@@ -38,6 +38,125 @@ extension String {
     }
 }
 
+// exit codes
+enum ExitCode: Int32 {
+    case ioError = 3
+    case lexerError = 4
+}
+
+enum Token {
+    case keywordInt
+    case keywordVoid
+    case keywordReturn
+    case openParen
+    case closeParen
+    case openBrace
+    case closeBrace
+    case semicolon
+    case identifier(String)
+    case constant(String)
+}
+
+func lexFile(sourceFile: String) -> [Token] {
+    let sourceFileContent : String
+    do {
+        sourceFileContent = try String(contentsOfFile: sourceFile, encoding: .utf8)
+    } catch {
+        print("Error reading source file for lexing: \(error)")
+        exit(ExitCode.ioError.rawValue)
+    }
+
+    var out : [Token] = []
+
+    var sourceFileCharacters = Array(sourceFileContent)
+
+    var i = 0
+
+    func enforceAscii(index: Int) {
+        if !sourceFileCharacters[index].isASCII {
+            print("Encountered illegal non-ASCII character \(sourceFileCharacters[i])")
+            exit(ExitCode.lexerError.rawValue)
+        }
+    }
+
+    func matchIdentifier(startingIndex: Int) -> String? {
+        var j = startingIndex
+        var matchedString : String = ""
+
+        while j < sourceFileCharacters.count {
+            let c = sourceFileCharacters[j]
+            let ascii = c.asciiValue!
+            if !((ascii >= Character("A").asciiValue! && ascii <= Character("Z").asciiValue!) || (ascii >= Character("a").asciiValue! && ascii <= Character("z").asciiValue!) || ascii == Character("_").asciiValue!) {
+                break
+            }
+            matchedString = matchedString + String(c)
+            j = j + 1
+        }
+
+        return matchedString.count > 0 ? matchedString : nil
+    }
+
+    func matchConstant(startingIndex: Int) -> String? {
+        var j = startingIndex
+        var matchedString: String = ""
+
+        while j < sourceFileCharacters.count {
+            let c = sourceFileCharacters[j]
+            let ascii = c.asciiValue!
+
+            if !(ascii >= Character("0").asciiValue! && ascii <= Character("9").asciiValue!) {
+                break
+            }
+
+            matchedString = matchedString + String(c)
+            j = j + 1
+        }
+
+        return matchedString.count > 0 ? matchedString : nil
+    }
+
+    func matchDelimiter(startingIndex: Int) -> Token? {
+        let c = sourceFileCharacters[startingIndex]
+        switch c {
+            case "(": return .openParen
+            case ")": return .closeParen
+            case "{": return .openBrace
+            case "}": return .closeBrace
+            case ";": return .semicolon
+            default: return nil
+        }
+    }
+
+    while i < sourceFileCharacters.count {
+        enforceAscii(index: i)
+
+        if sourceFileCharacters[i].isWhitespace {
+            i = i + 1
+        } else if let identifier = matchIdentifier(startingIndex: i) {
+            if identifier == "int" {
+                out.append(.keywordInt)
+            } else if identifier == "void" {
+                out.append(.keywordVoid)
+            } else if identifier == "return" {
+                out.append(.keywordReturn)
+            } else {
+                out.append(.identifier(identifier))
+            }
+
+            i = i + identifier.count
+        } else if let constant = matchConstant(startingIndex: i) {
+            out.append(.constant(constant))
+
+            i = i + constant.count
+        } else if let del = matchDelimiter(startingIndex: i) {
+            out.append(del)
+
+            i = i + 1
+        }
+    }
+
+    return out
+}
 
 @main
 struct ECC : ParsableCommand {
@@ -62,10 +181,23 @@ struct ECC : ParsableCommand {
 
         // TODO: this isn't very portable
         guard let _ = runCommand("/usr/bin/gcc", arguments: ["-E", "-P", inputFile, "-o", preprocFile]) else {
+            // already printed an error message
             return
         }
 
-        // TODO: lex
+        // lex
+
+        let tokenStream = lexFile(sourceFile: preprocFile)
+
+        // DEBUG
+        tokenStream.forEach { tkn in
+            print(tkn)
+        }
+        // END DEBUG
+
+        if lex {
+            return
+        }
 
         // TODO: parse
 
@@ -75,6 +207,7 @@ struct ECC : ParsableCommand {
 
         // TODO: this isn't very portable
         guard let _ = runCommand("/usr/bin/gcc", arguments: [assemblyFile, "-o", outputFile]) else {
+            // already printed an error message
             return
         }
     }
