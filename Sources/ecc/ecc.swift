@@ -402,9 +402,10 @@ struct ECC : ParsableCommand {
         let program = emitProgram(program: assembly)
 
         do {
-            if !FileManager.default.fileExists(atPath: assemblyFile) {
-                FileManager.default.createFile(atPath: assemblyFile, contents: nil, attributes: nil)
+            if FileManager.default.fileExists(atPath: assemblyFile) {
+                try FileManager.default.removeItem(at: URL(fileURLWithPath: assemblyFile))
             }
+            FileManager.default.createFile(atPath: assemblyFile, contents: nil, attributes: nil)
 
             let fileHandle = try FileHandle(forWritingTo: URL(fileURLWithPath: assemblyFile))
             fileHandle.seekToEndOfFile()
