@@ -69,7 +69,7 @@ func lexFile(sourceFile: String) -> [Token] {
 
     var out : [Token] = []
 
-    var sourceFileCharacters = Array(sourceFileContent)
+    let sourceFileCharacters = Array(sourceFileContent)
 
     var i = 0
 
@@ -257,6 +257,48 @@ func parseProgram(tokenStream: inout [Token]) -> Parser.AST.Program {
     return .Function(functionName, statement)
 }
 
+// Assembly Generator
+
+struct Assembly {
+    struct Tree {
+        enum Operand {
+            case Immediate(Int)
+            case Register
+        }
+
+        enum Instruction {
+            case Mov(Operand /* src */, Operand /* dst */)
+            case Ret
+        }
+
+        enum Program {
+            case Function(String, [Instruction])
+        }
+    }
+}
+
+
+func generateStatement(statement: Parser.AST.Statement) -> [Assembly.Tree.Instruction] {
+    switch statement {
+        case .Return(let exp):
+            let src: Assembly.Tree.Operand
+            switch exp {
+                case .Constant(let val):
+                    src = .Immediate(val)
+            }
+            let dst : Assembly.Tree.Operand = .Register
+            return [.Mov(src, dst), .Ret]
+    }
+}
+
+func generateProgram(program: Parser.AST.Program) -> Assembly.Tree.Program {
+    switch program {
+        case .Function(let name, let stmt):
+            let genStmt = generateStatement(statement: stmt)
+            return .Function(name, genStmt)
+    }
+}
+
 @main
 struct ECC : ParsableCommand {
 
@@ -300,7 +342,17 @@ struct ECC : ParsableCommand {
             return
         }
 
-        // TODO: code gen
+        // code gen
+
+        let assembly = generateProgram(program: ast)
+
+        // DEBUG
+        print(assembly)
+        // END DEBUG
+
+        if codegen {
+            return
+        }
 
         // TODO: emit code
 
