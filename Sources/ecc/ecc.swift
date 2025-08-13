@@ -299,6 +299,41 @@ func generateProgram(program: Parser.AST.Program) -> Assembly.Tree.Program {
     }
 }
 
+// Code Emission
+
+func emitInstruction(instr: Assembly.Tree.Instruction) -> String {
+    func emitOperand(op: Assembly.Tree.Operand) -> String {
+        switch op {
+            case .Immediate(let val):
+                return "$\(val)"
+            case .Register:
+                return "%eax"
+        }
+    }
+
+    switch instr {
+        case .Mov(let opSrc, let opDst):
+            return "\tmovl\t\(emitOperand(op: opSrc)), \(emitOperand(op: opDst))"
+        case .Ret:
+            return "\tret"
+    }
+}
+
+func emitProgram(program: Assembly.Tree.Program) -> [String] {
+    var out : [String] = []
+
+    switch program {
+        case .Function(let name, let instrs):
+            out.append("\t.global _\(name)")
+            out.append("_\(name):")
+            for inst in instrs {
+                out.append(emitInstruction(instr: inst))
+            }
+    }
+
+    return out
+}
+
 @main
 struct ECC : ParsableCommand {
 
@@ -362,7 +397,29 @@ struct ECC : ParsableCommand {
             return
         }
 
-        // TODO: emit code
+        // emit code
+
+        let program = emitProgram(program: assembly)
+
+        do {
+            if !FileManager.default.fileExists(atPath: assemblyFile) {
+                FileManager.default.createFile(atPath: assemblyFile, contents: nil, attributes: nil)
+            }
+
+            let fileHandle = try FileHandle(forWritingTo: URL(fileURLWithPath: assemblyFile))
+            fileHandle.seekToEndOfFile()
+
+            for line in program {
+                if let data = (line + "\n").data(using: .utf8) {
+                    fileHandle.write(data)
+                }
+            }
+
+            fileHandle.closeFile()
+        } catch {
+            print("Error writing code to file at \(assemblyFile): \(error)")
+            return
+        }
 
         // TODO: this isn't very portable
         guard let _ = runCommand("/usr/bin/gcc", arguments: [assemblyFile, "-o", outputFile]) else {
