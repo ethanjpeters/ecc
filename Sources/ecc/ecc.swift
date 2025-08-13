@@ -312,6 +312,9 @@ struct ECC : ParsableCommand {
     @Flag(help: "Exit after code generation")
     var codegen: Bool = false
 
+    @Flag(help: "Spit out intermediate data structures before exiting")
+    var verbose: Bool = false
+
     @Argument(help: "The file to compile")
     var inputFile: String
 
@@ -331,6 +334,9 @@ struct ECC : ParsableCommand {
         var tokenStream = lexFile(sourceFile: preprocFile)
 
         if lex {
+            if verbose {
+                print(tokenStream)
+            }
             return
         }
 
@@ -339,6 +345,9 @@ struct ECC : ParsableCommand {
         let ast = parseProgram(tokenStream: &tokenStream)
 
         if parse {
+            if verbose {
+                print(ast)
+            }
             return
         }
 
@@ -346,11 +355,10 @@ struct ECC : ParsableCommand {
 
         let assembly = generateProgram(program: ast)
 
-        // DEBUG
-        print(assembly)
-        // END DEBUG
-
         if codegen {
+            if verbose {
+                print(assembly)
+            }
             return
         }
 
