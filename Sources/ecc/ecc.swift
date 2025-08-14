@@ -54,6 +54,9 @@ enum Token : Equatable {
     case openBrace
     case closeBrace
     case semicolon
+    case complement
+    case negate
+    case decrement
     case identifier(String)
     case constant(String)
 }
@@ -116,6 +119,28 @@ func lexFile(sourceFile: String) -> [Token] {
         return matchedString.count > 0 ? matchedString : nil
     }
 
+    func matchTwoCharacterOperator(startingIndex: Int) -> Token? {
+        let c = sourceFileCharacters[startingIndex]
+        if c == "-" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "-" {
+                    return .decrement
+                }
+            }
+        }
+        return nil
+    }
+
+    func matchOneCharacterOperator(startingIndex: Int) -> Token? {
+        let c = sourceFileCharacters[startingIndex]
+
+        switch c {
+            case "~": return .complement
+            case "-": return .negate
+            default: return nil
+        }
+    }
+
     func matchDelimiter(startingIndex: Int) -> Token? {
         let c = sourceFileCharacters[startingIndex]
         switch c {
@@ -149,6 +174,14 @@ func lexFile(sourceFile: String) -> [Token] {
             out.append(.constant(constant))
 
             i = i + constant.count
+        } else if let op = matchTwoCharacterOperator(startingIndex: i) {
+            out.append(op)
+
+            i = i + 2
+        } else if let op = matchOneCharacterOperator(startingIndex: i) {
+            out.append(op)
+
+            i = i + 1
         } else if let del = matchDelimiter(startingIndex: i) {
             out.append(del)
 
