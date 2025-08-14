@@ -198,8 +198,14 @@ func lexFile(sourceFile: String) -> [Token] {
 
 struct Parser {
     struct AST {
-        enum Expression {
+        enum UnaryOperator {
+            case Complement
+            case Negate
+        }
+
+        indirect enum Expression {
             case Constant(Int)
+            case Unary(UnaryOperator, Expression)
         }
 
         enum Statement {
@@ -233,16 +239,29 @@ func parseExpression(tokenStream: inout [Token]) -> Parser.AST.Expression {
         exit(ExitCode.parserError.rawValue)
     }
 
-    let integer = tokenStream.removeFirst()
-    switch integer {
+    let next = tokenStream.removeFirst()
+    switch next {
+        // parse an integer constant
         case .constant(let val):
             guard let intVal = Int(val) else {
                 print("Integer constant \(val) was not a valid integer")
                 exit(ExitCode.parserError.rawValue)
             }
             return .Constant(intVal)
+        // expression wrapped in parentheses
+        case .openParen:
+            let out = parseExpression(tokenStream: &tokenStream)
+            let _ = expect(.closeParen, &tokenStream)
+            return out
+        // <unop> <exp>
+        case .complement:
+            let child = parseExpression(tokenStream: &tokenStream)
+            return .Unary(.Complement, child)
+        case .negate:
+            let child = parseExpression(tokenStream: &tokenStream)
+            return .Unary(.Negate, child)
         default:
-            print("Expected integer but encountered \(integer)")
+            print("Expected expression but encountered \(next)")
             exit(ExitCode.parserError.rawValue)
     }
 }
@@ -318,6 +337,9 @@ func generateStatement(statement: Parser.AST.Statement) -> [Assembly.Tree.Instru
             switch exp {
                 case .Constant(let val):
                     src = .Immediate(val)
+                default:
+                    print("Unsupported expression \(exp)")
+                    exit(ExitCode.parserError.rawValue)
             }
             let dst : Assembly.Tree.Operand = .Register
             return [.Mov(src, dst), .Ret]
