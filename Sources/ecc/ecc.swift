@@ -468,12 +468,12 @@ class Assembly {
                 return op
             case .Pseudo(let name):
                 if let slot = nameStackMapping[name] {
-                    return .Stack(slot * -4)
+                    return .Stack((slot+1) * -4)
                 }
                 let tmp = stackSlotCounter
                 stackSlotCounter = stackSlotCounter + 1
                 nameStackMapping[name] = tmp
-                return .Stack(tmp * -4)
+                return .Stack((tmp+1) * -4)
             case .Stack(_):
                 return op
         }
