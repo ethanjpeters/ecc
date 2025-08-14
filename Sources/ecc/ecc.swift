@@ -43,6 +43,7 @@ enum ExitCode: Int32 {
     case ioError = 3
     case lexerError = 4
     case parserError = 5
+    case internalError = 6
 }
 
 enum Token : Equatable {
@@ -386,15 +387,29 @@ class Tacky {
 
 // Assembly Generator
 
-struct Assembly {
+class Assembly {
     struct Tree {
+        enum Register {
+            case AX
+            case R10
+        }
+
         enum Operand {
             case Immediate(Int)
-            case Register
+            case Register(Register)
+            case Pseudo(String)
+            case Stack(Int)
+        }
+
+        enum UnaryOperator {
+            case Neg
+            case Not
         }
 
         enum Instruction {
             case Mov(Operand /* src */, Operand /* dst */)
+            case Unary(UnaryOperator, Operand)
+            case AllocateStack(Int)
             case Ret
         }
 
@@ -402,50 +417,179 @@ struct Assembly {
             case Function(String, [Instruction])
         }
     }
-}
 
+    func convert(_ val: Tacky.IR.Value) -> Tree.Operand {
+        switch val {
+            case .Constant(let c):
+                return .Immediate(c)
+            case .Var(let name):
+                return .Pseudo(name)
+        }
+    }
 
-func generateStatement(statement: Parser.AST.Statement) -> [Assembly.Tree.Instruction] {
-    switch statement {
-        case .Return(let exp):
-            let src: Assembly.Tree.Operand
-            switch exp {
-                case .Constant(let val):
-                    src = .Immediate(val)
-                default:
-                    print("Unsupported expression \(exp)")
-                    exit(ExitCode.parserError.rawValue)
+    func convert(_ op: Tacky.IR.UnaryOperator) -> Tree.UnaryOperator {
+        switch op {
+            case .Complement:
+                return .Not
+            case .Negate:
+                return .Neg
+        }
+    }
+
+    func generate(_ instructions: [Tacky.IR.Instruction]) -> [Tree.Instruction] {
+        var out : [Tree.Instruction] = []
+
+        for instr in instructions {
+            switch instr {
+                case .Return(let val):
+                    out.append(.Mov(convert(val), .Register(.AX)))
+                    out.append(.Ret)
+                case .Unary(let op, let src, let dst):
+                    out.append(.Mov(convert(src), convert(dst)))
+                    out.append(.Unary(convert(op), convert(dst)))
             }
-            let dst : Assembly.Tree.Operand = .Register
-            return [.Mov(src, dst), .Ret]
-    }
-}
+        }
 
-func generateProgram(program: Parser.AST.Program) -> Assembly.Tree.Program {
-    switch program {
-        case .Function(let name, let stmt):
-            let genStmt = generateStatement(statement: stmt)
-            return .Function(name, genStmt)
+        return out
     }
+
+    func generate(program: Tacky.IR.Program) -> Tree.Program {
+        switch program {
+            case .Function(let name, let instrs):
+                return .Function(name, generate(instrs))
+        }
+    }
+
+    func replacePseudoRegisters(_ op: Tree.Operand, _ stackSlotCounter: inout Int, _ nameStackMapping: inout [String: Int]) -> Tree.Operand {
+        switch op {
+            case .Immediate(_):
+                return op
+            case .Register(_):
+                return op
+            case .Pseudo(let name):
+                if let slot = nameStackMapping[name] {
+                    return .Stack(slot * -4)
+                }
+                let tmp = stackSlotCounter
+                stackSlotCounter = stackSlotCounter + 1
+                nameStackMapping[name] = tmp
+                return .Stack(tmp * -4)
+            case .Stack(_):
+                return op
+        }
+    }
+
+    func replacePseudoRegisters(_ instructions: [Tree.Instruction]) -> [Tree.Instruction] {
+        var out : [Tree.Instruction] = []
+
+        var stackSlotCounter : Int = 0
+        var nameStackMapping : [String: Int] = [:]
+
+        for instr: Assembly.Tree.Instruction in instructions {
+            switch instr {
+                case .AllocateStack(_):
+                    out.append(instr)
+                case .Mov(let op1, let op2):
+                    out.append(.Mov(replacePseudoRegisters(op1, &stackSlotCounter, &nameStackMapping),
+                                    replacePseudoRegisters(op2, &stackSlotCounter, &nameStackMapping)))
+                case .Ret:
+                    out.append(instr)
+                case .Unary(let unOp, let op):
+                    out.append(.Unary(unOp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
+            }
+        }
+
+        out.insert(.AllocateStack(stackSlotCounter), at: 0)
+
+        return out
+    }
+
+    func replacePseudoRegisters(program: Tree.Program) -> Tree.Program {
+        switch program {
+            case .Function(let name, let instrs):
+                return .Function(name, replacePseudoRegisters(instrs))
+        }
+    }
+
+    func fixUpMoves(_ instrs: [Tree.Instruction]) -> [Tree.Instruction] {
+        var out : [Tree.Instruction] = []
+        for instr in instrs {
+            switch instr {
+                case .AllocateStack(_): out.append(instr)
+                case .Mov(let opSrc, let opDst):
+                    switch opSrc {
+                        case .Stack(let srcSlot):
+                            switch opDst {
+                                case .Stack(let dstSlot):
+                                    out.append(.Mov(.Stack(srcSlot), .Register(.R10)))
+                                    out.append(.Mov(.Register(.R10), .Stack(dstSlot)))
+                                default:
+                                    out.append(instr)
+                            }
+                        default:
+                            out.append(instr)
+                    }
+                case .Ret: out.append(instr)
+                case .Unary(_, _): out.append(instr)
+            }
+        }
+        return out
+    }
+
+    func fixUpMoves(program: Tree.Program) -> Tree.Program {
+        switch program {
+            case .Function(let name, let instrs):
+                return .Function(name, fixUpMoves(instrs))
+        }
+    }
+
+
 }
 
 // Code Emission
 
-func emitInstruction(instr: Assembly.Tree.Instruction) -> String {
-    func emitOperand(op: Assembly.Tree.Operand) -> String {
-        switch op {
-            case .Immediate(let val):
-                return "$\(val)"
-            case .Register:
-                return "%eax"
-        }
+func convert(_ operand: Assembly.Tree.Operand) -> String {
+    switch operand {
+        case .Immediate(let val):
+            return "\(val)"
+        case .Pseudo(let name):
+            print("Encountered Pseudo way late in the pipeline: \(name)")
+            exit(ExitCode.internalError.rawValue)
+        case .Register(let reg):
+            switch reg {
+                case .AX:
+                    return "%eax"
+                case .R10:
+                    return "%r10d"
+            }
+        case .Stack(let slot):
+            return "\(slot)(%rbp)"
     }
+}
 
-    switch instr {
-        case .Mov(let opSrc, let opDst):
-            return "\tmovl\t\(emitOperand(op: opSrc)), \(emitOperand(op: opDst))"
-        case .Ret:
-            return "\tret"
+func convert(_ op: Assembly.Tree.UnaryOperator) -> String {
+    switch op {
+        case .Neg:
+            return "negl"
+        case .Not:
+            return "notl"
+    }
+}
+
+func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [String]) {
+    for instr in instructions {
+        switch instr {
+            case .AllocateStack(let count):
+                if count != 0 { out.append("\tsubq\t$\(count), %rsp") }
+            case .Mov(let opSrc, let opDst):
+                out.append("\tmovl\t\(convert(opSrc)), \(convert(opDst))")
+            case .Ret:
+                out.append("\tmovq\t%rbp, %rsp")
+                out.append("\tpopq\t%rbp")
+                out.append("\tret")
+            case .Unary(let unOp, let op):
+                out.append("\t\(convert(unOp))\t\(convert(op))")
+        }
     }
 }
 
@@ -456,9 +600,9 @@ func emitProgram(program: Assembly.Tree.Program) -> [String] {
         case .Function(let name, let instrs):
             out.append("\t.global _\(name)")
             out.append("_\(name):")
-            for inst in instrs {
-                out.append(emitInstruction(instr: inst))
-            }
+            out.append("\tpushq\t%rbp")
+            out.append("\tmovq\t%rsp, %rbp")
+            emitInstructions(instrs, out: &out)
     }
 
     return out
@@ -476,6 +620,9 @@ struct ECC : ParsableCommand {
     
     @Flag(help: "Exit after code generation")
     var codegen: Bool = false
+
+    @Flag(help: "Exit after TACKY generation")
+    var tacky: Bool = false
 
     @Flag(help: "Spit out intermediate data structures before exiting")
     var verbose: Bool = false
@@ -516,9 +663,23 @@ struct ECC : ParsableCommand {
             return
         }
 
+        // tacky IR gen
+        let TAC = Tacky().generateTACKYProgram(program: ast)
+
+        if tacky {
+            if verbose {
+                print(TAC)
+            }
+            return
+        }
+
         // code gen
 
-        let assembly = generateProgram(program: ast)
+        let assembler = Assembly()
+
+        var assembly = assembler.generate(program: TAC)
+        assembly = assembler.replacePseudoRegisters(program: assembly)
+        assembly = assembler.fixUpMoves(program: assembly)
 
         if codegen {
             if verbose {
