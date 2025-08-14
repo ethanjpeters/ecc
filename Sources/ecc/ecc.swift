@@ -14,7 +14,7 @@ func runCommand(_ executable: String, arguments: [String]) -> String? {
 
     let pipe = Pipe()
     task.standardOutput = pipe
-    task.standardError = pipe
+    // task.standardError = pipe
 
     do {
         try task.run()
@@ -551,7 +551,7 @@ class Assembly {
 func convert(_ operand: Assembly.Tree.Operand) -> String {
     switch operand {
         case .Immediate(let val):
-            return "\(val)"
+            return "$\(val)"
         case .Pseudo(let name):
             print("Encountered Pseudo way late in the pipeline: \(name)")
             exit(ExitCode.internalError.rawValue)
