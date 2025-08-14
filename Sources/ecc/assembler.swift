@@ -110,7 +110,7 @@ class Assembly {
             }
         }
 
-        out.insert(.AllocateStack(stackSlotCounter), at: 0)
+        out.insert(.AllocateStack(stackSlotCounter * 4), at: 0)
 
         return out
     }
