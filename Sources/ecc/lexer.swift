@@ -13,6 +13,10 @@ class Lexer {
         case complement
         case negate
         case decrement
+        case plus
+        case asterisk
+        case forwardSlash
+        case percent
         case identifier(String)
         case constant(String)
     }
@@ -92,6 +96,10 @@ class Lexer {
         switch c {
             case "~": return .complement
             case "-": return .negate
+            case "+": return .plus
+            case "*": return .asterisk
+            case "/": return .forwardSlash
+            case "%": return .percent
             default: return nil
         }
     }
