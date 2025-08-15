@@ -7,9 +7,18 @@ class Parser {
             case Negate
         }
 
+        enum BinaryOperator {
+            case Add
+            case Subtract
+            case Multiply
+            case Divide
+            case Remainder
+        }
+
         indirect enum Expression {
             case Constant(Int)
             case Unary(UnaryOperator, Expression)
+            case Binary(BinaryOperator, Expression, Expression)
         }
 
         enum Statement {
@@ -36,9 +45,57 @@ class Parser {
         return nextToken
     }
 
-    func parseExpression(tokenStream: inout [Lexer.Token]) -> Parser.AST.Expression {
+    func peek(_ tokenStream: [Lexer.Token]) -> Lexer.Token {
         if tokenStream.isEmpty {
-            print("Expected integer but encountered end of token stream")
+            print("Expected token but encountered end of token stream")
+            exit(ExitCode.parserError.rawValue)
+        }
+
+        return tokenStream.first!
+    }
+
+    func precedence(_ token: Lexer.Token) -> Int {
+        switch token {
+            case .asterisk: return 50
+            case .forwardSlash: return 50
+            case .percent: return 50
+            case .plus: return 45
+            case .negate: return 45
+            default:
+                print("Unreachable 2")
+                exit(ExitCode.parserError.rawValue)
+        }
+    }
+
+    func parseExpression(tokenStream: inout [Lexer.Token], minimumPrecedence: Int) -> Parser.AST.Expression {
+        if tokenStream.isEmpty {
+            print("Expected expression but encountered end of token stream")
+            exit(ExitCode.parserError.rawValue)
+        }
+
+        var left = parseFactor(tokenStream: &tokenStream)
+        var nextToken = peek(tokenStream)
+        while (nextToken == .plus || nextToken == .negate || nextToken == .asterisk || nextToken == .forwardSlash || nextToken == .percent) && precedence(nextToken) >= minimumPrecedence {
+            let op : AST.BinaryOperator
+            switch nextToken {
+                case .plus: op = .Add
+                case .negate: op = .Subtract
+                default:
+                    print("Unreachable")
+                    exit(ExitCode.parserError.rawValue)
+            }
+            tokenStream.removeFirst()
+
+            let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: precedence(nextToken) + 1)
+            left = .Binary(op, left, right)
+            nextToken = peek(tokenStream)
+        }
+        return left
+    }
+
+    func parseFactor(tokenStream: inout [Lexer.Token]) -> Parser.AST.Expression {
+        if tokenStream.isEmpty {
+            print("Expected factor but encountered end of token stream")
             exit(ExitCode.parserError.rawValue)
         }
 
@@ -53,15 +110,15 @@ class Parser {
                 return .Constant(intVal)
             // expression wrapped in parentheses
             case .openParen:
-                let out = parseExpression(tokenStream: &tokenStream)
+                let out = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 let _ = expect(.closeParen, &tokenStream)
                 return out
             // <unop> <exp>
             case .complement:
-                let child = parseExpression(tokenStream: &tokenStream)
+                let child = parseFactor(tokenStream: &tokenStream)
                 return .Unary(.Complement, child)
             case .negate:
-                let child = parseExpression(tokenStream: &tokenStream)
+                let child = parseFactor(tokenStream: &tokenStream)
                 return .Unary(.Negate, child)
             default:
                 print("Expected expression but encountered \(next)")
@@ -71,7 +128,7 @@ class Parser {
 
     func parseStatement(tokenStream: inout [Lexer.Token]) -> Parser.AST.Statement {
         let _ = expect(.keywordReturn, &tokenStream)
-        let exp = parseExpression(tokenStream: &tokenStream)
+        let exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
         let _ = expect(.semicolon, &tokenStream)
 
         return .Return(exp)

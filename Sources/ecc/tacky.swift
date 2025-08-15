@@ -1,3 +1,5 @@
+import Foundation
+
 class Tacky {
     struct IR {
         enum UnaryOperator {
@@ -49,6 +51,9 @@ class Tacky {
                 let tackyOp = generateTACKYOp(op)
                 out.append(.Unary(tackyOp, src, dst))
                 return dst
+            case .Binary(let op, let left, let right):
+                print("Can't handle Binary expressions yet")
+                exit(ExitCode.parserError.rawValue)
         }
     }
 
