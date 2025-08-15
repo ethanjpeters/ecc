@@ -1,3 +1,5 @@
+import Foundation
+
 class Assembly {
     struct Tree {
         enum Register {
@@ -58,6 +60,9 @@ class Assembly {
                 case .Unary(let op, let src, let dst):
                     out.append(.Mov(convert(src), convert(dst)))
                     out.append(.Unary(convert(op), convert(dst)))
+                case .Binary(let op, let src1, let src2, let dst):
+                    print("Can not handle binary expressions yet")
+                    exit(ExitCode.parserError.rawValue)
             }
         }
 

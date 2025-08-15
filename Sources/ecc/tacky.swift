@@ -7,6 +7,14 @@ class Tacky {
             case Negate
         }
 
+        enum BinaryOperator {
+            case Add
+            case Subtract
+            case Multiply
+            case Divide
+            case Remainder
+        }
+
         enum Value {
             case Constant(Int)
             case Var(String)
@@ -15,6 +23,7 @@ class Tacky {
         enum Instruction {
             case Return(Value)
             case Unary(UnaryOperator, Value/* src */, Value /* dst */)
+            case Binary(BinaryOperator, Value /* src1 */, Value /* src2 */, Value /* dst */)
         }
 
         enum Program {
@@ -52,8 +61,20 @@ class Tacky {
                 out.append(.Unary(tackyOp, src, dst))
                 return dst
             case .Binary(let op, let left, let right):
-                print("Can't handle Binary expressions yet")
-                exit(ExitCode.parserError.rawValue)
+                let v1 = generateTACKYExpression(left, out: &out)
+                let v2  = generateTACKYExpression(right, out: &out)
+                let dstName = makeTemp()
+                let dst : IR.Value = .Var(dstName)
+                let tackyOp : IR.BinaryOperator
+                switch op {
+                    case .Add: tackyOp = .Add
+                    case .Subtract: tackyOp = .Subtract
+                    case .Multiply: tackyOp = .Multiply
+                    case .Divide: tackyOp = .Divide
+                    case .Remainder: tackyOp = .Remainder
+                }
+                out.append(.Binary(tackyOp, v1, v2, dst))
+                return dst
         }
     }
 
