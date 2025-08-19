@@ -80,6 +80,9 @@ class Parser {
             switch nextToken {
                 case .plus: op = .Add
                 case .negate: op = .Subtract
+                case .asterisk: op = .Multiply
+                case .forwardSlash: op = .Divide
+                case .percent: op = .Remainder
                 default:
                     print("Unreachable")
                     exit(ExitCode.parserError.rawValue)
