@@ -32,6 +32,17 @@ func convert(_ op: Assembly.Tree.UnaryOperator) -> String {
     }
 }
 
+func convert(_ op: Assembly.Tree.BinaryOperator) -> String {
+    switch op {
+        case .Add:
+            return "addl"
+        case .Sub:
+            return "subl"
+        case .Mult:
+            return "imull"
+    }
+}
+
 func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [String]) {
     for instr in instructions {
         switch instr {
@@ -45,9 +56,12 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tret")
             case .Unary(let unOp, let op):
                 out.append("\t\(convert(unOp))\t\(convert(op))")
-            default:
-                print("Unhandled construct: \(instr)")
-                exit(ExitCode.parserError.rawValue)
+            case .Binary(let binOp, let leftOperand, let rightOperand):
+                out.append("\t\(convert(binOp))\t\(convert(leftOperand)), \(convert(rightOperand))")
+            case .Cdq:
+                out.append("\tcdq")
+            case .Idiv(let op):
+                out.append("\tidivl\t\(convert(op))")
         }
     }
 }
