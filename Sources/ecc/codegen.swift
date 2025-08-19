@@ -11,8 +11,12 @@ func convert(_ operand: Assembly.Tree.Operand) -> String {
             switch reg {
                 case .AX:
                     return "%eax"
+                case .DX:
+                    return "%edx"
                 case .R10:
                     return "%r10d"
+                case .R11:
+                    return "%r11d"
             }
         case .Stack(let slot):
             return "\(slot)(%rbp)"
@@ -41,6 +45,9 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tret")
             case .Unary(let unOp, let op):
                 out.append("\t\(convert(unOp))\t\(convert(op))")
+            default:
+                print("Unhandled construct: \(instr)")
+                exit(ExitCode.parserError.rawValue)
         }
     }
 }

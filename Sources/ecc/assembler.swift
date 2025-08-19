@@ -4,7 +4,9 @@ class Assembly {
     struct Tree {
         enum Register {
             case AX
+            case DX
             case R10
+            case R11
         }
 
         enum Operand {
@@ -19,9 +21,18 @@ class Assembly {
             case Not
         }
 
+        enum BinaryOperator {
+            case Add
+            case Sub
+            case Mult
+        }
+
         enum Instruction {
             case Mov(Operand /* src */, Operand /* dst */)
             case Unary(UnaryOperator, Operand)
+            case Binary(BinaryOperator, Operand, Operand)
+            case Idiv(Operand)
+            case Cdq
             case AllocateStack(Int)
             case Ret
         }
@@ -61,8 +72,27 @@ class Assembly {
                     out.append(.Mov(convert(src), convert(dst)))
                     out.append(.Unary(convert(op), convert(dst)))
                 case .Binary(let op, let src1, let src2, let dst):
-                    print("Can not handle binary expressions yet")
-                    exit(ExitCode.parserError.rawValue)
+                    switch op {
+                        case .Add:
+                            out.append(.Mov(convert(src1), convert(dst)))
+                            out.append(.Binary(.Add, convert(src2), convert(dst)))
+                        case .Subtract:
+                            out.append(.Mov(convert(src1), convert(dst)))
+                            out.append(.Binary(.Sub, convert(src2), convert(dst)))
+                        case .Multiply:
+                            out.append(.Mov(convert(src1), convert(dst)))
+                            out.append(.Binary(.Mult, convert(src2), convert(dst)))
+                        case .Divide:
+                            out.append(.Mov(convert(src1), .Register(.AX)))
+                            out.append(.Cdq)
+                            out.append(.Idiv(convert(src2)))
+                            out.append(.Mov(.Register(.AX), convert(dst)))
+                        case .Remainder:
+                            out.append(.Mov(convert(src1), .Register(.AX)))
+                            out.append(.Cdq)
+                            out.append(.Idiv(convert(src2)))
+                            out.append(.Mov(.Register(.DX), convert(dst)))
+                    }
             }
         }
 
@@ -112,6 +142,10 @@ class Assembly {
                     out.append(instr)
                 case .Unary(let unOp, let op):
                     out.append(.Unary(unOp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
+                case .Binary(let binOp, let left, let right):
+                    out.append(.Binary(binOp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping), replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping)))
+                case .Cdq: out.append(.Cdq)
+                case .Idiv(let op): out.append(.Idiv(replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
             }
         }
 
@@ -147,6 +181,39 @@ class Assembly {
                     }
                 case .Ret: out.append(instr)
                 case .Unary(_, _): out.append(instr)
+                case .Binary(let op, let src, let dst):
+                    switch op {
+                        case .Add: fallthrough
+                        case .Sub:
+                            switch src {
+                                case .Stack(let srcSlot):
+                                switch dst {
+                                    case .Stack(let dstSlot):
+                                        out.append(.Mov(.Stack(srcSlot), .Register(.R10)))
+                                        out.append(.Binary(op, .Register(.R10), .Stack(dstSlot)))
+                                        out.append(.Mov(.Register(.R10), .Stack(dstSlot)))
+                                    default: out.append(instr)
+                                }
+                                default: out.append(instr)
+                            }
+                        case .Mult:
+                            switch dst {
+                                case .Stack(let val):
+                                    out.append(.Mov(.Stack(val), .Register(.R11)))
+                                    out.append(.Binary(op, src, .Register(.R11)))
+                                    out.append(.Mov(.Register(.R11), .Stack(val)))
+                                default:
+                                    out.append(instr)
+                            }
+                    }
+                case .Cdq: out.append(instr)
+                case .Idiv(let op):
+                    switch op {
+                        case .Immediate(let val):
+                            out.append(.Mov(.Immediate(val), .Register(.R10)))
+                            out.append(.Idiv(.Register(.R10)))
+                        default: out.append(instr)
+                    }
             }
         }
         return out
