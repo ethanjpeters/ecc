@@ -191,7 +191,6 @@ class Assembly {
                                     case .Stack(let dstSlot):
                                         out.append(.Mov(.Stack(srcSlot), .Register(.R10)))
                                         out.append(.Binary(op, .Register(.R10), .Stack(dstSlot)))
-                                        out.append(.Mov(.Register(.R10), .Stack(dstSlot)))
                                     default: out.append(instr)
                                 }
                                 default: out.append(instr)
