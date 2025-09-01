@@ -4,6 +4,8 @@ class Assembly {
     struct Tree {
         enum Register {
             case AX
+            case CL
+            case CX
             case DX
             case R10
             case R11
@@ -205,11 +207,7 @@ class Assembly {
                     switch op {
                         case .Add: fallthrough
                         case .Sub: fallthrough
-                        case .And: fallthrough
-                        case .Or: fallthrough
-                        case .Xor: fallthrough
-                        case .Sar: fallthrough
-                        case .Shl:
+                        case .And:
                             switch src {
                                 case .Stack(let srcSlot):
                                 switch dst {
@@ -220,12 +218,25 @@ class Assembly {
                                 }
                                 default: out.append(instr)
                             }
-                        case .Mult:
+                        case .Mult: fallthrough
+                        case .Or: fallthrough
+                        case .Xor:
                             switch dst {
                                 case .Stack(let val):
                                     out.append(.Mov(.Stack(val), .Register(.R11)))
                                     out.append(.Binary(op, src, .Register(.R11)))
                                     out.append(.Mov(.Register(.R11), .Stack(val)))
+                                default:
+                                    out.append(instr)
+                            }
+                        case .Sar: fallthrough
+                        case .Shl:
+                            switch src {
+                                case .Stack(let val):
+                                    // move the value off of the stack and into CL, which is currently never used otherwise
+                                    // and is in no danger of being overwritten
+                                    out.append(.Mov(.Stack(val), .Register(.CX)))
+                                    out.append(.Binary(op, .Register(.CL), dst))
                                 default:
                                     out.append(instr)
                             }

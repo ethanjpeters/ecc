@@ -13,6 +13,10 @@ func convert(_ operand: Assembly.Tree.Operand) -> String {
                     return "%eax"
                 case .DX:
                     return "%edx"
+                case .CL:
+                    return "%cl"
+                case .CX:
+                    return "%ecx"
                 case .R10:
                     return "%r10d"
                 case .R11:
@@ -40,9 +44,16 @@ func convert(_ op: Assembly.Tree.BinaryOperator) -> String {
             return "subl"
         case .Mult:
             return "imull"
-        default:
-            print("Unsupported binary operator \(op) found during code generation")
-            exit(ExitCode.parserError.rawValue)
+        case .And:
+            return "andl"
+        case .Or:
+            return "orl"
+        case .Xor:
+            return "xorl"
+        case .Sar:
+            return "sarl"
+        case .Shl:
+            return "shll"
     }
 }
 

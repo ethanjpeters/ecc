@@ -71,8 +71,8 @@ class Parser {
             case .shiftLeft: return 40
             case .shiftRight: return 40
             case .ampersand: return 35
-            case .pipe: return 30
-            case .carrot: return 25
+            case .pipe: return 25
+            case .carrot: return 30
             default:
                 print("Unreachable 2")
                 exit(ExitCode.parserError.rawValue)
