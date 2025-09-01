@@ -21,8 +21,14 @@ class Lexer {
         case asterisk
         case forwardSlash
         case percent
+        case ampersand
+        case pipe
+        case carot
         // two character operators
         case decrement
+        case shiftLeft
+        case shiftRight
+        // tokens bearing data
         case identifier(String)
         case constant(String)
     }
