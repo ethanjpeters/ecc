@@ -23,7 +23,7 @@ class Lexer {
         case percent
         case ampersand
         case pipe
-        case carot
+        case carrot
         // two character operators
         case decrement
         case shiftLeft
@@ -99,6 +99,20 @@ class Lexer {
                 }
             }
         }
+        if c == "<" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "<" {
+                    return .shiftLeft
+                }
+            }
+        }
+        if c == ">" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == ">" {
+                    return .shiftRight
+                }
+            }
+        }
         return nil
     }
 
@@ -112,6 +126,9 @@ class Lexer {
             case "*": return .asterisk
             case "/": return .forwardSlash
             case "%": return .percent
+            case "&": return .ampersand
+            case "|": return .pipe
+            case "^": return .carrot
             default: return nil
         }
     }
