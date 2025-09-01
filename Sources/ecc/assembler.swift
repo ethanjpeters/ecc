@@ -25,6 +25,11 @@ class Assembly {
             case Add
             case Sub
             case Mult
+            case And
+            case Or
+            case Xor
+            case Sar
+            case Shl
         }
 
         enum Instruction {
@@ -92,9 +97,21 @@ class Assembly {
                             out.append(.Cdq)
                             out.append(.Idiv(convert(src2)))
                             out.append(.Mov(.Register(.DX), convert(dst)))
-                        default:
-                            print("Unsupported operation found in asssembly generation")
-                            exit(ExitCode.parserError.rawValue)
+                        case .BitwiseAnd:
+                            out.append(.Mov(convert(src1), convert(dst)))
+                            out.append(.Binary(.And, convert(src2), convert(dst)))
+                        case .BitwiseOr:
+                            out.append(.Mov(convert(src1), convert(dst)))
+                            out.append(.Binary(.Or, convert(src2), convert(dst)))
+                        case .BitwiseXor:
+                            out.append(.Mov(convert(src1), convert(dst)))
+                            out.append(.Binary(.Xor, convert(src2), convert(dst)))
+                        case .BitwiseShiftRight:
+                            out.append(.Mov(convert(src1), convert(dst)))
+                            out.append(.Binary(.Sar, convert(src2), convert(dst)))
+                        case .BitwiseShiftLeft:
+                            out.append(.Mov(convert(src1), convert(dst)))
+                            out.append(.Binary(.Shl, convert(src2), convert(dst)))
                     }
             }
         }
@@ -187,7 +204,12 @@ class Assembly {
                 case .Binary(let op, let src, let dst):
                     switch op {
                         case .Add: fallthrough
-                        case .Sub:
+                        case .Sub: fallthrough
+                        case .And: fallthrough
+                        case .Or: fallthrough
+                        case .Xor: fallthrough
+                        case .Sar: fallthrough
+                        case .Shl:
                             switch src {
                                 case .Stack(let srcSlot):
                                 switch dst {

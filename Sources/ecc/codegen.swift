@@ -40,6 +40,9 @@ func convert(_ op: Assembly.Tree.BinaryOperator) -> String {
             return "subl"
         case .Mult:
             return "imull"
+        default:
+            print("Unsupported binary operator \(op) found during code generation")
+            exit(ExitCode.parserError.rawValue)
     }
 }
 
