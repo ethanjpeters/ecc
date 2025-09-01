@@ -13,6 +13,13 @@ class Tacky {
             case Multiply
             case Divide
             case Remainder
+            case BitwiseAnd
+            case BitwiseOr
+            // these operations do not have non-bitwise counterparts, but
+            // grouping makes things easier for me
+            case BitwiseXor
+            case BitwiseShiftRight
+            case BitwiseShiftLeft
         }
 
         enum Value {
@@ -72,9 +79,11 @@ class Tacky {
                     case .Multiply: tackyOp = .Multiply
                     case .Divide: tackyOp = .Divide
                     case .Remainder: tackyOp = .Remainder
-                    default:
-                        print("Unsupported op found in Tacky generation: \(op)")
-                        exit(ExitCode.parserError.rawValue)
+                    case .BitwiseAnd: tackyOp = .BitwiseAnd
+                    case .BitwiseOr: tackyOp = .BitwiseOr
+                    case .BitwiseXor: tackyOp = .BitwiseXor
+                    case .BitwiseShiftLeft: tackyOp = .BitwiseShiftLeft
+                    case .BitwiseShiftRight: tackyOp = .BitwiseShiftRight
                 }
                 out.append(.Binary(tackyOp, v1, v2, dst))
                 return dst

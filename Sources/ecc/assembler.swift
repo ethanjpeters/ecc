@@ -92,6 +92,9 @@ class Assembly {
                             out.append(.Cdq)
                             out.append(.Idiv(convert(src2)))
                             out.append(.Mov(.Register(.DX), convert(dst)))
+                        default:
+                            print("Unsupported operation found in asssembly generation")
+                            exit(ExitCode.parserError.rawValue)
                     }
             }
         }
