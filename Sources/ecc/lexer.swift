@@ -2,21 +2,27 @@ import Foundation
 
 class Lexer {
     enum Token : Equatable {
+        // types
         case keywordInt
         case keywordVoid
+        // control flow
         case keywordReturn
+        // braces/brackets
         case openParen
         case closeParen
         case openBrace
         case closeBrace
+        // punctuation
         case semicolon
+        // one character operators
         case complement
         case negate
-        case decrement
         case plus
         case asterisk
         case forwardSlash
         case percent
+        // two character operators
+        case decrement
         case identifier(String)
         case constant(String)
     }
