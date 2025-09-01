@@ -13,6 +13,13 @@ class Parser {
             case Multiply
             case Divide
             case Remainder
+            case BitwiseAnd
+            case BitwiseOr
+            // these operations do not have non-bitwise counterparts, but
+            // grouping makes things easier for me
+            case BitwiseXor
+            case BitwiseShiftRight
+            case BitwiseShiftLeft
         }
 
         indirect enum Expression {
@@ -61,9 +68,31 @@ class Parser {
             case .percent: return 50
             case .plus: return 45
             case .negate: return 45
+            case .shiftLeft: return 40
+            case .shiftRight: return 40
+            case .ampersand: return 35
+            case .pipe: return 30
+            case .carrot: return 25
             default:
                 print("Unreachable 2")
                 exit(ExitCode.parserError.rawValue)
+        }
+    }
+
+    func isBinaryOperator(_ token: Lexer.Token) -> Bool {
+        switch token {
+            case .plus: fallthrough
+            case .negate: fallthrough
+            case .asterisk: fallthrough
+            case .forwardSlash: fallthrough
+            case .percent: fallthrough
+            case .ampersand: fallthrough
+            case .pipe: fallthrough
+            case .carrot: fallthrough
+            case .shiftLeft: fallthrough
+            case .shiftRight: return true
+            default:
+                return false
         }
     }
 
@@ -75,7 +104,7 @@ class Parser {
 
         var left = parseFactor(tokenStream: &tokenStream)
         var nextToken = peek(tokenStream)
-        while (nextToken == .plus || nextToken == .negate || nextToken == .asterisk || nextToken == .forwardSlash || nextToken == .percent) && precedence(nextToken) >= minimumPrecedence {
+        while isBinaryOperator(nextToken) && precedence(nextToken) >= minimumPrecedence {
             let op : AST.BinaryOperator
             switch nextToken {
                 case .plus: op = .Add
@@ -83,6 +112,11 @@ class Parser {
                 case .asterisk: op = .Multiply
                 case .forwardSlash: op = .Divide
                 case .percent: op = .Remainder
+                case .ampersand: op = .BitwiseAnd
+                case .pipe: op = .BitwiseOr
+                case .carrot: op = .BitwiseXor
+                case .shiftLeft: op = .BitwiseShiftLeft
+                case .shiftRight: op = .BitwiseShiftRight
                 default:
                     print("Unreachable")
                     exit(ExitCode.parserError.rawValue)

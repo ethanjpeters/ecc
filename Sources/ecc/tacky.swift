@@ -72,6 +72,9 @@ class Tacky {
                     case .Multiply: tackyOp = .Multiply
                     case .Divide: tackyOp = .Divide
                     case .Remainder: tackyOp = .Remainder
+                    default:
+                        print("Unsupported op found in Tacky generation: \(op)")
+                        exit(ExitCode.parserError.rawValue)
                 }
                 out.append(.Binary(tackyOp, v1, v2, dst))
                 return dst
