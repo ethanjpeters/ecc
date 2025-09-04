@@ -179,8 +179,9 @@ class Tacky {
     func generateTACKYProgram(program: Parser.AST.Program) -> Tacky.IR.Program {
         switch program {
             case .Function(let name, let stmt):
-                let tackyInstrs = generateTACKYStatement(statement: stmt)
-                return .Function(name, tackyInstrs)
+                // let tackyInstrs = generateTACKYStatement(statement: stmt)
+                // return .Function(name, tackyInstrs)
+                return .Function(name, [])
         }
     }
 
