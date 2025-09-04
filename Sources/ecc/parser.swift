@@ -5,6 +5,7 @@ class Parser {
         enum UnaryOperator {
             case Complement
             case Negate
+            case Not
         }
 
         enum BinaryOperator {
@@ -13,6 +14,14 @@ class Parser {
             case Multiply
             case Divide
             case Remainder
+            case And
+            case Or
+            case Equal
+            case NotEqual
+            case LessThan
+            case LessOrEqual
+            case GreaterThan
+            case GreaterOrEqual
             case BitwiseAnd
             case BitwiseOr
             // these operations do not have non-bitwise counterparts, but
@@ -70,9 +79,17 @@ class Parser {
             case .negate: return 45
             case .shiftLeft: return 40
             case .shiftRight: return 40
-            case .ampersand: return 35
-            case .pipe: return 25
-            case .carrot: return 30
+            case .lessThan: fallthrough
+            case .lessThanEqual: fallthrough
+            case .greaterThan: fallthrough
+            case .greaterThanEqual: return 35
+            case .doubleEquals: fallthrough
+            case .notEquals: return 30
+            case .ampersand: return 25
+            case .carrot: return 20
+            case .pipe: return 15
+            case .doubleAmpersand: return 10
+            case .doublePipe: return 5
             default:
                 print("Unreachable 2")
                 exit(ExitCode.parserError.rawValue)
@@ -86,6 +103,14 @@ class Parser {
             case .asterisk: fallthrough
             case .forwardSlash: fallthrough
             case .percent: fallthrough
+            case .doubleAmpersand: fallthrough
+            case .doublePipe: fallthrough
+            case .doubleEquals: fallthrough
+            case .notEquals: fallthrough
+            case .lessThan: fallthrough
+            case .lessThanEqual: fallthrough
+            case .greaterThan: fallthrough
+            case .greaterThanEqual: fallthrough
             case .ampersand: fallthrough
             case .pipe: fallthrough
             case .carrot: fallthrough
@@ -112,6 +137,14 @@ class Parser {
                 case .asterisk: op = .Multiply
                 case .forwardSlash: op = .Divide
                 case .percent: op = .Remainder
+                case .doubleAmpersand: op = .And
+                case .doublePipe: op = .Or
+                case .doubleEquals: op = .Equal
+                case .notEquals: op = .NotEqual
+                case .lessThan: op = .LessThan
+                case .lessThanEqual: op = .LessOrEqual
+                case .greaterThan: op = .GreaterThan
+                case .greaterThanEqual: op = .GreaterOrEqual
                 case .ampersand: op = .BitwiseAnd
                 case .pipe: op = .BitwiseOr
                 case .carrot: op = .BitwiseXor
@@ -157,6 +190,9 @@ class Parser {
             case .negate:
                 let child = parseFactor(tokenStream: &tokenStream)
                 return .Unary(.Negate, child)
+            case .exclamation:
+                let child = parseFactor(tokenStream: &tokenStream)
+                return .Unary(.Not, child)
             default:
                 print("Expected expression but encountered \(next)")
                 exit(ExitCode.parserError.rawValue)

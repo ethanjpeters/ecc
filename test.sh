@@ -1,5 +1,15 @@
 #!/bin/bash
 
+swift run ecc TestSources/logical_ops.c
+./logical_ops
+if [[ $? -ne 0 ]]; then
+    echo "logical_ops: Expected exit code 0logical_ops but got $?"
+    exit 1
+else
+    echo "logical_ops: success"
+fi
+rm logical_ops
+
 swift run ecc TestSources/return_2.c
 ./return_2
 if [[ $? -ne 2 ]]; then

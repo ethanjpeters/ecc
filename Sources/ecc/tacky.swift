@@ -54,6 +54,9 @@ class Tacky {
                     return .Complement
                 case .Negate:
                     return .Negate
+                default:
+                    print("Unsupported unary operator found when generating tacky")
+                    exit(ExitCode.parserError.rawValue)
             }
         }
 
@@ -84,6 +87,9 @@ class Tacky {
                     case .BitwiseXor: tackyOp = .BitwiseXor
                     case .BitwiseShiftLeft: tackyOp = .BitwiseShiftLeft
                     case .BitwiseShiftRight: tackyOp = .BitwiseShiftRight
+                    default:
+                        print("Unsupported binary operator found when generating tacky")
+                        exit(ExitCode.parserError.rawValue)
                 }
                 out.append(.Binary(tackyOp, v1, v2, dst))
                 return dst
