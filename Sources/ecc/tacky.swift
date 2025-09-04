@@ -157,6 +157,9 @@ class Tacky {
                     out.append(.Binary(tackyOp, v1, v2, dst))
                     return dst
                 }
+            default:
+                print("Unsupported expression found when generating tacky: \(exp)")
+                exit(ExitCode.parserError.rawValue)
         }
     }
 
@@ -167,6 +170,9 @@ class Tacky {
                 let child = generateTACKYExpression(exp, out: &out)
                 out.append(.Return(child))
                 return out
+            default:
+                print("Unsupported statement found when generating tacky: \(statement)")
+                exit(ExitCode.parserError.rawValue)
         }
     }
 

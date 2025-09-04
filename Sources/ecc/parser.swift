@@ -35,14 +35,27 @@ class Parser {
             case Constant(Int)
             case Unary(UnaryOperator, Expression)
             case Binary(BinaryOperator, Expression, Expression)
+            case Var(String /* identifier */)
+            case Assignment(Expression, Expression)
+        }
+
+        enum Declaration {
+            case Declaration(String /* identifier name */, Expression?)
         }
 
         enum Statement {
             case Return(Expression)
+            case Expression(Expression)
+            case Null
+        }
+
+        enum BlockItem {
+            case S(Statement)
+            case D(Declaration)
         }
 
         enum Program {
-            case Function(String /* name */, Statement /* body */)
+            case Function(String /* name */, [BlockItem] /* body */)
         }
     }
 
@@ -178,6 +191,9 @@ class Parser {
                     exit(ExitCode.parserError.rawValue)
                 }
                 return .Constant(intVal)
+            // variable
+            case .identifier(let name):
+                return .Var(name)
             // expression wrapped in parentheses
             case .openParen:
                 let out = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
@@ -205,6 +221,47 @@ class Parser {
         let _ = expect(.semicolon, &tokenStream)
 
         return .Return(exp)
+    }
+
+    func parseBlockItem(tokenStream: inout [Lexer.Token]) -> Parser.AST.BlockItem {
+        // <block-item> = <statement> | <declaration>
+
+        // determine if we're lookoing at a statement or a declaration
+        // for now we can cheat: declarations all start with a type name and statements do not
+
+        if peek(tokenStream) == .keywordInt {
+            // declaration
+            // go ahead and parse here
+            let _ = expect(.keywordInt, &tokenStream)
+
+            if tokenStream.isEmpty {
+                print("Empty token stream encountered when expecting a declaration (variable name)")
+                exit(ExitCode.parserError.rawValue)
+            }
+
+            let idToken = tokenStream.removeFirst()
+            let varName : String
+            switch idToken {
+                case .identifier(let name):
+                    varName = name
+                default:
+                    print("Expected variable name but encountered \(idToken)")
+                    exit(ExitCode.parserError.rawValue)
+            }
+
+            var exp : Parser.AST.Expression? = nil
+            if peek(tokenStream) == .equal {
+                let _ = expect(.equal, &tokenStream)
+                exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+            }
+
+            let _ = expect(.semicolon, &tokenStream)
+
+            return .D(.Declaration(varName, exp))
+        } else {
+            // statement
+            return .S(parseStatement(tokenStream: &tokenStream))
+        }
     }
 
     func parseProgram(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
@@ -235,10 +292,15 @@ class Parser {
         let _ = expect(.closeParen, &tokenStream)
         let _ = expect(.openBrace, &tokenStream)
 
-        let statement = parseStatement(tokenStream: &tokenStream)
+        // let statement = parseStatement(tokenStream: &tokenStream)
+        var functionBody : [Parser.AST.BlockItem] = []
+        while peek(tokenStream) != .closeBrace {
+            let nextBlockItem = parseBlockItem(tokenStream: &tokenStream)
+            functionBody.append(nextBlockItem)
+        }
 
         let _ = expect(.closeBrace, &tokenStream)
 
-        return .Function(functionName, statement)
+        return .Function(functionName, functionBody)
     }
 }
