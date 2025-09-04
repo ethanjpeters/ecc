@@ -157,31 +157,55 @@ class Tacky {
                     out.append(.Binary(tackyOp, v1, v2, dst))
                     return dst
                 }
-            default:
-                print("Unsupported expression found when generating tacky: \(exp)")
-                exit(ExitCode.parserError.rawValue)
+            case .Var(let name):
+                return .Var(name)
+            case .Assignment(let lVal, let rVal):
+                let result = generateTACKYExpression(rVal, out: &out)
+                switch lVal {
+                    case .Var(let name):
+                        out.append(.Copy(result, .Var(name)))
+                        return .Var(name)
+                    default:
+                        print("Unreachable non-variable lValue")
+                        exit(ExitCode.internalError.rawValue)
+                }
         }
     }
 
-    func generateTACKYStatement(statement: Parser.AST.Statement) -> [Tacky.IR.Instruction] {
+    func generateTACKYStatement(statement: Parser.AST.Statement, out : inout [Tacky.IR.Instruction]) {
         switch statement {
             case .Return(let exp):
-                var out : [Tacky.IR.Instruction] = []
                 let child = generateTACKYExpression(exp, out: &out)
                 out.append(.Return(child))
-                return out
-            default:
-                print("Unsupported statement found when generating tacky: \(statement)")
-                exit(ExitCode.parserError.rawValue)
+            case .Expression(let exp):
+                let _ = generateTACKYExpression(exp, out: &out)
+            case .Null: ()
+        }
+    }
+
+    func generateTACKYDeclaration(decl: Parser.AST.Declaration, out : inout [Tacky.IR.Instruction]) {
+        switch decl {
+            case .Declaration(let name, let exp):
+                if exp != nil {
+                    let child = generateTACKYExpression(exp!, out: &out)
+                    out.append(.Copy(child, .Var(name)))
+                }
         }
     }
 
     func generateTACKYProgram(program: Parser.AST.Program) -> Tacky.IR.Program {
         switch program {
-            case .Function(let name, let stmt):
-                // let tackyInstrs = generateTACKYStatement(statement: stmt)
-                // return .Function(name, tackyInstrs)
-                return .Function(name, [])
+            case .Function(let name, let body):
+                var instrs : [Tacky.IR.Instruction] = []
+                for blockItem in body {
+                    switch blockItem {
+                        case .S(let stmt):
+                            generateTACKYStatement(statement: stmt, out: &instrs)
+                        case .D(let decl):
+                            generateTACKYDeclaration(decl: decl, out: &instrs)
+                    }
+                }
+                return .Function(name, instrs)
         }
     }
 
