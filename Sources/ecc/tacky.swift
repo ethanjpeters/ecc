@@ -98,9 +98,8 @@ class Tacky {
                     return .Complement
                 case .Negate:
                     return .Negate
-                default:
-                    print("Unsupported unary operator found when generating tacky")
-                    exit(ExitCode.parserError.rawValue)
+                case .Not:
+                    return .Not
             }
         }
 
