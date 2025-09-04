@@ -43,7 +43,8 @@ enum ExitCode: Int32 {
     case ioError = 3
     case lexerError = 4
     case parserError = 5
-    case internalError = 6
+    case semanticError = 6
+    case internalError = 7
 }
 
 @main
@@ -58,6 +59,9 @@ struct ECC : ParsableCommand {
     
     @Flag(help: "Exit after code generation")
     var codegen: Bool = false
+
+    @Flag(help: "Exit after semantic analysis")
+    var validate: Bool = false
 
     @Flag(help: "Exit after TACKY generation")
     var tacky: Bool = false
@@ -101,8 +105,10 @@ struct ECC : ParsableCommand {
             return
         }
 
+        let validatedAst = SemanticAnalyzer().analyze(ast)
+
         // tacky IR gen
-        let TAC = Tacky().generateTACKYProgram(program: ast)
+        let TAC = Tacky().generateTACKYProgram(program: validatedAst)
 
         if tacky {
             if verbose {
