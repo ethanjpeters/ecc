@@ -60,7 +60,7 @@ class Tacky {
     }
 
     func makeLabel(_ descriptor: String = "") -> String {
-        let out = "\(descriptor)label.\(tempLabelCounter)"
+        let out = ".L\(descriptor)label.\(tempLabelCounter)"
         tempLabelCounter = tempLabelCounter + 1
         return out
     }

@@ -1,6 +1,6 @@
 import Foundation
 
-func convert(_ operand: Assembly.Tree.Operand) -> String {
+func convert(_ operand: Assembly.Tree.Operand, _ fourByte: Bool = true) -> String {
     switch operand {
         case .Immediate(let val):
             return "$\(val)"
@@ -10,17 +10,17 @@ func convert(_ operand: Assembly.Tree.Operand) -> String {
         case .Register(let reg):
             switch reg {
                 case .AX:
-                    return "%eax"
+                    return fourByte ? "%eax" : "%al"
                 case .DX:
-                    return "%edx"
+                    return fourByte ? "%edx" : "%dl"
                 case .CL:
                     return "%cl"
                 case .CX:
-                    return "%ecx"
+                    return fourByte ? "%ecx" : "%cl"
                 case .R10:
-                    return "%r10d"
+                    return fourByte ? "%r10d" : "%r10b"
                 case .R11:
-                    return "%r11d"
+                    return fourByte ? "%r11d" : "%r11b"
             }
         case .Stack(let slot):
             return "\(slot)(%rbp)"
@@ -57,6 +57,17 @@ func convert(_ op: Assembly.Tree.BinaryOperator) -> String {
     }
 }
 
+func convert(_ cc: Assembly.Tree.ConditionCode) -> String {
+    switch cc {
+        case .E: return "e"
+        case .NE: return "ne"
+        case .G: return "g"
+        case .GE: return "ge"
+        case .L: return "l"
+        case .LE: return "le"
+    }
+}
+
 func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [String]) {
     for instr in instructions {
         switch instr {
@@ -76,9 +87,16 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tcdq")
             case .Idiv(let op):
                 out.append("\tidivl\t\(convert(op))")
-            default:
-                print("Unsupported instruction when codegen-ing: \(instr)")
-                exit(ExitCode.parserError.rawValue)
+            case .Cmp(let left, let right):
+                out.append("\tcmpl\t\(convert(left)), \(convert(right))")
+            case .Jmp(let label):
+                out.append("\tjmp\t\(label)")
+            case .JmpCC(let cc, let label):
+                out.append("\tj\(convert(cc))\t\(label)")
+            case .SetCC(let cc, let op):
+                out.append("\tset\(convert(cc))\t\(convert(op, false))")
+            case .Label(let name):
+                out.append("\(name):")
         }
     }
 }
