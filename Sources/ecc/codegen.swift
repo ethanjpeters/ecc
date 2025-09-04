@@ -76,6 +76,9 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tcdq")
             case .Idiv(let op):
                 out.append("\tidivl\t\(convert(op))")
+            default:
+                print("Unsupported instruction when codegen-ing: \(instr)")
+                exit(ExitCode.parserError.rawValue)
         }
     }
 }

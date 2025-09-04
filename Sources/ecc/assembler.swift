@@ -2,6 +2,15 @@ import Foundation
 
 class Assembly {
     struct Tree {
+        enum ConditionCode {
+            case E
+            case NE
+            case G
+            case GE
+            case L
+            case LE
+        }
+
         enum Register {
             case AX
             case CL
@@ -38,8 +47,13 @@ class Assembly {
             case Mov(Operand /* src */, Operand /* dst */)
             case Unary(UnaryOperator, Operand)
             case Binary(BinaryOperator, Operand, Operand)
+            case Cmp(Operand, Operand)
             case Idiv(Operand)
             case Cdq
+            case Jmp(String /* identifier */)
+            case JmpCC(ConditionCode, String /* identifier */)
+            case SetCC(ConditionCode, Operand)
+            case Label(String /* identifier */)
             case AllocateStack(Int)
             case Ret
         }
@@ -65,7 +79,7 @@ class Assembly {
             case .Negate:
                 return .Neg
             default:
-                print("Unsupported unary operator found when assembling \(op)")
+                print("Unreachable 3")
                 exit(ExitCode.parserError.rawValue)
         }
     }
@@ -79,8 +93,14 @@ class Assembly {
                     out.append(.Mov(convert(val), .Register(.AX)))
                     out.append(.Ret)
                 case .Unary(let op, let src, let dst):
-                    out.append(.Mov(convert(src), convert(dst)))
-                    out.append(.Unary(convert(op), convert(dst)))
+                    if op == .Not {
+                        out.append(.Cmp(.Immediate(0), convert(src)))
+                        out.append(.Mov(.Immediate(0), convert(dst)))
+                        out.append(.SetCC(.E, convert(dst)))
+                    } else {
+                        out.append(.Mov(convert(src), convert(dst)))
+                        out.append(.Unary(convert(op), convert(dst)))
+                    }
                 case .Binary(let op, let src1, let src2, let dst):
                     switch op {
                         case .Add:
@@ -102,6 +122,30 @@ class Assembly {
                             out.append(.Cdq)
                             out.append(.Idiv(convert(src2)))
                             out.append(.Mov(.Register(.DX), convert(dst)))
+                        case .Equal:
+                            out.append(.Cmp(convert(src2), convert(src1)))
+                            out.append(.Mov(.Immediate(0), convert(dst)))
+                            out.append(.SetCC(.E, convert(dst)))
+                        case .NotEqual:
+                            out.append(.Cmp(convert(src2), convert(src1)))
+                            out.append(.Mov(.Immediate(0), convert(dst)))
+                            out.append(.SetCC(.NE, convert(dst)))
+                        case .LessThan:
+                            out.append(.Cmp(convert(src2), convert(src1)))
+                            out.append(.Mov(.Immediate(0), convert(dst)))
+                            out.append(.SetCC(.L, convert(dst)))
+                        case .LessOrEqual:
+                            out.append(.Cmp(convert(src2), convert(src1)))
+                            out.append(.Mov(.Immediate(0), convert(dst)))
+                            out.append(.SetCC(.LE, convert(dst)))
+                        case .GreaterThan: 
+                            out.append(.Cmp(convert(src2), convert(src1)))
+                            out.append(.Mov(.Immediate(0), convert(dst)))
+                            out.append(.SetCC(.G, convert(dst)))
+                        case .GreaterOrEqual:
+                            out.append(.Cmp(convert(src2), convert(src1)))
+                            out.append(.Mov(.Immediate(0), convert(dst)))
+                            out.append(.SetCC(.GE, convert(dst)))
                         case .BitwiseAnd:
                             out.append(.Mov(convert(src1), convert(dst)))
                             out.append(.Binary(.And, convert(src2), convert(dst)))
@@ -117,13 +161,19 @@ class Assembly {
                         case .BitwiseShiftLeft:
                             out.append(.Mov(convert(src1), convert(dst)))
                             out.append(.Binary(.Shl, convert(src2), convert(dst)))
-                        default:
-                            print("Unsupported binary operator found when assembling \(op)")
-                            exit(ExitCode.parserError.rawValue)
                     }
-                default:
-                    print("Unsupported instruction found when assembling \(instr)")
-                    exit(ExitCode.parserError.rawValue)
+                case .Copy(let src, let dst):
+                    out.append(.Mov(convert(src), convert(dst)))
+                case .Jump(let label):
+                    out.append(.Jmp(label))
+                case .JumpIfZero(let val, let label):
+                    out.append(.Cmp(.Immediate(0), convert(val)))
+                    out.append(.JmpCC(.E, label))
+                case .JumpIfNotZero(let val, let label):
+                    out.append(.Cmp(.Immediate(0), convert(val)))
+                    out.append(.JmpCC(.NE, label))
+                case .Label(let name):
+                    out.append(.Label(name))
             }
         }
 
@@ -177,6 +227,13 @@ class Assembly {
                     out.append(.Binary(binOp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping), replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping)))
                 case .Cdq: out.append(.Cdq)
                 case .Idiv(let op): out.append(.Idiv(replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
+                case .Cmp(let left, let right):
+                    out.append(.Cmp(replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping),
+                                    replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping)))
+                case .Jmp(_): out.append(instr)
+                case .JmpCC(_, _): out.append(instr)
+                case .SetCC(_, _): out.append(instr)
+                case .Label(_): out.append(instr)
             }
         }
 
@@ -258,6 +315,26 @@ class Assembly {
                             out.append(.Idiv(.Register(.R10)))
                         default: out.append(instr)
                     }
+                case .Cmp(let left, let right):
+                    switch left {
+                        case .Stack(let srcSlot):
+                            switch right {
+                                case .Stack(_):
+                                    out.append(.Mov(.Stack(srcSlot), .Register(.R10)))
+                                    out.append(.Cmp(.Register(.R10), right))
+                                case .Immediate(_):
+                                    out.append(.Mov(right, .Register(.R11)))
+                                    out.append(.Cmp(left, .Register(.R11)))
+                                default:
+                                    out.append(instr)
+                            }
+                        default:
+                            out.append(instr)
+                    }
+                case .Jmp(_): out.append(instr)
+                case .JmpCC(_, _): out.append(instr)
+                case .SetCC(_, _): out.append(instr)
+                case .Label(_): out.append(instr)
             }
         }
         return out

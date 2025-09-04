@@ -14,8 +14,6 @@ class Tacky {
             case Multiply
             case Divide
             case Remainder
-            case And
-            case Or
             case Equal
             case NotEqual
             case LessThan
@@ -73,8 +71,6 @@ class Tacky {
             case .Subtract: return .Subtract
             case .Multiply: return .Multiply
             case .Divide: return .Divide
-            case .And: return .And
-            case .Or: return .Or
             case .Equal: return .Equal
             case .NotEqual: return .NotEqual
             case .LessThan: return .LessThan
@@ -87,6 +83,10 @@ class Tacky {
             case .BitwiseXor: return .BitwiseXor
             case .BitwiseShiftLeft: return .BitwiseShiftLeft
             case .BitwiseShiftRight: return .BitwiseShiftRight
+            case .And: fallthrough
+            case .Or:
+                print("Unreachable 4")
+                exit(ExitCode.parserError.rawValue)
         }
     }
 
