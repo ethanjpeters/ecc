@@ -232,7 +232,8 @@ class Assembly {
                                     replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping)))
                 case .Jmp(_): out.append(instr)
                 case .JmpCC(_, _): out.append(instr)
-                case .SetCC(_, _): out.append(instr)
+                case .SetCC(let cc, let op):
+                    out.append(.SetCC(cc, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
                 case .Label(_): out.append(instr)
             }
         }
