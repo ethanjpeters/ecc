@@ -330,7 +330,13 @@ class Assembly {
                                     out.append(instr)
                             }
                         default:
-                            out.append(instr)
+                            switch right {
+                                case .Immediate(_):
+                                    out.append(.Mov(right, .Register(.R11)))
+                                    out.append(.Cmp(left, .Register(.R11)))
+                                default:
+                                    out.append(instr)
+                            }
                     }
                 case .Jmp(_): out.append(instr)
                 case .JmpCC(_, _): out.append(instr)
