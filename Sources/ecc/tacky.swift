@@ -61,8 +61,8 @@ class Tacky {
         return out
     }
 
-    func makeLabel() -> String {
-        let out = "label.\(tempLabelCounter)"
+    func makeLabel(_ descriptor: String = "") -> String {
+        let out = "\(descriptor)label.\(tempLabelCounter)"
         tempLabelCounter = tempLabelCounter + 1
         return out
     }
@@ -116,7 +116,7 @@ class Tacky {
             case .Binary(let op, let left, let right):
                 if op == .And {
                     let v1 = generateTACKYExpression(left, out: &out)
-                    let falseLabel = makeLabel()
+                    let falseLabel = makeLabel("and_false")
                     out.append(.JumpIfZero(v1, falseLabel))
                     let v2 = generateTACKYExpression(right, out: &out)
                     out.append(.JumpIfZero(v2, falseLabel))
@@ -133,7 +133,7 @@ class Tacky {
                     return result
                 } else if op == .Or {
                     let v1: Tacky.IR.Value = generateTACKYExpression(left, out: &out)
-                    let trueLabel = makeLabel()
+                    let trueLabel = makeLabel("or_true")
                     out.append(.JumpIfNotZero(v1, trueLabel))
                     let v2 = generateTACKYExpression(right, out: &out)
                     out.append(.JumpIfNotZero(v2, trueLabel))
