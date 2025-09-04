@@ -27,6 +27,7 @@ class Lexer {
         case exclamation
         case lessThan
         case greaterThan
+        case equal
         // two character operators
         case decrement
         case shiftLeft
@@ -175,6 +176,7 @@ class Lexer {
             case "!": return .exclamation
             case "<": return .lessThan
             case ">": return .greaterThan
+            case "=": return .equal
             default: return nil
         }
     }
