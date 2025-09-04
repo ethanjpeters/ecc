@@ -205,6 +205,7 @@ class Tacky {
                             generateTACKYDeclaration(decl: decl, out: &instrs)
                     }
                 }
+                instrs.append(.Return(.Constant(0)))
                 return .Function(name, instrs)
         }
     }
