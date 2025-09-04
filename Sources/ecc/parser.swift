@@ -103,6 +103,7 @@ class Parser {
             case .pipe: return 15
             case .doubleAmpersand: return 10
             case .doublePipe: return 5
+            case .equal: return 1
             default:
                 print("Unreachable 2")
                 exit(ExitCode.parserError.rawValue)
@@ -128,7 +129,8 @@ class Parser {
             case .pipe: fallthrough
             case .carrot: fallthrough
             case .shiftLeft: fallthrough
-            case .shiftRight: return true
+            case .shiftRight: fallthrough
+            case .equal: return true
             default:
                 return false
         }
@@ -143,34 +145,40 @@ class Parser {
         var left = parseFactor(tokenStream: &tokenStream)
         var nextToken = peek(tokenStream)
         while isBinaryOperator(nextToken) && precedence(nextToken) >= minimumPrecedence {
-            let op : AST.BinaryOperator
-            switch nextToken {
-                case .plus: op = .Add
-                case .negate: op = .Subtract
-                case .asterisk: op = .Multiply
-                case .forwardSlash: op = .Divide
-                case .percent: op = .Remainder
-                case .doubleAmpersand: op = .And
-                case .doublePipe: op = .Or
-                case .doubleEquals: op = .Equal
-                case .notEquals: op = .NotEqual
-                case .lessThan: op = .LessThan
-                case .lessThanEqual: op = .LessOrEqual
-                case .greaterThan: op = .GreaterThan
-                case .greaterThanEqual: op = .GreaterOrEqual
-                case .ampersand: op = .BitwiseAnd
-                case .pipe: op = .BitwiseOr
-                case .carrot: op = .BitwiseXor
-                case .shiftLeft: op = .BitwiseShiftLeft
-                case .shiftRight: op = .BitwiseShiftRight
-                default:
-                    print("Unreachable")
-                    exit(ExitCode.parserError.rawValue)
-            }
-            tokenStream.removeFirst()
+            if nextToken == .equal {
+                tokenStream.removeFirst()
+                let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: precedence(nextToken))
+                left = .Assignment(left, right)
+            } else {
+                let op : AST.BinaryOperator
+                switch nextToken {
+                    case .plus: op = .Add
+                    case .negate: op = .Subtract
+                    case .asterisk: op = .Multiply
+                    case .forwardSlash: op = .Divide
+                    case .percent: op = .Remainder
+                    case .doubleAmpersand: op = .And
+                    case .doublePipe: op = .Or
+                    case .doubleEquals: op = .Equal
+                    case .notEquals: op = .NotEqual
+                    case .lessThan: op = .LessThan
+                    case .lessThanEqual: op = .LessOrEqual
+                    case .greaterThan: op = .GreaterThan
+                    case .greaterThanEqual: op = .GreaterOrEqual
+                    case .ampersand: op = .BitwiseAnd
+                    case .pipe: op = .BitwiseOr
+                    case .carrot: op = .BitwiseXor
+                    case .shiftLeft: op = .BitwiseShiftLeft
+                    case .shiftRight: op = .BitwiseShiftRight
+                    default:
+                        print("Unreachable")
+                        exit(ExitCode.parserError.rawValue)
+                }
+                tokenStream.removeFirst()
 
-            let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: precedence(nextToken) + 1)
-            left = .Binary(op, left, right)
+                let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: precedence(nextToken) + 1)
+                left = .Binary(op, left, right)
+            }
             nextToken = peek(tokenStream)
         }
         return left
