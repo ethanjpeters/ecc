@@ -64,6 +64,9 @@ class Assembly {
                 return .Not
             case .Negate:
                 return .Neg
+            default:
+                print("Unsupported unary operator found when assembling \(op)")
+                exit(ExitCode.parserError.rawValue)
         }
     }
 
@@ -114,7 +117,13 @@ class Assembly {
                         case .BitwiseShiftLeft:
                             out.append(.Mov(convert(src1), convert(dst)))
                             out.append(.Binary(.Shl, convert(src2), convert(dst)))
+                        default:
+                            print("Unsupported binary operator found when assembling \(op)")
+                            exit(ExitCode.parserError.rawValue)
                     }
+                default:
+                    print("Unsupported instruction found when assembling \(instr)")
+                    exit(ExitCode.parserError.rawValue)
             }
         }
 
