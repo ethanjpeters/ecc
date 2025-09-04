@@ -24,10 +24,19 @@ class Lexer {
         case ampersand
         case pipe
         case carrot
+        case exclamation
+        case lessThan
+        case greaterThan
         // two character operators
         case decrement
         case shiftLeft
         case shiftRight
+        case doubleAmpersand
+        case doublePipe
+        case doubleEquals
+        case notEquals
+        case lessThanEqual
+        case greaterThanEqual
         // tokens bearing data
         case identifier(String)
         case constant(String)
@@ -104,12 +113,46 @@ class Lexer {
                 if sourceFileCharacters[startingIndex + 1] == "<" {
                     return .shiftLeft
                 }
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .lessThanEqual
+                }
             }
         }
         if c == ">" {
             if startingIndex + 1 < sourceFileCharacters.count {
                 if sourceFileCharacters[startingIndex + 1] == ">" {
                     return .shiftRight
+                }
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .greaterThanEqual
+                }
+            }
+        }
+        if c == "&" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "&" {
+                    return .doubleAmpersand
+                }
+            }
+        }
+        if c == "|" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "|" {
+                    return .doublePipe
+                }
+            }
+        }
+        if c == "=" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .doubleEquals
+                }
+            }
+        }
+        if c == "!" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .notEquals
                 }
             }
         }
@@ -129,6 +172,9 @@ class Lexer {
             case "&": return .ampersand
             case "|": return .pipe
             case "^": return .carrot
+            case "!": return .exclamation
+            case "<": return .lessThan
+            case ">": return .greaterThan
             default: return nil
         }
     }
