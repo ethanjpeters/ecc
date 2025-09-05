@@ -10,7 +10,15 @@ class SemanticAnalyzer {
             return out
         }
 
-        func resolveExpression(_ exp : Parser.AST.Expression, _ nameMap: inout [String : String]) -> Parser.AST.Expression {
+        func copyNameMap(_ nameMap: [String : (String, Bool)]) -> [String : (String, Bool)] {
+            var out : [String : (String, Bool)] = [:]
+            for (k, v) in nameMap {
+                out[k] = (v.0, false)
+            }
+            return out
+        }
+
+        func resolveExpression(_ exp : Parser.AST.Expression, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Expression {
             switch exp {
                 case .Assignment(let lValue, let rValue):
                     switch lValue {
@@ -32,7 +40,7 @@ class SemanticAnalyzer {
                     return .Unary(op, resolveExpression(child, &nameMap))
                 case .Var(let name):
                     if let uniqueName = nameMap[name] {
-                        return .Var(uniqueName)
+                        return .Var(uniqueName.0)
                     } else {
                         print("Undeclared variable \(name)")
                         exit(ExitCode.semanticError.rawValue)
@@ -42,35 +50,37 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveStatement(_ stmt : Parser.AST.Statement, _ nameMap: inout [String : String]) -> Parser.AST.Statement {
+        func resolveStatement(_ stmt : Parser.AST.Statement, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Statement {
             switch stmt {
                 case .Expression(let exp): return .Expression(resolveExpression(exp, &nameMap))
                 case .Return(let exp): return .Return(resolveExpression(exp, &nameMap))
                 case .Null: return .Null
                 case .If(let cond, let thenStatement, let elseStatement):
-                    var copiedNameMap = nameMap
+                    var copiedNameMap = copyNameMap(nameMap)
                     return .If(resolveExpression(cond, &nameMap), resolveStatement(thenStatement, &copiedNameMap),
                                elseStatement == nil ? nil : resolveStatement(elseStatement!, &copiedNameMap))
                 case .Compound(let block):
                     switch block {
                         case .Block(let items):
                             return .Compound(.Block(items.map { itm in
-                                var copiedNameMap : [String : String] = nameMap
+                                var copiedNameMap = copyNameMap(nameMap)
                                 return resolveBlockItem(itm, &copiedNameMap)
                             }))
                     }
             }
         }
 
-        func resolveDeclaration(_ decl: Parser.AST.Declaration, _ nameMap: inout [String : String]) -> Parser.AST.Declaration {
+        func resolveDeclaration(_ decl: Parser.AST.Declaration, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Declaration {
             switch decl {
                 case .Declaration(let name, let exp):
                     if let n = nameMap[name] {
-                        print("Duplicate variable name found: \(n)")
-                        exit(ExitCode.semanticError.rawValue)
+                        if n.1 {
+                            print("Duplicate variable name found: \(n)")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
                     }
                     let uniqueName = makeTemp(name)
-                    nameMap[name] = uniqueName
+                    nameMap[name] = (uniqueName, true)
                     var outInit : Parser.AST.Expression? = nil
                     if let initializer = exp {
                         outInit = resolveExpression(initializer, &nameMap)
@@ -79,7 +89,7 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveBlockItem(_ blockItem: Parser.AST.BlockItem, _ nameMap: inout [String : String]) -> Parser.AST.BlockItem {
+        func resolveBlockItem(_ blockItem: Parser.AST.BlockItem, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.BlockItem {
             switch blockItem {
                 case .D(let decl):
                     return .D(resolveDeclaration(decl, &nameMap))
@@ -92,7 +102,7 @@ class SemanticAnalyzer {
             switch program {
                 case .Function(let name, let body):
                     // MARK - globals to be introduced here
-                    var variableNameMapping : [String : String] = [:]
+                    var variableNameMapping : [String : (String, Bool)] = [:]
                     switch body {
                         case .Block(let items):
                             return .Function(name, .Block(items.map { resolveBlockItem($0, &variableNameMapping) }))
