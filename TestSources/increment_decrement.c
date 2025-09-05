@@ -1,4 +1,8 @@
 int main(void) {
     int x = 3;
-    return --(++((x++)--));
+    x++;
+    x--;
+    ++x;
+    --x;
+    return x;
 }
