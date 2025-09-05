@@ -1,5 +1,15 @@
 #!/bin/bash
 
+swift run ecc TestSources/control_flow.c
+./control_flow
+if [[ $? -ne 205 ]]; then
+    echo "control_flow: Expected exit code 205 but got $?"
+    exit 1
+else
+    echo "control_flow: success"
+fi
+rm control_flow
+
 swift run ecc TestSources/increment_decrement.c
 ./increment_decrement
 if [[ $? -ne 3 ]]; then
