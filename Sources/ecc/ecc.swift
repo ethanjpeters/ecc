@@ -107,6 +107,10 @@ struct ECC : ParsableCommand {
 
         let validatedAst = SemanticAnalyzer().analyze(ast)
 
+        if validate {
+            return
+        }
+
         // tacky IR gen
         let TAC = Tacky().generateTACKYProgram(program: validatedAst)
 

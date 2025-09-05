@@ -37,10 +37,9 @@ class SemanticAnalyzer {
                         print("Undeclared variable \(name)")
                         exit(ExitCode.semanticError.rawValue)
                     }
-                case .Conditional(_, _, _):
-                    print("Unsupported conditional expression found during semantic analysis")
-                    exit(ExitCode.internalError.rawValue)
-}
+                case .Conditional(let cond, let left, let right):
+                    return .Conditional(resolveExpression(cond, &nameMap), resolveExpression(left, &nameMap), resolveExpression(right, &nameMap))
+            }
         }
 
         func resolveStatement(_ stmt : Parser.AST.Statement, _ nameMap: inout [String : String]) -> Parser.AST.Statement {
@@ -48,9 +47,10 @@ class SemanticAnalyzer {
                 case .Expression(let exp): return .Expression(resolveExpression(exp, &nameMap))
                 case .Return(let exp): return .Return(resolveExpression(exp, &nameMap))
                 case .Null: return .Null
-                case .If(_, _, _):
-                    print("Unsupported if statement found during semantic analysis")
-                    exit(ExitCode.internalError.rawValue)
+                case .If(let cond, let thenStatement, let elseStatement):
+                    var copiedNameMap = nameMap
+                    return .If(resolveExpression(cond, &nameMap), resolveStatement(thenStatement, &copiedNameMap),
+                               elseStatement == nil ? nil : resolveStatement(elseStatement!, &copiedNameMap))
             }
         }
 
