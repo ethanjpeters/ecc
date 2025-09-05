@@ -377,4 +377,48 @@ class Parser {
 
         return .Function(functionName, functionBody)
     }
+
+    func fixUpCompoundAssignments(_ exp: Parser.AST.Expression) -> Parser.AST.Expression {
+        switch exp {
+            case .CompoundAssignment(let op, let lVal, let rVal):
+                return .Assignment(lVal, .Binary(op, lVal, rVal))
+            default: return exp
+        }
+    }
+
+    func fixUpCompoundAssignments(_ statement: Parser.AST.Statement) -> Parser.AST.Statement {
+        switch statement {
+            case .Expression(let exp): return .Expression(fixUpCompoundAssignments(exp))
+            case .Null: return statement
+            case .Return(let exp): return .Return(fixUpCompoundAssignments(exp))
+        }
+    }
+
+    func fixUpCompoundAssignments(_ blockItem: Parser.AST.BlockItem) -> Parser.AST.BlockItem {
+        switch blockItem {
+            case .D(_):
+                return blockItem
+            case .S(let stmt):
+                return .S(fixUpCompoundAssignments(stmt))
+        }
+    }
+
+    func fixUpCompoundAssignments(_ program: Parser.AST.Program) -> Parser.AST.Program {
+        switch program {
+            case .Function(let name, let body):
+                return .Function(name, body.map { fixUpCompoundAssignments($0)} )
+        }
+    }
+
+    func parse(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
+        let initialForm = parseProgram(tokenStream: &tokenStream)
+
+        if !tokenStream.isEmpty {
+            print("Unexpected tokens found at end of stream: \(tokenStream)")
+            exit(ExitCode.parserError.rawValue)
+        }
+
+        let noCompoundAssignments = fixUpCompoundAssignments(initialForm)
+        return noCompoundAssignments
+    }
 }

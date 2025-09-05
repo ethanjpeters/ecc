@@ -96,7 +96,7 @@ struct ECC : ParsableCommand {
 
         // parse
 
-        let ast = Parser().parseProgram(tokenStream: &tokenStream)
+        let ast = Parser().parse(tokenStream: &tokenStream)
 
         if parse {
             if verbose {
