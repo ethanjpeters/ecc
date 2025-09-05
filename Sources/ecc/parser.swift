@@ -42,6 +42,7 @@ class Parser {
             case Var(String /* identifier */)
             case Assignment(Expression, Expression)
             case CompoundAssignment(BinaryOperator, Expression, Expression)
+            case Conditional(Expression /* condition */, Expression, Expression)
         }
 
         enum Declaration {
@@ -210,6 +211,12 @@ class Parser {
                             exit(ExitCode.internalError.rawValue)
                     }
                 }
+            } else if nextToken == .question {
+                let _ = expect(.question, &tokenStream)
+                let middle = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                let _ = expect(.colon, &tokenStream)
+                let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                left = .Conditional(left, middle, right)
             } else {
                 let op : AST.BinaryOperator
                 switch nextToken {
