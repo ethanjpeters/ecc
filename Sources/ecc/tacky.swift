@@ -108,19 +108,49 @@ class Tacky {
             }
         }
 
+        func isIncOrDec(_ op: Parser.AST.UnaryOperator) -> Bool {
+            switch op {
+                case .PreIncrement: fallthrough
+                case .PreDecrement: fallthrough
+                case .PostIncrement: fallthrough
+                case .PostDecrement: return true
+                default: return false
+            }
+        }
+
         switch exp {
             case .Constant(let val):
                 return .Constant(val)
             case .Unary(let op, let exp):
-                let src = generateTACKYExpression(exp, out: &out)
-                let dstName = makeTemp()
-                let dst : Tacky.IR.Value = .Var(dstName)
-                let tackyOp = generateTACKYOp(op)
-                out.append(.Unary(tackyOp, src, dst))
-                if tackyOp == .PostIncrement || tackyOp == .PostDecrement {
-                    return src
+                if isIncOrDec(op) {
+                    let src = generateTACKYExpression(exp, out: &out)
+                    let dstName = makeTemp()
+                    let dst : Tacky.IR.Value = .Var(dstName)
+                    switch op {
+                        case .PreIncrement:
+                            out.append(.Binary(.Add, .Constant(1), src, dst))
+                            return dst
+                        case .PreDecrement:
+                            out.append(.Binary(.Subtract, src, .Constant(1), dst))
+                            return dst
+                        case .PostIncrement:
+                            out.append(.Binary(.Add, .Constant(1), src, dst))
+                            return src
+                        case .PostDecrement:
+                            out.append(.Binary(.Subtract, src, .Constant(1), dst))
+                            return src
+                        default:
+                            print("Unreachable B")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                } else {
+                    let src = generateTACKYExpression(exp, out: &out)
+                    let dstName = makeTemp()
+                    let dst : Tacky.IR.Value = .Var(dstName)
+                    let tackyOp = generateTACKYOp(op)
+                    out.append(.Unary(tackyOp, src, dst))
+                    return dst
                 }
-                return dst
             case .Binary(let op, let left, let right):
                 if op == .And {
                     let v1 = generateTACKYExpression(left, out: &out)
