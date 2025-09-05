@@ -1,9 +1,19 @@
 #!/bin/bash
 
+swift run ecc TestSources/assignment.c
+./assignment
+if [[ $? -ne 11 ]]; then
+    echo "assignment: Expected exit code 11 but got $?"
+    exit 1
+else
+    echo "assignment: success"
+fi
+rm assignment
+
 swift run ecc TestSources/logical_ops.c
 ./logical_ops
 if [[ $? -ne 0 ]]; then
-    echo "logical_ops: Expected exit code 0logical_ops but got $?"
+    echo "logical_ops: Expected exit code 0 but got $?"
     exit 1
 else
     echo "logical_ops: success"
