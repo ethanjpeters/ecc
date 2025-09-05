@@ -7,13 +7,15 @@ class Lexer {
         case keywordVoid
         // control flow
         case keywordReturn
+        case keywordIf
+        case keywordElse
         // braces/brackets
         case openParen
         case closeParen
         case openBrace
         case closeBrace
         // punctuation
-            case semicolon
+        case semicolon
         // one character operators
         case complement
         case negate
@@ -28,6 +30,8 @@ class Lexer {
         case lessThan
         case greaterThan
         case equal
+        case question
+        case colon
         // two character operators
         case decrement
         case increment
@@ -263,6 +267,8 @@ class Lexer {
             case "<": return .lessThan
             case ">": return .greaterThan
             case "=": return .equal
+            case ":": return .colon
+            case "?": return .question
             default: return nil
         }
     }
@@ -279,6 +285,17 @@ class Lexer {
         }
     }
 
+    func matchKeyword(identifier: String) -> Token? {
+        switch identifier {
+            case "int": return .keywordInt
+            case "void": return .keywordVoid
+            case "return": return .keywordReturn
+            case "if": return .keywordIf
+            case "else": return .keywordElse
+            default: return nil
+        }
+    }
+
     func lex() -> [Token] {
         var out : [Token] = []
         var i = 0
@@ -289,12 +306,8 @@ class Lexer {
             if sourceFileCharacters[i].isWhitespace {
                 i = i + 1
             } else if let identifier = matchIdentifier(startingIndex: i) {
-                if identifier == "int" {
-                    out.append(.keywordInt)
-                } else if identifier == "void" {
-                    out.append(.keywordVoid)
-                } else if identifier == "return" {
-                    out.append(.keywordReturn)
+                if let kw = matchKeyword(identifier: identifier) {
+                    out.append(kw)
                 } else {
                     out.append(.identifier(identifier))
                 }
