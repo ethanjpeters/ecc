@@ -37,6 +37,7 @@ class Parser {
             case Binary(BinaryOperator, Expression, Expression)
             case Var(String /* identifier */)
             case Assignment(Expression, Expression)
+            case CompoundAssignment(BinaryOperator, Expression, Expression)
         }
 
         enum Declaration {
@@ -103,7 +104,17 @@ class Parser {
             case .pipe: return 15
             case .doubleAmpersand: return 10
             case .doublePipe: return 5
-            case .equal: return 1
+            case .equal: fallthrough
+            case .plusEqual: fallthrough
+            case .minusEqual: fallthrough
+            case .asteriskEqual: fallthrough
+            case .slashEqual: fallthrough
+            case .percentEqual: fallthrough
+            case .ampersandEqual: fallthrough
+            case .pipeEqual: fallthrough
+            case .carrotEqual: fallthrough
+            case .shiftLeftEqual: fallthrough
+            case .shiftRightEqual: return 1
             default:
                 print("Unreachable 2")
                 exit(ExitCode.parserError.rawValue)
@@ -130,9 +141,36 @@ class Parser {
             case .carrot: fallthrough
             case .shiftLeft: fallthrough
             case .shiftRight: fallthrough
-            case .equal: return true
+            case .equal: fallthrough
+            case .plusEqual: fallthrough
+            case .minusEqual: fallthrough
+            case .asteriskEqual: fallthrough
+            case .slashEqual: fallthrough
+            case .percentEqual: fallthrough
+            case .ampersandEqual: fallthrough
+            case .pipeEqual: fallthrough
+            case .carrotEqual: fallthrough
+            case .shiftLeftEqual: fallthrough
+            case .shiftRightEqual: return true
             default:
                 return false
+        }
+    }
+
+    func isAssignmentOperator(_ token: Lexer.Token) -> Bool {
+        switch token {
+            case .equal: fallthrough
+            case .plusEqual: fallthrough
+            case .minusEqual: fallthrough
+            case .asteriskEqual: fallthrough
+            case .slashEqual: fallthrough
+            case .percentEqual: fallthrough
+            case .ampersandEqual: fallthrough
+            case .pipeEqual: fallthrough
+            case .carrotEqual: fallthrough
+            case .shiftLeftEqual: fallthrough
+            case .shiftRightEqual: return true
+            default: return false
         }
     }
 
@@ -145,10 +183,28 @@ class Parser {
         var left = parseFactor(tokenStream: &tokenStream)
         var nextToken = peek(tokenStream)
         while isBinaryOperator(nextToken) && precedence(nextToken) >= minimumPrecedence {
-            if nextToken == .equal {
+            if isAssignmentOperator(nextToken) {
                 tokenStream.removeFirst()
                 let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: precedence(nextToken))
-                left = .Assignment(left, right)
+                if nextToken == .equal {
+                    left = .Assignment(left, right)
+                } else {
+                    switch nextToken {
+                        case .plusEqual: left = .CompoundAssignment(.Add, left, right)
+                        case .minusEqual: left = .CompoundAssignment(.Subtract, left, right)
+                        case .asteriskEqual: left = .CompoundAssignment(.Multiply, left, right)
+                        case .slashEqual: left = .CompoundAssignment(.Divide, left, right)
+                        case .percentEqual: left = .CompoundAssignment(.Remainder, left, right)
+                        case .ampersandEqual: left = .CompoundAssignment(.BitwiseAnd, left, right)
+                        case .pipeEqual: left = .CompoundAssignment(.BitwiseOr, left, right)
+                        case .carrotEqual: left = .CompoundAssignment(.BitwiseXor, left, right)
+                        case .shiftLeftEqual: left = .CompoundAssignment(.BitwiseShiftLeft, left, right)
+                        case .shiftRightEqual: left = .CompoundAssignment(.BitwiseShiftRight, left, right)
+                        default:
+                            print("Unreachable A")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                }
             } else {
                 let op : AST.BinaryOperator
                 switch nextToken {
@@ -224,11 +280,21 @@ class Parser {
     }
 
     func parseStatement(tokenStream: inout [Lexer.Token]) -> Parser.AST.Statement {
-        let _ = expect(.keywordReturn, &tokenStream)
-        let exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
-        let _ = expect(.semicolon, &tokenStream)
+        let maybeReturn = peek(tokenStream)
 
-        return .Return(exp)
+        switch maybeReturn {
+            case .keywordReturn:
+                let _ = expect(.keywordReturn, &tokenStream)
+                let exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                let _ = expect(.semicolon, &tokenStream)
+                return .Return(exp)
+            case .semicolon:
+                let _ = expect(.semicolon, &tokenStream)
+                return .Null
+            default:
+                let exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                return .Expression(exp)
+        }
     }
 
     func parseBlockItem(tokenStream: inout [Lexer.Token]) -> Parser.AST.BlockItem {

@@ -21,6 +21,9 @@ class SemanticAnalyzer {
                             exit(ExitCode.semanticError.rawValue)
                     }
                     return .Assignment(resolveExpression(lValue, &nameMap), resolveExpression(rValue, &nameMap))
+                case .CompoundAssignment(_,_,_):
+                    print("Unsupported compount assignment found while generating tacky")
+                    exit(ExitCode.internalError.rawValue)
                 case .Binary(let op, let left, let right):
                     return .Binary(op, resolveExpression(left, &nameMap), resolveExpression(right, &nameMap))
                 case .Constant(_):

@@ -169,6 +169,9 @@ class Tacky {
                         print("Unreachable non-variable lValue")
                         exit(ExitCode.internalError.rawValue)
                 }
+            case .CompoundAssignment(_,_,_):
+                print("Unsupported compount assignment found while generating tacky")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 
