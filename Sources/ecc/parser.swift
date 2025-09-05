@@ -340,6 +340,8 @@ class Parser {
                     elseStatement = parseStatement(tokenStream: &tokenStream)
                 }
                 return .If(conditional, thenStatement, elseStatement)
+            case .openBrace:
+                return .Compound(parseBlock(tokenStream: &tokenStream))
             default:
                 let exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 return .Expression(exp)
