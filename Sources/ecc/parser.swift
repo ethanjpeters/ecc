@@ -49,20 +49,25 @@ class Parser {
             case Declaration(String /* identifier name */, Expression?)
         }
 
-        indirect enum Statement {
-            case Return(Expression)
-            case Expression(Expression)
-            case If(Expression /* condition */, Statement /* then */, Statement? /* else */)
-            case Null
-        }
-
         enum BlockItem {
             case S(Statement)
             case D(Declaration)
         }
 
+        enum Block {
+            case Block([BlockItem])
+        }
+
+        indirect enum Statement {
+            case Return(Expression)
+            case Expression(Expression)
+            case If(Expression /* condition */, Statement /* then */, Statement? /* else */)
+            case Compound(Block)
+            case Null
+        }
+
         enum Program {
-            case Function(String /* name */, [BlockItem] /* body */)
+            case Function(String /* name */, Block /* body */)
         }
     }
 
@@ -382,6 +387,16 @@ class Parser {
         }
     }
 
+    func parseBlock(tokenStream: inout [Lexer.Token]) -> Parser.AST.Block {
+        let _ = expect(.openBrace, &tokenStream)
+        var body : [Parser.AST.BlockItem] = []
+        while peek(tokenStream) != .closeBrace {
+            body.append(parseBlockItem(tokenStream: &tokenStream))
+        }
+        let _ = expect(.closeBrace, &tokenStream)
+        return .Block(body)
+    }    
+
     func parseProgram(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
         if tokenStream.isEmpty {
             print("Empty token stream encountered when expecting a program")
@@ -408,18 +423,8 @@ class Parser {
         let _ = expect(.openParen, &tokenStream)
         let _ = expect(.keywordVoid, &tokenStream)    // currently the only acceptable parameter type
         let _ = expect(.closeParen, &tokenStream)
-        let _ = expect(.openBrace, &tokenStream)
 
-        // let statement = parseStatement(tokenStream: &tokenStream)
-        var functionBody : [Parser.AST.BlockItem] = []
-        while peek(tokenStream) != .closeBrace {
-            let nextBlockItem = parseBlockItem(tokenStream: &tokenStream)
-            functionBody.append(nextBlockItem)
-        }
-
-        let _ = expect(.closeBrace, &tokenStream)
-
-        return .Function(functionName, functionBody)
+        return .Function(functionName, parseBlock(tokenStream: &tokenStream))
     }
 
     func fixUpCompoundAssignments(_ exp: Parser.AST.Expression) -> Parser.AST.Expression {
@@ -437,6 +442,11 @@ class Parser {
             case .Return(let exp): return .Return(fixUpCompoundAssignments(exp))
             case .If(let exp, let thenStatement, let elseStatement):
                 return .If(fixUpCompoundAssignments(exp), fixUpCompoundAssignments(thenStatement), elseStatement == nil ? nil : fixUpCompoundAssignments(elseStatement!))
+            case .Compound(let block):
+                switch block {
+                    case .Block(let blockItemStar):
+                        return .Compound(.Block(blockItemStar.map { fixUpCompoundAssignments($0) }))
+                }
         }
     }
 
@@ -452,7 +462,10 @@ class Parser {
     func fixUpCompoundAssignments(_ program: Parser.AST.Program) -> Parser.AST.Program {
         switch program {
             case .Function(let name, let body):
-                return .Function(name, body.map { fixUpCompoundAssignments($0)} )
+                switch body {
+                    case .Block(let body):
+                        return .Function(name, .Block(body.map { fixUpCompoundAssignments($0) }))
+                }
         }
     }
 

@@ -248,6 +248,9 @@ class Tacky {
                 }
                 out.append(.Label(endLabel))
             case .Null: ()
+            case .Compound(_):
+                print("Unsupported construct Compound found when generating tacky statement")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 
@@ -264,17 +267,20 @@ class Tacky {
     func generateTACKYProgram(program: Parser.AST.Program) -> Tacky.IR.Program {
         switch program {
             case .Function(let name, let body):
-                var instrs : [Tacky.IR.Instruction] = []
-                for blockItem in body {
-                    switch blockItem {
-                        case .S(let stmt):
-                            generateTACKYStatement(statement: stmt, out: &instrs)
-                        case .D(let decl):
-                            generateTACKYDeclaration(decl: decl, out: &instrs)
-                    }
+                switch body {
+                    case .Block(let items):
+                        var instrs : [Tacky.IR.Instruction] = []
+                        for blockItem in items {
+                            switch blockItem {
+                                case .S(let stmt):
+                                    generateTACKYStatement(statement: stmt, out: &instrs)
+                                case .D(let decl):
+                                    generateTACKYDeclaration(decl: decl, out: &instrs)
+                            }
+                        }
+                        instrs.append(.Return(.Constant(0)))
+                        return .Function(name, instrs)
                 }
-                instrs.append(.Return(.Constant(0)))
-                return .Function(name, instrs)
         }
     }
 

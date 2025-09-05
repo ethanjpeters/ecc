@@ -51,6 +51,9 @@ class SemanticAnalyzer {
                     var copiedNameMap = nameMap
                     return .If(resolveExpression(cond, &nameMap), resolveStatement(thenStatement, &copiedNameMap),
                                elseStatement == nil ? nil : resolveStatement(elseStatement!, &copiedNameMap))
+                case .Compound(_):
+                    print("Unsupported construct Compound found when doing semantic analysis")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -85,7 +88,10 @@ class SemanticAnalyzer {
                 case .Function(let name, let body):
                     // MARK - globals to be introduced here
                     var variableNameMapping : [String : String] = [:]
-                    return .Function(name, body.map { resolveBlockItem($0, &variableNameMapping) })
+                    switch body {
+                        case .Block(let items):
+                            return .Function(name, .Block(items.map { resolveBlockItem($0, &variableNameMapping) }))
+                    }
             }
         }
     }
