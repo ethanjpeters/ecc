@@ -3,9 +3,8 @@ int main(void) {
     x *= 15;
     x = x + 100;
     int y = x > 400 ? 399 : 401;
-    if (x < 255) {
+    if (x < 255)
         return x;
-    } else {
+    else
         return 5;
-    }
 }

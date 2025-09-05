@@ -48,9 +48,10 @@ class Parser {
             case Declaration(String /* identifier name */, Expression?)
         }
 
-        enum Statement {
+        indirect enum Statement {
             case Return(Expression)
             case Expression(Expression)
+            case If(Expression /* condition */, Statement /* then */, Statement? /* else */)
             case Null
         }
 
@@ -313,6 +314,18 @@ class Parser {
             case .semicolon:
                 let _ = expect(.semicolon, &tokenStream)
                 return .Null
+            case .keywordIf:
+                let _ = expect(.keywordIf, &tokenStream)
+                let _ = expect(.openParen, &tokenStream)
+                let conditional = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                let _ = expect(.closeParen, &tokenStream)
+                let thenStatement = parseStatement(tokenStream: &tokenStream)
+                var elseStatement : Parser.AST.Statement? = nil
+                if peek(tokenStream) == .keywordElse {
+                    let _ = expect(.keywordElse, &tokenStream)
+                    elseStatement = parseStatement(tokenStream: &tokenStream)
+                }
+                return .If(conditional, thenStatement, elseStatement)
             default:
                 let exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 return .Expression(exp)
@@ -413,6 +426,8 @@ class Parser {
             case .Expression(let exp): return .Expression(fixUpCompoundAssignments(exp))
             case .Null: return statement
             case .Return(let exp): return .Return(fixUpCompoundAssignments(exp))
+            case .If(let exp, let thenStatement, let elseStatement):
+                return .If(fixUpCompoundAssignments(exp), fixUpCompoundAssignments(thenStatement), elseStatement == nil ? nil : fixUpCompoundAssignments(elseStatement!))
         }
     }
 
