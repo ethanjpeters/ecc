@@ -13,7 +13,7 @@ class Lexer {
         case openBrace
         case closeBrace
         // punctuation
-        case semicolon
+            case semicolon
         // one character operators
         case complement
         case negate
@@ -38,6 +38,17 @@ class Lexer {
         case notEquals
         case lessThanEqual
         case greaterThanEqual
+        case plusEqual
+        case minusEqual
+        case asteriskEqual
+        case slashEqual
+        case percentEqual
+        case ampersandEqual
+        case pipeEqual
+        case carrotEqual
+        // three chracter operators
+        case shiftLeftEqual
+        case shiftRightEqual
         // tokens bearing data
         case identifier(String)
         case constant(String)
@@ -100,6 +111,33 @@ class Lexer {
         return matchedString.count > 0 ? matchedString : nil
     }
 
+    func matchThreeCharacterOperator(startingIndex: Int) -> Token? {
+        let c = sourceFileCharacters[startingIndex]
+        if c == "<" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "<" {
+                    if startingIndex + 2 < sourceFileCharacters.count {
+                        if sourceFileCharacters[startingIndex + 2] == "=" {
+                            return .shiftLeftEqual
+                        }
+                    }
+                }
+            }
+        }
+        if c == ">" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == ">" {
+                    if startingIndex + 2 < sourceFileCharacters.count {
+                        if sourceFileCharacters[startingIndex + 2] == "=" {
+                            return .shiftRightEqual
+                        }
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
     func matchTwoCharacterOperator(startingIndex: Int) -> Token? {
         let c = sourceFileCharacters[startingIndex]
         if c == "-" {
@@ -134,12 +172,18 @@ class Lexer {
                 if sourceFileCharacters[startingIndex + 1] == "&" {
                     return .doubleAmpersand
                 }
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .ampersandEqual
+                }
             }
         }
         if c == "|" {
             if startingIndex + 1 < sourceFileCharacters.count {
                 if sourceFileCharacters[startingIndex + 1] == "|" {
                     return .doublePipe
+                }
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .pipeEqual
                 }
             }
         }
@@ -154,6 +198,48 @@ class Lexer {
             if startingIndex + 1 < sourceFileCharacters.count {
                 if sourceFileCharacters[startingIndex + 1] == "=" {
                     return .notEquals
+                }
+            }
+        }
+        if c == "+" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .plusEqual
+                }
+            }
+        }
+        if c == "-" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .minusEqual
+                }
+            }
+        }
+        if c == "*" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .asteriskEqual
+                }
+            }
+        }
+        if c == "/" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .slashEqual
+                }
+            }
+        }
+        if c == "%" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .percentEqual
+                }
+            }
+        }
+        if c == "^" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .carrotEqual
                 }
             }
         }
@@ -218,6 +304,10 @@ class Lexer {
                 out.append(.constant(constant))
 
                 i = i + constant.count
+            } else if let op = matchThreeCharacterOperator(startingIndex: i) {
+                out.append(op)
+
+                i = i + 3
             } else if let op = matchTwoCharacterOperator(startingIndex: i) {
                 out.append(op)
 
