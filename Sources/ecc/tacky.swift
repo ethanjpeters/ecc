@@ -100,6 +100,9 @@ class Tacky {
                     return .Negate
                 case .Not:
                     return .Not
+                default:
+                    print("Unsupported unary operator \(op) found while generating tacky")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 

@@ -6,6 +6,10 @@ class Parser {
             case Complement
             case Negate
             case Not
+            case PreIncrement
+            case PostIncrement
+            case PreDecrement
+            case PostDecrement
         }
 
         enum BinaryOperator {
@@ -247,6 +251,7 @@ class Parser {
         }
 
         let next = tokenStream.removeFirst()
+        var lhs : Parser.AST.Expression
         switch next {
             // parse an integer constant
             case .constant(let val):
@@ -254,29 +259,46 @@ class Parser {
                     print("Integer constant \(val) was not a valid integer")
                     exit(ExitCode.parserError.rawValue)
                 }
-                return .Constant(intVal)
+                lhs = .Constant(intVal)
             // variable
             case .identifier(let name):
-                return .Var(name)
+                lhs = .Var(name)
             // expression wrapped in parentheses
             case .openParen:
                 let out = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 let _ = expect(.closeParen, &tokenStream)
-                return out
+                lhs = out
             // <unop> <exp>
             case .complement:
                 let child = parseFactor(tokenStream: &tokenStream)
-                return .Unary(.Complement, child)
+                lhs = .Unary(.Complement, child)
             case .negate:
                 let child = parseFactor(tokenStream: &tokenStream)
-                return .Unary(.Negate, child)
+                lhs = .Unary(.Negate, child)
             case .exclamation:
                 let child = parseFactor(tokenStream: &tokenStream)
-                return .Unary(.Not, child)
+                lhs = .Unary(.Not, child)
+            case .increment:
+                let child = parseFactor(tokenStream: &tokenStream)
+                lhs = .Unary(.PreIncrement, child)
+            case .decrement:
+                let child = parseFactor(tokenStream: &tokenStream)
+                lhs = .Unary(.PreDecrement, child)
             default:
                 print("Expected expression but encountered \(next)")
                 exit(ExitCode.parserError.rawValue)
         }
+
+        // check for postfix operators
+        if peek(tokenStream) == .increment {
+            lhs = .Unary(.PostIncrement, lhs)
+            tokenStream.removeFirst()
+        } else if peek(tokenStream) == .decrement {
+            lhs = .Unary(.PostDecrement, lhs)
+            tokenStream.removeFirst()
+        }
+
+        return lhs
     }
 
     func parseStatement(tokenStream: inout [Lexer.Token]) -> Parser.AST.Statement {
