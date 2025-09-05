@@ -211,8 +211,20 @@ class Tacky {
                 print("Unreachable compound assignment")
                 exit(ExitCode.internalError.rawValue)
             case .Conditional(let cond, let left, let right):
-                print("EJP -- MARK")
-                exit(ExitCode.internalError.rawValue)
+                let condValue = generateTACKYExpression(cond, out: &out)
+                let dstName = makeTemp()
+                let dst : Tacky.IR.Value = .Var(dstName)
+                let e2Label = makeLabel("right")
+                let endLabel = makeLabel("end")
+                out.append(.JumpIfZero(condValue, e2Label))
+                let e1Value = generateTACKYExpression(left, out: &out)
+                out.append(.Copy(e1Value, dst))
+                out.append(.Jump(endLabel))
+                out.append(.Label(e2Label))
+                let e2Value = generateTACKYExpression(right, out: &out)
+                out.append(.Copy(e2Value, dst))
+                out.append(.Label(endLabel))
+                return dst
         }
     }
 
