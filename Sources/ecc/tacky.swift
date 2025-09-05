@@ -208,7 +208,10 @@ class Tacky {
                         exit(ExitCode.internalError.rawValue)
                 }
             case .CompoundAssignment(_,_,_):
-                print("Unsupported compount assignment found while generating tacky")
+                print("Unsupported compound assignment found while generating tacky")
+                exit(ExitCode.internalError.rawValue)
+            case .Conditional(_,_,_):
+                print("Unsupported conditional expression found while generating tacky")
                 exit(ExitCode.internalError.rawValue)
         }
     }
@@ -220,6 +223,9 @@ class Tacky {
                 out.append(.Return(child))
             case .Expression(let exp):
                 let _ = generateTACKYExpression(exp, out: &out)
+            case .If(_,_,_):
+                print("Unsupported if statement found while generating tacky")
+                exit(ExitCode.internalError.rawValue)
             case .Null: ()
         }
     }
