@@ -6,6 +6,10 @@ class Tacky {
             case Complement
             case Negate
             case Not
+            case PreIncrement
+            case PostIncrement
+            case PreDecrement
+            case PostDecrement
         }
 
         enum BinaryOperator {
@@ -94,15 +98,13 @@ class Tacky {
 
         func generateTACKYOp(_ op: Parser.AST.UnaryOperator) -> Tacky.IR.UnaryOperator {
             switch op {
-                case .Complement:
-                    return .Complement
-                case .Negate:
-                    return .Negate
-                case .Not:
-                    return .Not
-                default:
-                    print("Unsupported unary operator \(op) found while generating tacky")
-                    exit(ExitCode.internalError.rawValue)
+                case .Complement: return .Complement
+                case .Negate: return .Negate
+                case .Not: return .Not
+                case .PreIncrement: return .PreIncrement
+                case .PreDecrement: return .PreDecrement
+                case .PostIncrement: return .PostIncrement
+                case .PostDecrement: return .PostDecrement
             }
         }
 
@@ -115,6 +117,9 @@ class Tacky {
                 let dst : Tacky.IR.Value = .Var(dstName)
                 let tackyOp = generateTACKYOp(op)
                 out.append(.Unary(tackyOp, src, dst))
+                if tackyOp == .PostIncrement || tackyOp == .PostDecrement {
+                    return src
+                }
                 return dst
             case .Binary(let op, let left, let right):
                 if op == .And {

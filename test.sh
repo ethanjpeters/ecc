@@ -1,5 +1,15 @@
 #!/bin/bash
 
+swift run ecc TestSources/increment_decrement.c
+./increment_decrement
+if [[ $? -ne 3 ]]; then
+    echo "increment_decrement: Expected exit code 3 but got $?"
+    exit 1
+else
+    echo "increment_decrement: success"
+fi
+rm increment_decrement
+
 swift run ecc TestSources/assignment.c
 ./assignment
 if [[ $? -ne 11 ]]; then
