@@ -43,6 +43,9 @@ class SemanticAnalyzer {
                         return .Var(uniqueName.0)
                     } else {
                         print("Undeclared variable \(name)")
+                        // DEBUG
+                        print("\(nameMap)")
+                        // END DEBUG
                         exit(ExitCode.semanticError.rawValue)
                     }
                 case .Conditional(let cond, let left, let right):
@@ -56,14 +59,13 @@ class SemanticAnalyzer {
                 case .Return(let exp): return .Return(resolveExpression(exp, &nameMap))
                 case .Null: return .Null
                 case .If(let cond, let thenStatement, let elseStatement):
-                    var copiedNameMap = copyNameMap(nameMap)
-                    return .If(resolveExpression(cond, &nameMap), resolveStatement(thenStatement, &copiedNameMap),
-                               elseStatement == nil ? nil : resolveStatement(elseStatement!, &copiedNameMap))
+                    return .If(resolveExpression(cond, &nameMap), resolveStatement(thenStatement, &nameMap),
+                               elseStatement == nil ? nil : resolveStatement(elseStatement!, &nameMap))
                 case .Compound(let block):
                     switch block {
                         case .Block(let items):
+                            var copiedNameMap = copyNameMap(nameMap)
                             return .Compound(.Block(items.map { itm in
-                                var copiedNameMap = copyNameMap(nameMap)
                                 return resolveBlockItem(itm, &copiedNameMap)
                             }))
                     }

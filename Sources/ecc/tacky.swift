@@ -248,9 +248,18 @@ class Tacky {
                 }
                 out.append(.Label(endLabel))
             case .Null: ()
-            case .Compound(_):
-                print("Unsupported construct Compound found when generating tacky statement")
-                exit(ExitCode.internalError.rawValue)
+            case .Compound(let block):
+                switch block {
+                    case .Block(let items):
+                        for itm in items {
+                            switch itm {
+                                case .S(let stmt):
+                                    generateTACKYStatement(statement: stmt, out: &out)
+                                case .D(let decl):
+                                    generateTACKYDeclaration(decl: decl, out: &out)
+                            }
+                        }
+                }
         }
     }
 

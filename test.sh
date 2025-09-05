@@ -1,5 +1,25 @@
 #!/bin/bash
 
+swift run ecc TestSources/dup_var.c
+./dup_var
+if [[ $? -ne 5 ]]; then
+    echo "dup_var: Expected exit code 5 but got $?"
+    exit 1
+else
+    echo "dup_var: success"
+fi
+rm dup_var
+
+swift run ecc TestSources/blocks.c
+./blocks
+if [[ $? -ne 27 ]]; then
+    echo "blocks: Expected exit code 27 but got $?"
+    exit 1
+else
+    echo "blocks: success"
+fi
+rm blocks
+
 swift run ecc TestSources/control_flow.c
 ./control_flow
 if [[ $? -ne 205 ]]; then
