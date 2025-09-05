@@ -51,9 +51,14 @@ class SemanticAnalyzer {
                     var copiedNameMap = nameMap
                     return .If(resolveExpression(cond, &nameMap), resolveStatement(thenStatement, &copiedNameMap),
                                elseStatement == nil ? nil : resolveStatement(elseStatement!, &copiedNameMap))
-                case .Compound(_):
-                    print("Unsupported construct Compound found when doing semantic analysis")
-                    exit(ExitCode.internalError.rawValue)
+                case .Compound(let block):
+                    switch block {
+                        case .Block(let items):
+                            return .Compound(.Block(items.map { itm in
+                                var copiedNameMap : [String : String] = nameMap
+                                return resolveBlockItem(itm, &copiedNameMap)
+                            }))
+                    }
             }
         }
 
