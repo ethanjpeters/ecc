@@ -30,6 +30,7 @@ class Lexer {
         case equal
         // two character operators
         case decrement
+        case increment
         case shiftLeft
         case shiftRight
         case doubleAmpersand
@@ -145,6 +146,19 @@ class Lexer {
                 if sourceFileCharacters[startingIndex + 1] == "-" {
                     return .decrement
                 }
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .minusEqual
+                }
+            }
+        }
+        if c == "+" {
+            if startingIndex + 1 < sourceFileCharacters.count {
+                if sourceFileCharacters[startingIndex + 1] == "=" {
+                    return .plusEqual
+                }
+                if sourceFileCharacters[startingIndex + 1] == "+" {
+                    return .increment
+                }
             }
         }
         if c == "<" {
@@ -198,20 +212,6 @@ class Lexer {
             if startingIndex + 1 < sourceFileCharacters.count {
                 if sourceFileCharacters[startingIndex + 1] == "=" {
                     return .notEquals
-                }
-            }
-        }
-        if c == "+" {
-            if startingIndex + 1 < sourceFileCharacters.count {
-                if sourceFileCharacters[startingIndex + 1] == "=" {
-                    return .plusEqual
-                }
-            }
-        }
-        if c == "-" {
-            if startingIndex + 1 < sourceFileCharacters.count {
-                if sourceFileCharacters[startingIndex + 1] == "=" {
-                    return .minusEqual
                 }
             }
         }
