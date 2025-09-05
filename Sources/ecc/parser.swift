@@ -110,6 +110,7 @@ class Parser {
             case .pipe: return 15
             case .doubleAmpersand: return 10
             case .doublePipe: return 5
+            case .question: return 3
             case .equal: fallthrough
             case .plusEqual: fallthrough
             case .minusEqual: fallthrough
@@ -157,7 +158,8 @@ class Parser {
             case .pipeEqual: fallthrough
             case .carrotEqual: fallthrough
             case .shiftLeftEqual: fallthrough
-            case .shiftRightEqual: return true
+            case .shiftRightEqual: fallthrough
+            case .question: return true
             default:
                 return false
         }
@@ -215,7 +217,7 @@ class Parser {
                 let _ = expect(.question, &tokenStream)
                 let middle = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 let _ = expect(.colon, &tokenStream)
-                let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: precedence(nextToken))
                 left = .Conditional(left, middle, right)
             } else {
                 let op : AST.BinaryOperator
