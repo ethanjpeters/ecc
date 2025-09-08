@@ -91,7 +91,7 @@ class Parser {
         if nextToken != tok {
             print("Expected \(tok) but encountered \(nextToken)")
             // DEBUG
-            print("REAMINING TOKEN STREAM: \(tokenStream)")
+            print("REAMAINING TOKEN STREAM: \(tokenStream)")
             // END DEBUG
             exit(ExitCode.parserError.rawValue)
         }
@@ -447,7 +447,6 @@ class Parser {
                 print("Expected identifier in declaration but found \(idToken) instead")
                 exit(ExitCode.parserError.rawValue)
         }
-        let _ = tokenStream.removeFirst()
 
         let exp : Parser.AST.Expression?
         if peek(tokenStream) == .equal {
@@ -465,7 +464,6 @@ class Parser {
     func parseForInit(tokenStream: inout [Lexer.Token]) -> Parser.AST.ForInit {
         if peek(tokenStream) == .keywordInt {
             let out : Parser.AST.ForInit = .InitDecl(parseDeclaration(tokenStream: &tokenStream))
-            let _ = expect(.semicolon, &tokenStream)
             return out;
         } else {
             let exp : Parser.AST.Expression?
