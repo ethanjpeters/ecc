@@ -260,6 +260,9 @@ class Tacky {
                             }
                         }
                 }
+            default:
+                print("Unsupported statement construct found while generating TACKY: \(statement)")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 

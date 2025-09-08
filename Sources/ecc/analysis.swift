@@ -69,6 +69,9 @@ class SemanticAnalyzer {
                                 return resolveBlockItem(itm, &copiedNameMap)
                             }))
                     }
+                default:
+                    print("Unsupported statement construct found while doing semantic analysis: \(stmt)")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 

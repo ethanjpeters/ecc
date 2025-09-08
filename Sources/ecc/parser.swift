@@ -58,12 +58,22 @@ class Parser {
             case Block([BlockItem])
         }
 
+        enum ForInit {
+            case InitDecl(Declaration)
+            case InitExp(Expression?)
+        }
+
         indirect enum Statement {
             case Return(Expression)
             case Expression(Expression)
             case If(Expression /* condition */, Statement /* then */, Statement? /* else */)
             case Compound(Block)
             case Null
+            case Break(String /* label */)
+            case Continue(String /* label */)
+            case While(Expression /* condition */, Statement /* body */)
+            case DoWhile(Statement /* body */, Expression /* condition */)
+            case For(ForInit /* init */, Expression? /* condition */, Expression? /* post */, Statement /* body */)
         }
 
         enum Program {
@@ -449,6 +459,29 @@ class Parser {
                     case .Block(let blockItemStar):
                         return .Compound(.Block(blockItemStar.map { fixUpCompoundAssignments($0) }))
                 }
+            case .Break(_): return statement
+            case .Continue(_): return statement
+            case .While(let condition, let body):
+                return .While(fixUpCompoundAssignments(condition), fixUpCompoundAssignments(body))
+            case .DoWhile(let body, let condition):
+                return .DoWhile(fixUpCompoundAssignments(body), fixUpCompoundAssignments(condition))
+            case .For(let forInit, let condition, let post, let body):
+                let fixedUpInit : Parser.AST.ForInit
+                switch forInit {
+                    case .InitDecl(_): fixedUpInit = forInit
+                    case .InitExp(let exp):
+                        if let e = exp {
+                            fixedUpInit = .InitExp(fixUpCompoundAssignments(e))
+                        } else {
+                            fixedUpInit = forInit
+                        }
+                }
+                return .For(
+                    fixedUpInit,
+                    condition == nil ? nil : fixUpCompoundAssignments(condition!),
+                    post == nil ? nil : fixUpCompoundAssignments(post!),
+                    fixUpCompoundAssignments(body)
+                )
         }
     }
 
