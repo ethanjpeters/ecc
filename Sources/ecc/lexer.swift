@@ -9,6 +9,11 @@ class Lexer {
         case keywordReturn
         case keywordIf
         case keywordElse
+        case keywordDo
+        case keywordWhile
+        case keywordFor
+        case keywordBreak
+        case keywordContinue
         // braces/brackets
         case openParen
         case closeParen
@@ -292,6 +297,11 @@ class Lexer {
             case "return": return .keywordReturn
             case "if": return .keywordIf
             case "else": return .keywordElse
+            case "do": return .keywordDo
+            case "while": return .keywordWhile
+            case "for": return .keywordFor
+            case "break": return .keywordBreak
+            case "continue": return .keywordContinue
             default: return nil
         }
     }
