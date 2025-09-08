@@ -71,13 +71,13 @@ class SemanticAnalyzer {
                     }
                 case .Break(_): return stmt
                 case .Continue(_): return stmt
-                case .While(let condition, let body):
+                case .While(let condition, let body, _):
                     var copiedNameMap = copyNameMap(nameMap)
-                    return .While(resolveExpression(condition, &nameMap), resolveStatement(body, &copiedNameMap))
-                case .DoWhile(let body, let condition):
+                    return .While(resolveExpression(condition, &nameMap), resolveStatement(body, &copiedNameMap), "")
+                case .DoWhile(let body, let condition, _):
                     var copiedNameMap = copyNameMap(nameMap)
-                    return .DoWhile(resolveStatement(body, &copiedNameMap), resolveExpression(condition, &nameMap))
-                case .For(let forInit, let condition, let inc, let body):
+                    return .DoWhile(resolveStatement(body, &copiedNameMap), resolveExpression(condition, &nameMap), "")
+                case .For(let forInit, let condition, let inc, let body, _):
                     var copiedNameMap = copyNameMap(nameMap)
                     let resolvedForInit : Parser.AST.ForInit
                     switch forInit {
@@ -89,7 +89,7 @@ class SemanticAnalyzer {
                     let resolvedCondition = condition == nil ? nil : resolveExpression(condition!, &copiedNameMap)
                     let resolvedInc = inc == nil ? nil : resolveExpression(inc!, &copiedNameMap)
                     let resolvedBody = resolveStatement(body, &copiedNameMap)
-                    return .For(resolvedForInit, resolvedCondition, resolvedInc, resolvedBody)
+                    return .For(resolvedForInit, resolvedCondition, resolvedInc, resolvedBody, "")
             }
         }
 

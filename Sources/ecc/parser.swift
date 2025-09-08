@@ -71,9 +71,9 @@ class Parser {
             case Null
             case Break(String /* label */)
             case Continue(String /* label */)
-            case While(Expression /* condition */, Statement /* body */)
-            case DoWhile(Statement /* body */, Expression /* condition */)
-            case For(ForInit /* init */, Expression? /* condition */, Expression? /* post */, Statement /* body */)
+            case While(Expression /* condition */, Statement /* body */, String /* label */)
+            case DoWhile(Statement /* body */, Expression /* condition */, String /* label */)
+            case For(ForInit /* init */, Expression? /* condition */, Expression? /* post */, Statement /* body */, String /* label */)
         }
 
         enum Program {
@@ -368,7 +368,7 @@ class Parser {
                 let _ = expect(.openParen, &tokenStream)
                 let cond = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 let _ = expect(.closeParen, &tokenStream)
-                return .While(cond, parseStatement(tokenStream: &tokenStream))
+                return .While(cond, parseStatement(tokenStream: &tokenStream), "")
             case .keywordDo:
                 let _ = expect(.keywordDo, &tokenStream)
                 let body = parseStatement(tokenStream: &tokenStream)
@@ -377,7 +377,7 @@ class Parser {
                 let cond = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 let _ = expect(.closeParen, &tokenStream)
                 let _ = expect(.semicolon, &tokenStream)
-                return .DoWhile(body, cond)
+                return .DoWhile(body, cond, "")
             case .keywordFor:
                 let _ = expect(.keywordFor, &tokenStream)
                 let _ = expect(.openParen, &tokenStream)
@@ -397,7 +397,7 @@ class Parser {
                 }
                 let _ = expect(.closeParen, &tokenStream)
                 let body = parseStatement(tokenStream: &tokenStream)
-                return .For(forInit, cond, inc, body)
+                return .For(forInit, cond, inc, body, "")
             default:
                 let exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 let _ = expect(.semicolon, &tokenStream)
@@ -527,11 +527,11 @@ class Parser {
                 }
             case .Break(_): return statement
             case .Continue(_): return statement
-            case .While(let condition, let body):
-                return .While(fixUpCompoundAssignments(condition), fixUpCompoundAssignments(body))
-            case .DoWhile(let body, let condition):
-                return .DoWhile(fixUpCompoundAssignments(body), fixUpCompoundAssignments(condition))
-            case .For(let forInit, let condition, let post, let body):
+            case .While(let condition, let body, _):
+                return .While(fixUpCompoundAssignments(condition), fixUpCompoundAssignments(body), "")
+            case .DoWhile(let body, let condition, _):
+                return .DoWhile(fixUpCompoundAssignments(body), fixUpCompoundAssignments(condition), "")
+            case .For(let forInit, let condition, let post, let body, _):
                 let fixedUpInit : Parser.AST.ForInit
                 switch forInit {
                     case .InitDecl(_): fixedUpInit = forInit
@@ -546,7 +546,8 @@ class Parser {
                     fixedUpInit,
                     condition == nil ? nil : fixUpCompoundAssignments(condition!),
                     post == nil ? nil : fixUpCompoundAssignments(post!),
-                    fixUpCompoundAssignments(body)
+                    fixUpCompoundAssignments(body),
+                    ""
                 )
         }
     }
