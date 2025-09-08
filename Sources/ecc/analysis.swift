@@ -30,7 +30,7 @@ class SemanticAnalyzer {
                     }
                     return .Assignment(resolveExpression(lValue, &nameMap), resolveExpression(rValue, &nameMap))
                 case .CompoundAssignment(_,_,_):
-                    print("Unsupported compount assignment found while generating tacky")
+                    print("Unreachable: Unsupported compound assignment found while generating tacky")
                     exit(ExitCode.internalError.rawValue)
                 case .Binary(let op, let left, let right):
                     return .Binary(op, resolveExpression(left, &nameMap), resolveExpression(right, &nameMap))
@@ -69,9 +69,27 @@ class SemanticAnalyzer {
                                 return resolveBlockItem(itm, &copiedNameMap)
                             }))
                     }
-                default:
-                    print("Unsupported statement construct found while doing semantic analysis: \(stmt)")
-                    exit(ExitCode.internalError.rawValue)
+                case .Break(_): return stmt
+                case .Continue(_): return stmt
+                case .While(let condition, let body):
+                    var copiedNameMap = copyNameMap(nameMap)
+                    return .While(resolveExpression(condition, &nameMap), resolveStatement(body, &copiedNameMap))
+                case .DoWhile(let body, let condition):
+                    var copiedNameMap = copyNameMap(nameMap)
+                    return .DoWhile(resolveStatement(body, &copiedNameMap), resolveExpression(condition, &nameMap))
+                case .For(let forInit, let condition, let inc, let body):
+                    var copiedNameMap = copyNameMap(nameMap)
+                    let resolvedForInit : Parser.AST.ForInit
+                    switch forInit {
+                        case .InitDecl(let decl):
+                            resolvedForInit = .InitDecl(resolveDeclaration(decl, &copiedNameMap))
+                        case .InitExp(let exp):
+                            resolvedForInit = .InitExp(exp == nil ? nil : resolveExpression(exp!, &copiedNameMap))
+                    }
+                    let resolvedCondition = condition == nil ? nil : resolveExpression(condition!, &copiedNameMap)
+                    let resolvedInc = inc == nil ? nil : resolveExpression(inc!, &copiedNameMap)
+                    let resolvedBody = resolveStatement(body, &copiedNameMap)
+                    return .For(resolvedForInit, resolvedCondition, resolvedInc, resolvedBody)
             }
         }
 
