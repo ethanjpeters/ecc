@@ -90,6 +90,9 @@ class Parser {
         let nextToken = tokenStream.removeFirst()
         if nextToken != tok {
             print("Expected \(tok) but encountered \(nextToken)")
+            // DEBUG
+            print("REAMINING TOKEN STREAM: \(tokenStream)")
+            // END DEBUG
             exit(ExitCode.parserError.rawValue)
         }
 
@@ -352,8 +355,52 @@ class Parser {
                 return .If(conditional, thenStatement, elseStatement)
             case .openBrace:
                 return .Compound(parseBlock(tokenStream: &tokenStream))
+            case .keywordBreak:
+                let brk : Parser.AST.Statement = .Break("")
+                let _ = expect(.semicolon, &tokenStream)
+                return brk
+            case .keywordContinue:
+                let cont : Parser.AST.Statement = .Continue("")
+                let _ = expect(.semicolon, &tokenStream)
+                return cont
+            case .keywordWhile:
+                let _ = expect(.keywordWhile, &tokenStream)
+                let _ = expect(.openParen, &tokenStream)
+                let cond = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                let _ = expect(.closeParen, &tokenStream)
+                return .While(cond, parseStatement(tokenStream: &tokenStream))
+            case .keywordDo:
+                let _ = expect(.keywordDo, &tokenStream)
+                let body = parseStatement(tokenStream: &tokenStream)
+                let _ = expect(.keywordWhile, &tokenStream)
+                let _ = expect(.openParen, &tokenStream)
+                let cond = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                let _ = expect(.closeParen, &tokenStream)
+                let _ = expect(.semicolon, &tokenStream)
+                return .DoWhile(body, cond)
+            case .keywordFor:
+                let _ = expect(.keywordFor, &tokenStream)
+                let _ = expect(.openParen, &tokenStream)
+                let forInit = parseForInit(tokenStream: &tokenStream)
+                let cond : Parser.AST.Expression?
+                if peek(tokenStream) != .semicolon {
+                    cond = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                } else {
+                    cond = nil
+                }
+                let _ = expect(.semicolon, &tokenStream)
+                let inc : Parser.AST.Expression?
+                if peek(tokenStream) != .closeParen {
+                    inc = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                } else {
+                    inc = nil
+                }
+                let _ = expect(.closeParen, &tokenStream)
+                let body = parseStatement(tokenStream: &tokenStream)
+                return .For(forInit, cond, inc, body)
             default:
                 let exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                let _ = expect(.semicolon, &tokenStream)
                 return .Expression(exp)
         }
     }
@@ -366,33 +413,7 @@ class Parser {
 
         if peek(tokenStream) == .keywordInt {
             // declaration
-            // go ahead and parse here
-            let _ = expect(.keywordInt, &tokenStream)
-
-            if tokenStream.isEmpty {
-                print("Empty token stream encountered when expecting a declaration (variable name)")
-                exit(ExitCode.parserError.rawValue)
-            }
-
-            let idToken = tokenStream.removeFirst()
-            let varName : String
-            switch idToken {
-                case .identifier(let name):
-                    varName = name
-                default:
-                    print("Expected variable name but encountered \(idToken)")
-                    exit(ExitCode.parserError.rawValue)
-            }
-
-            var exp : Parser.AST.Expression? = nil
-            if peek(tokenStream) == .equal {
-                let _ = expect(.equal, &tokenStream)
-                exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
-            }
-
-            let _ = expect(.semicolon, &tokenStream)
-
-            return .D(.Declaration(varName, exp))
+            return .D(parseDeclaration(tokenStream: &tokenStream))
         } else {
             // statement
             return .S(parseStatement(tokenStream: &tokenStream))
@@ -407,7 +428,54 @@ class Parser {
         }
         let _ = expect(.closeBrace, &tokenStream)
         return .Block(body)
-    }    
+    }
+
+    func parseDeclaration(tokenStream: inout [Lexer.Token]) -> Parser.AST.Declaration {
+        let _ = expect(.keywordInt, &tokenStream)
+        if tokenStream.isEmpty {
+            print("Unexpected end of stream hit while parsing declaration")
+            exit(ExitCode.parserError.rawValue)
+        }
+
+        let idToken = tokenStream.removeFirst()
+
+        let varName : String
+        switch idToken {
+            case .identifier(let name):
+                varName = name
+            default:
+                print("Expected identifier in declaration but found \(idToken) instead")
+                exit(ExitCode.parserError.rawValue)
+        }
+        let _ = tokenStream.removeFirst()
+
+        let exp : Parser.AST.Expression?
+        if peek(tokenStream) == .equal {
+            let _ = expect(.equal, &tokenStream)
+            exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+        } else {
+            exp = nil
+        }
+
+        let _ = expect(.semicolon, &tokenStream)
+
+        return .Declaration(varName, exp)
+    }
+
+    func parseForInit(tokenStream: inout [Lexer.Token]) -> Parser.AST.ForInit {
+        if peek(tokenStream) == .keywordInt {
+            let out : Parser.AST.ForInit = .InitDecl(parseDeclaration(tokenStream: &tokenStream))
+            let _ = expect(.semicolon, &tokenStream)
+            return out;
+        } else {
+            let exp : Parser.AST.Expression?
+            if peek(tokenStream) != .semicolon {
+                exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+            } else { exp = nil }
+            let _ = expect(.semicolon, &tokenStream)
+            return .InitExp(exp)
+        }
+    }
 
     func parseProgram(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
         if tokenStream.isEmpty {
