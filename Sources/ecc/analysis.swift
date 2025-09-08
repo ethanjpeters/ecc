@@ -134,8 +134,116 @@ class SemanticAnalyzer {
         }
     }
 
+    class LoopLabeler {
+        private var tempLabelCounter : Int = 0
+
+        func makeLoopLabel() -> String {
+            let label = "loop\(tempLabelCounter)"
+            tempLabelCounter = tempLabelCounter + 1
+            return label
+        }
+
+        func labelLoops(_ statement: Parser.AST.Statement, loopLabel: String?) -> Parser.AST.Statement {
+            switch statement {
+                case .Break(_):
+                    if let lab = loopLabel {
+                        return .Break(lab)
+                    } else {
+                        print("Break found outside of loop")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                case .Continue(_):
+                    if let lab = loopLabel {
+                        return .Continue(lab)
+                    } else {
+                        print("Continue found outside of loop")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                case .DoWhile(let body, let condition, _):
+                    let newLabel = makeLoopLabel()
+                    let labeledBody = labelLoops(body, loopLabel: newLabel)
+                    let labeledCondition = labelLoops(condition, loopLabel: newLabel)
+                    return .DoWhile(labeledBody, labeledCondition, newLabel)
+                case .While(let condition, let body, _):
+                    let newLabel = makeLoopLabel()
+                    let labeledBody = labelLoops(body, loopLabel: newLabel)
+                    let labeledCondition = labelLoops(condition, loopLabel: newLabel)
+                    return .While(labeledCondition, labeledBody, newLabel)
+                case .For(let forInit, let condition, let increment, let body, _):
+                    let newLabel = makeLoopLabel()
+                    let labeledForInit : Parser.AST.ForInit
+                    switch forInit {
+                        case .InitDecl(let decl):
+                            switch decl {
+                                case .Declaration(let name, let exp):
+                                    labeledForInit = .InitDecl(.Declaration(name, exp == nil ? nil : labelLoops(exp!, loopLabel: newLabel)))
+                            }
+                        case .InitExp(let exp):
+                            labeledForInit = .InitExp(exp == nil ? nil : labelLoops(exp!, loopLabel: newLabel))
+                    }
+                    let labeledCondition = condition == nil ? nil : labelLoops(condition!, loopLabel: newLabel)
+                    let labeledIncrement = increment == nil ? nil : labelLoops(increment!, loopLabel: newLabel)
+                    let labeledBody = labelLoops(body, loopLabel: newLabel)
+                    return .For(labeledForInit, labeledCondition, labeledIncrement, labeledBody, newLabel)
+                case .Return(let exp): return .Return(labelLoops(exp, loopLabel: loopLabel))
+                case .Expression(let exp): return .Expression(labelLoops(exp, loopLabel: loopLabel))
+                case .If(let cond, let thenStatement, let elseStatement):
+                    return .If(
+                        labelLoops(cond, loopLabel: loopLabel),
+                        labelLoops(thenStatement, loopLabel: loopLabel),
+                        elseStatement == nil ? nil : labelLoops(elseStatement!, loopLabel: loopLabel)
+                    )
+                case .Compound(let block):
+                    return .Compound(labelLoops(block, loopLabel: loopLabel))
+                case .Null: return .Null
+            }
+        }
+
+        func labelLoops(_ expression: Parser.AST.Expression, loopLabel: String?) -> Parser.AST.Expression {
+            // this might actually be correct
+            return expression
+        }
+
+        func labelLoops(_ blockItem: Parser.AST.BlockItem, loopLabel: String?) -> Parser.AST.BlockItem {
+            switch blockItem {
+                case .D(let decl):
+                    switch decl {
+                        case .Declaration(let name, let exp):
+                            let outExp : Parser.AST.Expression?
+                            if let e = exp {
+                                outExp = labelLoops(e, loopLabel: loopLabel)
+                            } else {
+                                outExp = nil
+                            }
+                            return .D(.Declaration(name, outExp))
+                    }
+                case .S(let stmt):
+                    return .S(labelLoops(stmt, loopLabel: loopLabel))
+            }
+        }
+
+        func labelLoops(_ block : Parser.AST.Block, loopLabel: String?) -> Parser.AST.Block {
+            switch block {
+                case .Block(let items):
+                    var labeledItems : [Parser.AST.BlockItem] = []
+                    for itm in items {
+                        labeledItems.append(labelLoops(itm, loopLabel: loopLabel))
+                    }
+                    return .Block(labeledItems)
+            }
+        }
+
+        func labelLoops(_ program: Parser.AST.Program) -> Parser.AST.Program {
+            switch program {
+                case .Function(let name, let body):
+                    return .Function(name, labelLoops(body, loopLabel: nil))
+            }
+        }
+    }
+
     func analyze(_ program: Parser.AST.Program) -> Parser.AST.Program {
         // currently our only semantic analysis step
-        return VariableResolver().resolveVariables(program)
+        let resolvedProgram = VariableResolver().resolveVariables(program)
+        return LoopLabeler().labelLoops(resolvedProgram)
     }
 }

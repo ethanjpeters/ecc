@@ -267,7 +267,7 @@ class Tacky {
             case .For(_, _, _, _, _):
                 print("Unsupported construct \(statement) found while generating tacky")
                 exit(ExitCode.internalError.rawValue)
-}
+        }
     }
 
     func generateTACKYDeclaration(decl: Parser.AST.Declaration, out : inout [Tacky.IR.Instruction]) {
