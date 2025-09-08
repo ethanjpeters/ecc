@@ -108,6 +108,9 @@ struct ECC : ParsableCommand {
         let validatedAst = SemanticAnalyzer().analyze(ast)
 
         if validate {
+            if verbose {
+                print(validatedAst)
+            }
             return
         }
 
