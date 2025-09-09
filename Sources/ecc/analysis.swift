@@ -90,10 +90,17 @@ class SemanticAnalyzer {
                     let resolvedInc = inc == nil ? nil : resolveExpression(inc!, &copiedNameMap)
                     let resolvedBody = resolveStatement(body, &copiedNameMap)
                     return .For(resolvedForInit, resolvedCondition, resolvedInc, resolvedBody, "")
-                case .Switch(_, _): fallthrough
-                case .Labeled(_):
-                    print("Unsupported statement found during analysis: \(stmt)")
-                    exit(ExitCode.internalError.rawValue)
+                case .Switch(let toggle, let body):
+                    return .Switch(resolveExpression(toggle, &nameMap), resolveStatement(body, &nameMap))
+                case .Labeled(let ls):
+                    switch ls {
+                        case .CaseStatement(let val, let exe):
+                            return .Labeled(.CaseStatement(resolveExpression(val, &nameMap), resolveStatement(exe, &nameMap)))
+                        case .DefaultStatement(let exe):
+                            return .Labeled(.DefaultStatement(resolveStatement(exe, &nameMap)))
+                        case .IdentifiedLine(let name, let st):
+                            return .Labeled(.IdentifiedLine(name, resolveStatement(st, &nameMap)))
+                    }
             }
         }
 
@@ -153,8 +160,8 @@ class SemanticAnalyzer {
                     if let lab = loopLabel {
                         return .Break(lab)
                     } else {
-                        print("Break found outside of loop")
-                        exit(ExitCode.semanticError.rawValue)
+                        // wait until we're labelling switches because breaks can be inside of those as well
+                        return .Break("")
                     }
                 case .Continue(_):
                     if let lab = loopLabel {
@@ -200,10 +207,23 @@ class SemanticAnalyzer {
                 case .Compound(let block):
                     return .Compound(labelLoops(block, loopLabel: loopLabel))
                 case .Null: return .Null
-                case .Switch(_, _): fallthrough
-                case .Labeled(_):
-                    print("Unsupported statement found during loop labeling: \(statement)")
-                    exit(ExitCode.internalError.rawValue)
+                case .Switch(let toggle, let body):
+                    return .Switch(
+                        labelLoops(toggle, loopLabel: loopLabel),
+                        labelLoops(body, loopLabel: loopLabel)
+                    )
+                case .Labeled(let ls):
+                    switch ls {
+                        case .CaseStatement(let lbl, let lineStatement):
+                            return .Labeled(.CaseStatement(
+                                labelLoops(lbl, loopLabel: loopLabel),
+                                labelLoops(lineStatement, loopLabel: loopLabel)
+                            ))
+                        case .DefaultStatement(let ds):
+                            return .Labeled(.DefaultStatement(labelLoops(ds, loopLabel: loopLabel)))
+                        case .IdentifiedLine(let lbl, let lineStatement):
+                            return .Labeled(.IdentifiedLine(lbl, labelLoops(lineStatement, loopLabel: loopLabel)))
+                    }
             }
         }
 
