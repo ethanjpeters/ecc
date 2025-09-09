@@ -14,6 +14,9 @@ class Lexer {
         case keywordFor
         case keywordBreak
         case keywordContinue
+        case keywordSwitch
+        case keywordCase
+        case keywordDefault
         // braces/brackets
         case openParen
         case closeParen
@@ -302,6 +305,9 @@ class Lexer {
             case "for": return .keywordFor
             case "break": return .keywordBreak
             case "continue": return .keywordContinue
+            case "switch": return .keywordSwitch
+            case "case": return .keywordCase
+            case "default" : return .keywordDefault
             default: return nil
         }
     }
