@@ -324,6 +324,10 @@ class Tacky {
                 }
                 out.append(.Jump(startLabel))
                 out.append(.Label(breakLabel))
+            case .Switch(_, _): fallthrough
+            case .Labeled(_):
+                print("Unsupported statement while generating tacky: \(statement)")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 

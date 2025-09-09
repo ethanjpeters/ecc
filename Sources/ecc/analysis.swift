@@ -90,6 +90,10 @@ class SemanticAnalyzer {
                     let resolvedInc = inc == nil ? nil : resolveExpression(inc!, &copiedNameMap)
                     let resolvedBody = resolveStatement(body, &copiedNameMap)
                     return .For(resolvedForInit, resolvedCondition, resolvedInc, resolvedBody, "")
+                case .Switch(_, _): fallthrough
+                case .Labeled(_):
+                    print("Unsupported statement found during analysis: \(stmt)")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -196,6 +200,10 @@ class SemanticAnalyzer {
                 case .Compound(let block):
                     return .Compound(labelLoops(block, loopLabel: loopLabel))
                 case .Null: return .Null
+                case .Switch(_, _): fallthrough
+                case .Labeled(_):
+                    print("Unsupported statement found during loop labeling: \(statement)")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
