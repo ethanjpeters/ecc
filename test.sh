@@ -1,5 +1,15 @@
 #!/bin/bash
 
+swift run ecc TestSources/loops.c
+./loops
+if [[ $? -ne 93 ]]; then
+    echo "loops: Expected exit code 93 but got $?"
+    exit 1
+else
+    echo "loops: success"
+fi
+rm loops
+
 swift run ecc TestSources/dup_var.c
 ./dup_var
 if [[ $? -ne 5 ]]; then
