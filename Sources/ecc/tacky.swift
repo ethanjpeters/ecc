@@ -133,16 +133,26 @@ class Tacky {
                     switch op {
                         case .PreIncrement:
                             out.append(.Binary(.Add, .Constant(1), src, dst))
-                            return dst
+                            out.append(.Copy(dst, src))
+                            return src
                         case .PreDecrement:
                             out.append(.Binary(.Subtract, src, .Constant(1), dst))
-                            return dst
+                            out.append(.Copy(dst, src))
+                            return src
                         case .PostIncrement:
+                            let tmpName = makeTemp()
+                            let tmp : Tacky.IR.Value = .Var(tmpName)
+                            out.append(.Copy(src, tmp))
                             out.append(.Binary(.Add, .Constant(1), src, dst))
-                            return src
+                            out.append(.Copy(dst, src))
+                            return tmp
                         case .PostDecrement:
+                            let tmpName = makeTemp()
+                            let tmp : Tacky.IR.Value = .Var(tmpName)
+                            out.append(.Copy(src, tmp))
                             out.append(.Binary(.Subtract, src, .Constant(1), dst))
-                            return src
+                            out.append(.Copy(dst, src))
+                            return tmp
                         default:
                             print("Unreachable B")
                             exit(ExitCode.internalError.rawValue)
