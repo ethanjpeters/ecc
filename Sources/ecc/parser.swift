@@ -63,6 +63,10 @@ class Parser {
             case InitExp(Expression?)
         }
 
+        enum LabeledStatement {
+            // EJP -- MARK
+        }
+
         indirect enum Statement {
             case Return(Expression)
             case Expression(Expression)
@@ -74,6 +78,8 @@ class Parser {
             case While(Expression /* condition */, Statement /* body */, String /* label */)
             case DoWhile(Statement /* body */, Expression /* condition */, String /* label */)
             case For(ForInit /* init */, Expression? /* condition */, Expression? /* post */, Statement /* body */, String /* label */)
+            case Switch(Expression /* condition */, Statement /* body */)
+            case Labeled(LabeledStatement)
         }
 
         enum Program {
@@ -400,6 +406,13 @@ class Parser {
                 let _ = expect(.closeParen, &tokenStream)
                 let body = parseStatement(tokenStream: &tokenStream)
                 return .For(forInit, cond, inc, body, "")
+            case .keywordSwitch:
+                let _ = expect(.keywordSwitch, &tokenStream)
+                let _ = expect(.openParen, &tokenStream)
+                let condition = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                let _ = expect(.closeParen, &tokenStream)
+                let body = parseStatement(tokenStream: &tokenStream)
+                return .Switch(condition, body)
             default:
                 let exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 let _ = expect(.semicolon, &tokenStream)
