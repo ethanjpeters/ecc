@@ -356,10 +356,12 @@ class Parser {
             case .openBrace:
                 return .Compound(parseBlock(tokenStream: &tokenStream))
             case .keywordBreak:
+                let _ = expect(.keywordBreak, &tokenStream)
                 let brk : Parser.AST.Statement = .Break("")
                 let _ = expect(.semicolon, &tokenStream)
                 return brk
             case .keywordContinue:
+                let _ = expect(.keywordContinue, &tokenStream)
                 let cont : Parser.AST.Statement = .Continue("")
                 let _ = expect(.semicolon, &tokenStream)
                 return cont

@@ -69,6 +69,10 @@ class Tacky {
         return out
     }
 
+    func makeLoopLabel(_ descriptor: String) -> String {
+        return ".L.loop.\(descriptor)label.inf"
+    }
+
     func convert(_ op : Parser.AST.BinaryOperator) -> IR.BinaryOperator {
         switch op {
             case .Add: return .Add
@@ -260,13 +264,56 @@ class Tacky {
                             }
                         }
                 }
-            case .Break(_): fallthrough
-            case .Continue(_): fallthrough
-            case .While(_, _, _): fallthrough
-            case .DoWhile(_, _, _): fallthrough
-            case .For(_, _, _, _, _):
-                print("Unsupported construct \(statement) found while generating tacky")
-                exit(ExitCode.internalError.rawValue)
+            case .Break(let label):
+                out.append(.Jump(makeLoopLabel("\(label).break")))
+            case .Continue(let label):
+                out.append(.Jump(makeLoopLabel("\(label).continue")))
+            case .While(let condition, let body, let label):
+                let startLabel = makeLoopLabel("\(label).start")
+                out.append(.Label(startLabel))  // for debugging purposes
+                let continueLabel = makeLoopLabel("\(label).continue")
+                out.append(.Label(continueLabel))
+                let condValue = generateTACKYExpression(condition, out: &out)
+                let breakLabel = makeLoopLabel("\(label).break")
+                out.append(.JumpIfZero(condValue, breakLabel))
+                generateTACKYStatement(statement: body, out: &out)
+                out.append(.Jump(continueLabel))
+                out.append(.Label(breakLabel))
+            case .DoWhile(let body, let condition, let label):
+                let startLabel = makeLoopLabel("\(label).start")
+                out.append(.Label(startLabel))
+                generateTACKYStatement(statement: body, out: &out)
+                let continueLabel = makeLoopLabel("\(label).continue")
+                out.append(.Label(continueLabel))
+                let condValue = generateTACKYExpression(condition, out: &out)
+                out.append(.JumpIfNotZero(condValue, startLabel))
+                out.append(.Label(makeLoopLabel("\(label).break")))
+            case .For(let forInit, let condition, let increment, let body, let label):
+                switch forInit {
+                    case .InitDecl(let decl):
+                        generateTACKYDeclaration(decl: decl, out: &out)
+                    case .InitExp(let exp):
+                        if let e = exp {
+                            let _ = generateTACKYExpression(e, out: &out)
+                        }
+                }
+                let startLabel = makeLoopLabel("\(label).start")
+                out.append(.Label(startLabel))
+                let condValue : Tacky.IR.Value
+                if let c = condition {
+                    condValue = generateTACKYExpression(c, out: &out)
+                } else {
+                    condValue = .Constant(1)
+                }
+                let breakLabel = makeLoopLabel("\(label).break")
+                out.append(.JumpIfZero(condValue, breakLabel))
+                generateTACKYStatement(statement: body, out: &out)
+                out.append(.Label(makeLoopLabel("\(label).continue")))
+                if let inc = increment {
+                    let _ = generateTACKYExpression(inc, out: &out)
+                }
+                out.append(.Jump(startLabel))
+                out.append(.Label(breakLabel))
         }
     }
 
