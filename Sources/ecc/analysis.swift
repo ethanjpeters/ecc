@@ -154,14 +154,24 @@ class SemanticAnalyzer {
             return label
         }
 
-        func labelLoops(_ statement: Parser.AST.Statement, loopLabel: String?) -> Parser.AST.Statement {
+        func makeSwitchLabel() -> String {
+            let label = "switch\(tempLabelCounter)"
+            tempLabelCounter = tempLabelCounter + 1
+            return label
+        }
+
+        func labelLoops(_ statement: Parser.AST.Statement, loopLabel: String?, switchLabel: String?) -> Parser.AST.Statement {
             switch statement {
                 case .Break(_):
                     if let lab = loopLabel {
                         return .Break(lab)
                     } else {
-                        // wait until we're labelling switches because breaks can be inside of those as well
-                        return .Break("")
+                        if let lab = switchLabel {
+                            return .Break(lab)
+                        } else {
+                            print("Unlabeled break statement")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
                     }
                 case .Continue(_):
                     if let lab = loopLabel {
@@ -172,13 +182,13 @@ class SemanticAnalyzer {
                     }
                 case .DoWhile(let body, let condition, _):
                     let newLabel = makeLoopLabel()
-                    let labeledBody = labelLoops(body, loopLabel: newLabel)
-                    let labeledCondition = labelLoops(condition, loopLabel: newLabel)
+                    let labeledBody = labelLoops(body, loopLabel: newLabel, switchLabel: nil)
+                    let labeledCondition = labelLoops(condition, loopLabel: newLabel, switchLabel: nil)
                     return .DoWhile(labeledBody, labeledCondition, newLabel)
                 case .While(let condition, let body, _):
                     let newLabel = makeLoopLabel()
-                    let labeledBody = labelLoops(body, loopLabel: newLabel)
-                    let labeledCondition = labelLoops(condition, loopLabel: newLabel)
+                    let labeledBody = labelLoops(body, loopLabel: newLabel, switchLabel: nil)
+                    let labeledCondition = labelLoops(condition, loopLabel: newLabel, switchLabel: nil)
                     return .While(labeledCondition, labeledBody, newLabel)
                 case .For(let forInit, let condition, let increment, let body, _):
                     let newLabel = makeLoopLabel()
@@ -187,76 +197,98 @@ class SemanticAnalyzer {
                         case .InitDecl(let decl):
                             switch decl {
                                 case .Declaration(let name, let exp):
-                                    labeledForInit = .InitDecl(.Declaration(name, exp == nil ? nil : labelLoops(exp!, loopLabel: newLabel)))
+                                    labeledForInit = .InitDecl(.Declaration(
+                                        name,
+                                        exp == nil ? nil : labelLoops(
+                                            exp!,
+                                            loopLabel: newLabel,
+                                            switchLabel: nil
+                                        )
+                                    ))
                             }
                         case .InitExp(let exp):
-                            labeledForInit = .InitExp(exp == nil ? nil : labelLoops(exp!, loopLabel: newLabel))
+                            labeledForInit = .InitExp(exp == nil ? nil : labelLoops(
+                                exp!,
+                                loopLabel: newLabel,
+                                switchLabel: nil
+                            ))
                     }
-                    let labeledCondition = condition == nil ? nil : labelLoops(condition!, loopLabel: newLabel)
-                    let labeledIncrement = increment == nil ? nil : labelLoops(increment!, loopLabel: newLabel)
-                    let labeledBody = labelLoops(body, loopLabel: newLabel)
+                    let labeledCondition = condition == nil ? nil : labelLoops(condition!, loopLabel: newLabel, switchLabel: nil)
+                    let labeledIncrement = increment == nil ? nil : labelLoops(increment!, loopLabel: newLabel, switchLabel: nil)
+                    let labeledBody = labelLoops(body, loopLabel: newLabel, switchLabel: nil)
                     return .For(labeledForInit, labeledCondition, labeledIncrement, labeledBody, newLabel)
-                case .Return(let exp): return .Return(labelLoops(exp, loopLabel: loopLabel))
-                case .Expression(let exp): return .Expression(labelLoops(exp, loopLabel: loopLabel))
+                case .Return(let exp):
+                    return .Return(labelLoops(exp, loopLabel: loopLabel, switchLabel: nil))
+                case .Expression(let exp):
+                    return .Expression(labelLoops(exp, loopLabel: loopLabel, switchLabel: nil))
                 case .If(let cond, let thenStatement, let elseStatement):
                     return .If(
-                        labelLoops(cond, loopLabel: loopLabel),
-                        labelLoops(thenStatement, loopLabel: loopLabel),
-                        elseStatement == nil ? nil : labelLoops(elseStatement!, loopLabel: loopLabel)
+                        labelLoops(cond, loopLabel: loopLabel, switchLabel: nil),
+                        labelLoops(thenStatement, loopLabel: loopLabel, switchLabel: nil),
+                        elseStatement == nil ? nil : labelLoops(elseStatement!, loopLabel: loopLabel, switchLabel: nil)
                     )
                 case .Compound(let block):
-                    return .Compound(labelLoops(block, loopLabel: loopLabel))
+                    return .Compound(labelLoops(block, loopLabel: loopLabel, switchLabel: switchLabel))
                 case .Null: return .Null
-                case .Switch(let toggle, let body, let switchLabel):
+                case .Switch(let toggle, let body, _):
+                    let switchLabel = makeSwitchLabel()
                     return .Switch(
-                        labelLoops(toggle, loopLabel: loopLabel),
-                        labelLoops(body, loopLabel: loopLabel),
+                        labelLoops(toggle, loopLabel: nil, switchLabel: switchLabel),
+                        labelLoops(body, loopLabel: nil, switchLabel: switchLabel),
                         switchLabel
                     )
                 case .Labeled(let ls):
                     switch ls {
                         case .CaseStatement(let lbl, let lineStatement):
                             return .Labeled(.CaseStatement(
-                                labelLoops(lbl, loopLabel: loopLabel),
-                                labelLoops(lineStatement, loopLabel: loopLabel)
+                                labelLoops(lbl, loopLabel: loopLabel, switchLabel: switchLabel),
+                                labelLoops(lineStatement, loopLabel: loopLabel, switchLabel: switchLabel)
                             ))
                         case .DefaultStatement(let ds):
-                            return .Labeled(.DefaultStatement(labelLoops(ds, loopLabel: loopLabel)))
+                            return .Labeled(.DefaultStatement(labelLoops(
+                                ds,
+                                loopLabel: loopLabel,
+                                switchLabel: switchLabel
+                            )))
                         case .IdentifiedLine(let lbl, let lineStatement):
-                            return .Labeled(.IdentifiedLine(lbl, labelLoops(lineStatement, loopLabel: loopLabel)))
+                            return .Labeled(.IdentifiedLine(lbl, labelLoops(
+                                lineStatement,
+                                loopLabel: loopLabel,
+                                switchLabel: switchLabel
+                            )))
                     }
             }
         }
 
-        func labelLoops(_ expression: Parser.AST.Expression, loopLabel: String?) -> Parser.AST.Expression {
+        func labelLoops(_ expression: Parser.AST.Expression, loopLabel: String?, switchLabel: String?) -> Parser.AST.Expression {
             // this might actually be correct
             return expression
         }
 
-        func labelLoops(_ blockItem: Parser.AST.BlockItem, loopLabel: String?) -> Parser.AST.BlockItem {
+        func labelLoops(_ blockItem: Parser.AST.BlockItem, loopLabel: String?, switchLabel: String?) -> Parser.AST.BlockItem {
             switch blockItem {
                 case .D(let decl):
                     switch decl {
                         case .Declaration(let name, let exp):
                             let outExp : Parser.AST.Expression?
                             if let e = exp {
-                                outExp = labelLoops(e, loopLabel: loopLabel)
+                                outExp = labelLoops(e, loopLabel: loopLabel, switchLabel: switchLabel)
                             } else {
                                 outExp = nil
                             }
                             return .D(.Declaration(name, outExp))
                     }
                 case .S(let stmt):
-                    return .S(labelLoops(stmt, loopLabel: loopLabel))
+                    return .S(labelLoops(stmt, loopLabel: loopLabel, switchLabel: switchLabel))
             }
         }
 
-        func labelLoops(_ block : Parser.AST.Block, loopLabel: String?) -> Parser.AST.Block {
+        func labelLoops(_ block : Parser.AST.Block, loopLabel: String?, switchLabel: String?) -> Parser.AST.Block {
             switch block {
                 case .Block(let items):
                     var labeledItems : [Parser.AST.BlockItem] = []
                     for itm in items {
-                        labeledItems.append(labelLoops(itm, loopLabel: loopLabel))
+                        labeledItems.append(labelLoops(itm, loopLabel: loopLabel, switchLabel: switchLabel))
                     }
                     return .Block(labeledItems)
             }
@@ -265,7 +297,7 @@ class SemanticAnalyzer {
         func labelLoops(_ program: Parser.AST.Program) -> Parser.AST.Program {
             switch program {
                 case .Function(let name, let body):
-                    return .Function(name, labelLoops(body, loopLabel: nil))
+                    return .Function(name, labelLoops(body, loopLabel: nil, switchLabel: nil))
             }
         }
     }
