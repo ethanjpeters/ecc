@@ -90,8 +90,8 @@ class SemanticAnalyzer {
                     let resolvedInc = inc == nil ? nil : resolveExpression(inc!, &copiedNameMap)
                     let resolvedBody = resolveStatement(body, &copiedNameMap)
                     return .For(resolvedForInit, resolvedCondition, resolvedInc, resolvedBody, "")
-                case .Switch(let toggle, let body):
-                    return .Switch(resolveExpression(toggle, &nameMap), resolveStatement(body, &nameMap))
+                case .Switch(let toggle, let body, let label):
+                    return .Switch(resolveExpression(toggle, &nameMap), resolveStatement(body, &nameMap), label)
                 case .Labeled(let ls):
                     switch ls {
                         case .CaseStatement(let val, let exe):
@@ -207,10 +207,11 @@ class SemanticAnalyzer {
                 case .Compound(let block):
                     return .Compound(labelLoops(block, loopLabel: loopLabel))
                 case .Null: return .Null
-                case .Switch(let toggle, let body):
+                case .Switch(let toggle, let body, let switchLabel):
                     return .Switch(
                         labelLoops(toggle, loopLabel: loopLabel),
-                        labelLoops(body, loopLabel: loopLabel)
+                        labelLoops(body, loopLabel: loopLabel),
+                        switchLabel
                     )
                 case .Labeled(let ls):
                     switch ls {

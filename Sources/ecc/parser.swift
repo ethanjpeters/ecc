@@ -80,7 +80,7 @@ class Parser {
             case While(Expression /* condition */, Statement /* body */, String /* label */)
             case DoWhile(Statement /* body */, Expression /* condition */, String /* label */)
             case For(ForInit /* init */, Expression? /* condition */, Expression? /* post */, Statement /* body */, String /* label */)
-            case Switch(Expression /* condition */, Statement /* body */)
+            case Switch(Expression /* condition */, Statement /* body */, String /* label */)
             case Labeled(LabeledStatement)
         }
         
@@ -449,7 +449,7 @@ class Parser {
             let condition = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
             let _ = expect(.closeParen, &tokenStream)
             let body = parseStatement(tokenStream: &tokenStream)
-            return .Switch(condition, body)
+            return .Switch(condition, body, "")
         case .identifier(_):
             if tokenStream.count > 1 {
                 if tokenStream[1] == .colon {
@@ -626,8 +626,8 @@ class Parser {
                 fixUpCompoundAssignments(body),
                 ""
             )
-        case .Switch(let toggle, let body):
-            return .Switch(fixUpCompoundAssignments(toggle), fixUpCompoundAssignments(body))
+        case .Switch(let toggle, let body, let label):
+            return .Switch(fixUpCompoundAssignments(toggle), fixUpCompoundAssignments(body), label)
         case .Labeled(let stmt):
             return .Labeled(fixUpCompoundAssignments(stmt))
         }
