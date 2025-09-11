@@ -1,5 +1,15 @@
 #!/bin/bash
 
+swift run ecc TestSources/switch.c
+./switch
+if [[ $? -ne 21 ]]; then
+    echo "switch: Expected exit code 21 but got $?"
+    exit 1
+else
+    echo "switch: success"
+fi
+rm switch
+
 swift run ecc TestSources/loops.c
 ./loops
 if [[ $? -ne 93 ]]; then
