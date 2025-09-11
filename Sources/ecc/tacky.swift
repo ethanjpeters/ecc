@@ -49,8 +49,12 @@ class Tacky {
             case Label(String /* identifier */)
         }
 
+        enum ProgramLevelStatement {
+            case Function(String /* name */, [Instruction] /* body */)
+        }
+
         enum Program {
-            case Function(String /* identifier */, [Instruction]/* body */)
+            case Statement([ProgramLevelStatement])
         }
     }
 
@@ -384,8 +388,8 @@ class Tacky {
         }
     }
 
-    func generateTACKYProgram(program: Parser.AST.Program) -> Tacky.IR.Program {
-        switch program {
+    func generateTACKYPLS(statement: Parser.AST.ProgramLevelStatement) -> Tacky.IR.ProgramLevelStatement {
+        switch statement {
             case .Function(let name, let body):
                 switch body {
                     case .Block(let items):
@@ -401,6 +405,13 @@ class Tacky {
                         instrs.append(.Return(.Constant(0)))
                         return .Function(name, instrs)
                 }
+        }
+    }
+
+    func generateTACKYProgram(program: Parser.AST.Program) -> Tacky.IR.Program {
+        switch program {
+            case .Statement(let statements):
+                return .Statement(statements.map{ generateTACKYPLS(statement: $0) })
         }
     }
 

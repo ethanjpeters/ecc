@@ -58,8 +58,12 @@ class Assembly {
             case Ret
         }
 
-        enum Program {
+        enum ProgramLevelStatement {
             case Function(String, [Instruction])
+        }
+
+        enum Program {
+            case Statement([ProgramLevelStatement])
         }
     }
 
@@ -180,10 +184,17 @@ class Assembly {
         return out
     }
 
-    func generate(program: Tacky.IR.Program) -> Tree.Program {
-        switch program {
+    func generate(_ pls: Tacky.IR.ProgramLevelStatement) -> Tree.ProgramLevelStatement {
+        switch pls {
             case .Function(let name, let instrs):
                 return .Function(name, generate(instrs))
+        }
+    }
+
+    func generate(program: Tacky.IR.Program) -> Tree.Program {
+        switch program {
+            case .Statement(let statements):
+                return .Statement(statements.map { generate($0) })
         }
     }
 
@@ -243,10 +254,17 @@ class Assembly {
         return out
     }
 
-    func replacePseudoRegisters(program: Tree.Program) -> Tree.Program {
-        switch program {
+    func replacePseudoRegisters(_ pls: Tree.ProgramLevelStatement) -> Tree.ProgramLevelStatement {
+        switch pls {
             case .Function(let name, let instrs):
                 return .Function(name, replacePseudoRegisters(instrs))
+        }
+    }
+
+    func replacePseudoRegisters(program: Tree.Program) -> Tree.Program {
+        switch program {
+            case .Statement(let statements):
+                return .Statement(statements.map{ replacePseudoRegisters($0) })
         }
     }
 
@@ -347,10 +365,17 @@ class Assembly {
         return out
     }
 
-    func fixUpMoves(program: Tree.Program) -> Tree.Program {
-        switch program {
+    func fixUpMoves(_ pls: Tree.ProgramLevelStatement) -> Tree.ProgramLevelStatement {
+        switch pls {
             case .Function(let name, let instrs):
                 return .Function(name, fixUpMoves(instrs))
+        }
+    }
+
+    func fixUpMoves(program: Tree.Program) -> Tree.Program {
+        switch program {
+            case .Statement(let statements):
+                return .Statement(statements.map { fixUpMoves($0) })
         }
     }
 }

@@ -132,8 +132,8 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveVariables(_ program: Parser.AST.Program) -> Parser.AST.Program {
-            switch program {
+        func resolveVariables(_ pls: Parser.AST.ProgramLevelStatement) -> Parser.AST.ProgramLevelStatement {
+           switch pls {
                 case .Function(let name, let body):
                     // MARK - globals to be introduced here
                     var variableNameMapping : [String : (String, Bool)] = [:]
@@ -141,6 +141,13 @@ class SemanticAnalyzer {
                         case .Block(let items):
                             return .Function(name, .Block(items.map { resolveBlockItem($0, &variableNameMapping) }))
                     }
+            }
+        }
+
+        func resolveVariables(_ program: Parser.AST.Program) -> Parser.AST.Program {
+            switch program {
+                case .Statement(let statements):
+                    return .Statement(statements.map { resolveVariables($0) })
             }
         }
     }
@@ -294,10 +301,17 @@ class SemanticAnalyzer {
             }
         }
 
-        func labelLoops(_ program: Parser.AST.Program) -> Parser.AST.Program {
-            switch program {
+        func labelLoops(_ pls: Parser.AST.ProgramLevelStatement) -> Parser.AST.ProgramLevelStatement {
+            switch pls {
                 case .Function(let name, let body):
                     return .Function(name, labelLoops(body, loopLabel: nil, switchLabel: nil))
+            }
+        }
+
+        func labelLoops(_ program: Parser.AST.Program) -> Parser.AST.Program {
+            switch program {
+                case .Statement(let statements):
+                    return .Statement(statements.map { labelLoops($0) })
             }
         }
     }
@@ -407,10 +421,17 @@ class SemanticAnalyzer {
             }
         }
 
+        func placeCases(_ pls: Parser.AST.ProgramLevelStatement, isInSwitch: Bool) -> Parser.AST.ProgramLevelStatement {
+            switch pls {
+                case .Function(let name, let body):
+                    return .Function(name, placeCases(body, isInSwitch: isInSwitch))
+            }
+        }
+
         func placeCases(_ program: Parser.AST.Program) -> Parser.AST.Program {
             switch program {
-                case .Function(let name, let body):
-                    return .Function(name, placeCases(body, isInSwitch: false))
+                case .Statement(let statements):
+                    return .Statement(statements.map { placeCases($0, isInSwitch: false) })
             }
         }
     }

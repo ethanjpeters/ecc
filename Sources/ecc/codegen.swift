@@ -101,16 +101,26 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
     }
 }
 
-func emitProgram(program: Assembly.Tree.Program) -> [String] {
-    var out : [String] = []
-
-    switch program {
+func emitProgramLevelStatement(_ pls: Assembly.Tree.ProgramLevelStatement, out: inout [String]) {
+    switch pls {
         case .Function(let name, let instrs):
             out.append("\t.global _\(name)")
             out.append("_\(name):")
             out.append("\tpushq\t%rbp")
             out.append("\tmovq\t%rsp, %rbp")
             emitInstructions(instrs, out: &out)
+            out.append("\n\n")
+    }
+}
+
+func emitProgram(program: Assembly.Tree.Program) -> [String] {
+    var out : [String] = []
+
+    switch program {
+        case .Statement(let statements):
+            for stmt in statements {
+                emitProgramLevelStatement(stmt, out: &out)
+            }
     }
 
     return out
