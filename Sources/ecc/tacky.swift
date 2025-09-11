@@ -338,6 +338,7 @@ class Tacky {
                 let toggleVal = generateTACKYExpression(toggle, out: &out)
                 let fallthroughTmpName = makeTemp()
                 let ftVal : Tacky.IR.Value = .Var(fallthroughTmpName)
+                out.append(.Copy(.Constant(0), ftVal))
                 generateTACKYStatement(statement: stmt, out: &out, switchValue: toggleVal, fallthroughValue: ftVal)
                 out.append(.Label(breakLabel))
             case .Labeled(let ls):
