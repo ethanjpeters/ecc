@@ -302,9 +302,123 @@ class SemanticAnalyzer {
         }
     }
 
+    class CasePlacer {
+        func placeCases(_ expression: Parser.AST.Expression, isInSwitch: Bool) -> Parser.AST.Expression {
+            return expression
+        }
+
+        func placeCases(_ statement: Parser.AST.Statement, isInSwitch: Bool) -> Parser.AST.Statement {
+            switch statement {
+                case .Return(let exp): return .Return(placeCases(exp, isInSwitch: isInSwitch))
+                case .Expression(let exp): return .Expression(placeCases(exp, isInSwitch: isInSwitch))
+                case .If(let condition, let thenClause, let elseClause):
+                    let placedCondition = placeCases(condition, isInSwitch: isInSwitch)
+                    let placedThen = placeCases(thenClause, isInSwitch: isInSwitch)
+                    let placedElse: Parser.AST.Statement?
+                    if let ec = elseClause {
+                        placedElse = placeCases(ec, isInSwitch: isInSwitch)
+                    } else {
+                        placedElse = nil
+                    }
+                    return .If(placedCondition, placedThen, placedElse)
+                case .Compound(let block):
+                    return .Compound(placeCases(block, isInSwitch: isInSwitch))
+                case .Null: return .Null
+                case .Break(let label): return .Break(label)
+                case .Continue(let label): return .Continue(label)
+                case .While(let condition, let body, let label):
+                    return .While(
+                        placeCases(condition, isInSwitch: isInSwitch),
+                        placeCases(body, isInSwitch: isInSwitch),
+                        label
+                    )
+                case .DoWhile(let body, let condition, let label):
+                    return .DoWhile(
+                        placeCases(body, isInSwitch: isInSwitch),
+                        placeCases(condition, isInSwitch: isInSwitch),
+                        label
+                    )
+                case .For(let forInit, let condition, let post, let body, let label):
+                    return .For(
+                        forInit,    // forInits can not have labels of any kind because they contain no statements
+                        condition == nil ? nil : placeCases(condition!, isInSwitch: isInSwitch),
+                        post == nil ? nil : placeCases(post!, isInSwitch: isInSwitch),
+                        placeCases(body, isInSwitch: isInSwitch),
+                        label
+                    )
+                case .Switch(let toggle, let body, let label):
+                    return .Switch(
+                        placeCases(toggle, isInSwitch: false),
+                        placeCases(body, isInSwitch: true),
+                        label
+                    )
+                case .Labeled(let ls):
+                    switch ls {
+                        case .CaseStatement(let exp, let line):
+                            if isInSwitch {
+                                /**
+                                * NOTE: this allows constructs like:
+                                switch (x) {
+                                    case 10: if (x > 100) { case 12: x; }
+                                };
+                                which are functionally meaningless but semantically and gramatically valid 
+                                **/
+                                return .Labeled(.CaseStatement(placeCases(exp, isInSwitch: true), placeCases(line, isInSwitch: true)))
+                            } else {
+                                print("Case statement found outside of switch statement")
+                                exit(ExitCode.semanticError.rawValue)
+                            }
+                        case .DefaultStatement(let stmt):
+                            // NOTE: we need to make sure there is only one default in every switch statement; we will attempt to
+                            // enforce that in the tacky generation phase
+                            if isInSwitch {
+                                return .Labeled(.DefaultStatement(placeCases(stmt, isInSwitch: true)))
+                            } else {
+                                print("Default statement found outside of switch statement")
+                                exit(ExitCode.semanticError.rawValue)
+                            }
+                        case .IdentifiedLine(let label, let stmt): return .Labeled(.IdentifiedLine(
+                            label,
+                            placeCases(stmt, isInSwitch: isInSwitch)
+                        ))
+                    }
+            }
+        }
+
+        func placeCases(_ block: Parser.AST.Block, isInSwitch: Bool) -> Parser.AST.Block {
+            switch block {
+                case .Block(let items):
+                    var placedItems : [Parser.AST.BlockItem] = []
+                    for itm in items {
+                        switch itm {
+                            case .D(let decl):
+                                switch decl {
+                                    case .Declaration(let name, let initializer):
+                                        placedItems.append(.D(.Declaration(
+                                            name,
+                                            initializer == nil ? nil : placeCases(initializer!, isInSwitch: isInSwitch)
+                                        )))
+                                }
+                            case .S(let stmt):
+                                placedItems.append(.S(placeCases(stmt, isInSwitch: isInSwitch)))
+                        }
+                    }
+                    return .Block(placedItems)
+            }
+        }
+
+        func placeCases(_ program: Parser.AST.Program) -> Parser.AST.Program {
+            switch program {
+                case .Function(let name, let body):
+                    return .Function(name, placeCases(body, isInSwitch: false))
+            }
+        }
+    }
+
     func analyze(_ program: Parser.AST.Program) -> Parser.AST.Program {
         // currently our only semantic analysis step
         let resolvedProgram = VariableResolver().resolveVariables(program)
-        return LoopLabeler().labelLoops(resolvedProgram)
+        let labeledProgram = LoopLabeler().labelLoops(resolvedProgram)
+        return CasePlacer().placeCases(labeledProgram)
     }
 }
