@@ -334,6 +334,7 @@ class Tacky {
                 out.append(.Jump(startLabel))
                 out.append(.Label(breakLabel))
             case .Switch(let toggle, let stmt, let label):
+                // NOTE: something here is broken, duff's device does not function properly
                 let breakLabel = makeLoopLabel("\(label).break")
                 let toggleVal = generateTACKYExpression(toggle, out: &out)
                 let fallthroughTmpName = makeTemp()
