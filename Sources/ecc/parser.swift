@@ -84,8 +84,12 @@ class Parser {
             case Labeled(LabeledStatement)
         }
         
-        enum Program {
+        enum ProgramLevelStatement {
             case Function(String /* name */, Block /* body */)
+        }
+
+        enum Program {
+            case Statement([ProgramLevelStatement])
         }
     }
     
@@ -548,9 +552,9 @@ class Parser {
         }
     }
     
-    func parseProgram(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
+    func parseFunction(tokenStream: inout [Lexer.Token]) -> Parser.AST.ProgramLevelStatement {
         if tokenStream.isEmpty {
-            print("Empty token stream encountered when expecting a program")
+            print("Empty token stream encountered when expecting a function")
             exit(ExitCode.parserError.rawValue)
         }
         
@@ -576,6 +580,15 @@ class Parser {
         let _ = expect(.closeParen, &tokenStream)
         
         return .Function(functionName, parseBlock(tokenStream: &tokenStream))
+    }
+
+    func parseProgram(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
+        // right now, only functions
+        var functions : [Parser.AST.ProgramLevelStatement] = []
+        while !tokenStream.isEmpty {
+            functions.append(parseFunction(tokenStream: &tokenStream))
+        }
+        return .Statement(functions)
     }
     
     func fixUpCompoundAssignments(_ exp: Parser.AST.Expression) -> Parser.AST.Expression {
@@ -642,13 +655,20 @@ class Parser {
         }
     }
     
+    func fixUpCompoundAssignments(_ statement: Parser.AST.ProgramLevelStatement) -> Parser.AST.ProgramLevelStatement {
+        switch statement {
+            case .Function(let name, let body):
+                switch body {
+                    case .Block(let body):
+                        return .Function(name, .Block(body.map { fixUpCompoundAssignments($0) }))
+                }
+        }
+    }
+
     func fixUpCompoundAssignments(_ program: Parser.AST.Program) -> Parser.AST.Program {
         switch program {
-        case .Function(let name, let body):
-            switch body {
-            case .Block(let body):
-                return .Function(name, .Block(body.map { fixUpCompoundAssignments($0) }))
-            }
+            case .Statement(let stmt):
+                return .Statement(stmt.map { fixUpCompoundAssignments($0) })
         }
     }
     
