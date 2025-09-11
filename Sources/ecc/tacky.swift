@@ -73,6 +73,15 @@ class Tacky {
         return ".L.loop.\(descriptor)label.inf"
     }
 
+    func makeSwitchLabel(_ descriptor: String) -> String {
+        return ".L.switch.\(descriptor)label.inf"
+    }
+
+    func transformUserLabel(_ userLabel: String) -> String {
+        let out = ".L.user.\(userLabel).eps"
+        return out
+    }
+
     func convert(_ op : Parser.AST.BinaryOperator) -> IR.BinaryOperator {
         switch op {
             case .Add: return .Add
@@ -242,7 +251,7 @@ class Tacky {
         }
     }
 
-    func generateTACKYStatement(statement: Parser.AST.Statement, out : inout [Tacky.IR.Instruction]) {
+    func generateTACKYStatement(statement: Parser.AST.Statement, out : inout [Tacky.IR.Instruction], switchValue: Tacky.IR.Value?, fallthroughValue: Tacky.IR.Value?) {
         switch statement {
             case .Return(let exp):
                 let child = generateTACKYExpression(exp, out: &out)
@@ -254,11 +263,11 @@ class Tacky {
                 let elseLabel = makeLabel("ifelse")
                 let endLabel = makeLabel("ifend")
                 out.append(.JumpIfZero(condValue, elseLabel))
-                generateTACKYStatement(statement: thenStatement, out: &out)
+                generateTACKYStatement(statement: thenStatement, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue)
                 out.append(.Jump(endLabel))
                 out.append(.Label(elseLabel))
                 if let es = elseStatement {
-                    generateTACKYStatement(statement: es, out: &out)
+                    generateTACKYStatement(statement: es, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue)
                 }
                 out.append(.Label(endLabel))
             case .Null: ()
@@ -268,7 +277,7 @@ class Tacky {
                         for itm in items {
                             switch itm {
                                 case .S(let stmt):
-                                    generateTACKYStatement(statement: stmt, out: &out)
+                                    generateTACKYStatement(statement: stmt, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue)
                                 case .D(let decl):
                                     generateTACKYDeclaration(decl: decl, out: &out)
                             }
@@ -286,13 +295,13 @@ class Tacky {
                 let condValue = generateTACKYExpression(condition, out: &out)
                 let breakLabel = makeLoopLabel("\(label).break")
                 out.append(.JumpIfZero(condValue, breakLabel))
-                generateTACKYStatement(statement: body, out: &out)
+                generateTACKYStatement(statement: body, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue)
                 out.append(.Jump(continueLabel))
                 out.append(.Label(breakLabel))
             case .DoWhile(let body, let condition, let label):
                 let startLabel = makeLoopLabel("\(label).start")
                 out.append(.Label(startLabel))
-                generateTACKYStatement(statement: body, out: &out)
+                generateTACKYStatement(statement: body, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue)
                 let continueLabel = makeLoopLabel("\(label).continue")
                 out.append(.Label(continueLabel))
                 let condValue = generateTACKYExpression(condition, out: &out)
@@ -317,17 +326,49 @@ class Tacky {
                 }
                 let breakLabel = makeLoopLabel("\(label).break")
                 out.append(.JumpIfZero(condValue, breakLabel))
-                generateTACKYStatement(statement: body, out: &out)
+                generateTACKYStatement(statement: body, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue)
                 out.append(.Label(makeLoopLabel("\(label).continue")))
                 if let inc = increment {
                     let _ = generateTACKYExpression(inc, out: &out)
                 }
                 out.append(.Jump(startLabel))
                 out.append(.Label(breakLabel))
-            case .Switch(_, _, _): fallthrough
-            case .Labeled(_):
-                print("Unsupported statement while generating tacky: \(statement)")
-                exit(ExitCode.internalError.rawValue)
+            case .Switch(let toggle, let stmt, let label):
+                let breakLabel = "\(makeSwitchLabel(label)).break"
+                let toggleVal = generateTACKYExpression(toggle, out: &out)
+                let fallthroughTmpName = makeTemp()
+                let ftVal : Tacky.IR.Value = .Var(fallthroughTmpName)
+                generateTACKYStatement(statement: stmt, out: &out, switchValue: toggleVal, fallthroughValue: ftVal)
+                out.append(.Label(breakLabel))
+            case .Labeled(let ls):
+                switch ls {
+                    case .CaseStatement(let labelExp, let line):
+                        // check if we're falling through
+                        let ftLabel = makeLabel("case.fallthrough")
+                        let ftCmpTmpName = makeTemp()
+                        let ftCmpTmp : Tacky.IR.Value = .Var(ftCmpTmpName)
+                        out.append(.Binary(.Equal, fallthroughValue!, .Constant(1), ftCmpTmp))
+                        out.append(.JumpIfNotZero(ftCmpTmp, ftLabel))
+                        let labelVal = generateTACKYExpression(labelExp, out: &out)
+                        let tmpName = makeTemp()
+                        let tmp : Tacky.IR.Value = .Var(tmpName)
+                        // semantic analyzer catches when we're not in a switch statement
+                        // and switchValue would be nil
+                        out.append(.Binary(.Equal, labelVal, switchValue!, tmp))
+                        let skipLabel = makeLabel("case.skip")
+                        out.append(.JumpIfZero(tmp, skipLabel))
+                        out.append(.Copy(tmp, fallthroughValue!))
+                        out.append(.Label(ftLabel))
+                        generateTACKYStatement(statement: line, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue)
+                        out.append(.Label(skipLabel))
+                    case .IdentifiedLine(let label, let line):
+                        out.append(.Label(transformUserLabel(label)))
+                        generateTACKYStatement(statement: line, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue)
+                    case .DefaultStatement(let stmt):
+                        // unconditionally execute this statement
+                        out.append(.Label(makeLabel("case.default")))
+                        generateTACKYStatement(statement: stmt, out: &out, switchValue: nil, fallthroughValue: nil)
+                }
         }
     }
 
@@ -350,7 +391,7 @@ class Tacky {
                         for blockItem in items {
                             switch blockItem {
                                 case .S(let stmt):
-                                    generateTACKYStatement(statement: stmt, out: &instrs)
+                                    generateTACKYStatement(statement: stmt, out: &instrs, switchValue: nil, fallthroughValue: nil)
                                 case .D(let decl):
                                     generateTACKYDeclaration(decl: decl, out: &instrs)
                             }
