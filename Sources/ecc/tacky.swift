@@ -104,6 +104,9 @@ class Tacky {
             case .BitwiseXor: return .BitwiseXor
             case .BitwiseShiftLeft: return .BitwiseShiftLeft
             case .BitwiseShiftRight: return .BitwiseShiftRight
+            case .FunctionCall:
+                print("Unsupported binary operator \(op) found while generating tacky")
+                exit(ExitCode.internalError.rawValue)
             case .And: fallthrough
             case .Or:
                 print("Unreachable 4")
@@ -252,7 +255,11 @@ class Tacky {
                 out.append(.Copy(e2Value, dst))
                 out.append(.Label(endLabel))
                 return dst
-        }
+            case .FunctionCallParameters(_):
+                print("Unsupported expression \(exp) found while generating tacky")
+                exit(ExitCode.internalError.rawValue)
+
+}
     }
 
     func generateTACKYStatement(statement: Parser.AST.Statement, out : inout [Tacky.IR.Instruction], switchValue: Tacky.IR.Value?, fallthroughValue: Tacky.IR.Value?) {

@@ -40,6 +40,7 @@ class Lexer {
         case equal
         case question
         case colon
+        case comma
         // two character operators
         case decrement
         case increment
@@ -277,6 +278,7 @@ class Lexer {
             case "=": return .equal
             case ":": return .colon
             case "?": return .question
+            case ",": return .comma
             default: return nil
         }
     }

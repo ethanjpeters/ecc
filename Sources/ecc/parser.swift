@@ -33,6 +33,8 @@ class Parser {
             case BitwiseXor
             case BitwiseShiftRight
             case BitwiseShiftLeft
+            // does this go here?
+            case FunctionCall
         }
         
         indirect enum Expression {
@@ -43,6 +45,7 @@ class Parser {
             case Assignment(Expression, Expression)
             case CompoundAssignment(BinaryOperator, Expression, Expression)
             case Conditional(Expression /* condition */, Expression, Expression)
+            case FunctionCallParameters([Expression])
         }
         
         enum Declaration {
@@ -284,6 +287,20 @@ class Parser {
         return left
     }
     
+    func parseFunctionCallParameters(tokenStream: inout [Lexer.Token]) -> Parser.AST.Expression {
+        let _ = expect(.openParen, &tokenStream)
+        var expressionList : [Parser.AST.Expression] = []
+        while peek(tokenStream) != .closeParen {
+            expressionList.append(parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0))
+            if peek(tokenStream) == .comma {
+                let _ = expect(.comma, &tokenStream)
+            }
+        }
+        let _ = expect(.closeParen, &tokenStream)
+
+        return .FunctionCallParameters(expressionList)
+    }
+
     func parseFactor(tokenStream: inout [Lexer.Token]) -> Parser.AST.Expression {
         if tokenStream.isEmpty {
             print("Expected factor but encountered end of token stream")
@@ -330,12 +347,20 @@ class Parser {
         }
         
         // check for postfix operators
-        if peek(tokenStream) == .increment {
-            lhs = .Unary(.PostIncrement, lhs)
-            tokenStream.removeFirst()
-        } else if peek(tokenStream) == .decrement {
-            lhs = .Unary(.PostDecrement, lhs)
-            tokenStream.removeFirst()
+        switch peek(tokenStream) {
+            case .increment:
+                lhs = .Unary(.PostIncrement, lhs)
+                tokenStream.removeFirst()
+            case .decrement:
+                lhs = .Unary(.PostDecrement, lhs)
+                tokenStream.removeFirst()
+            case .openParen:
+                // function call
+                // get paremeters
+                let params = parseFunctionCallParameters(tokenStream: &tokenStream)
+                lhs = .Binary(.FunctionCall, lhs, params)
+            default:
+                break
         }
         
         return lhs
