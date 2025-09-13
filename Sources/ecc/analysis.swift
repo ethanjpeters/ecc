@@ -142,22 +142,22 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveVariables(_ pls: Parser.AST.ProgramLevelStatement) -> Parser.AST.ProgramLevelStatement {
+        func resolveVariables(_ pls: Parser.AST.ProgramLevelStatement, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.ProgramLevelStatement {
            switch pls {
                 case .Function(let name, let body):
-                    // MARK - globals to be introduced here
-                    var variableNameMapping : [String : (String, Bool)] = [:]
                     switch body {
                         case .Block(let items):
-                            return .Function(name, .Block(items.map { resolveBlockItem($0, &variableNameMapping) }))
+                            nameMap[name] = (makeTemp(name), true)
+                            return .Function(name, .Block(items.map { resolveBlockItem($0, &nameMap) }))
                     }
             }
         }
 
         func resolveVariables(_ program: Parser.AST.Program) -> Parser.AST.Program {
+            var variableNameMapping : [String : (String, Bool)] = [:]
             switch program {
                 case .Statement(let statements):
-                    return .Statement(statements.map { resolveVariables($0) })
+                    return .Statement(statements.map { resolveVariables($0, &variableNameMapping) })
             }
         }
     }
