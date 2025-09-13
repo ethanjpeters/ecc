@@ -98,6 +98,7 @@ class Parser {
 
         enum ProgramLevelStatement {
             case Function(CType /* return type */, String /* name */, [Parameter] /* type signature */, Block /* body */)
+            case FunctionDeclaration(CType /* return type */, String /* name */, [Parameter] /* type signature */)
         }
 
         enum Program {
@@ -670,15 +671,7 @@ class Parser {
             exit(ExitCode.parserError.rawValue)
         }
         
-        let idToken = tokenStream.removeFirst()
-        let functionName : String
-        switch idToken {
-        case .identifier(let name):
-            functionName = name
-        default:
-            print("Expected function identifier but encountered \(idToken)")
-            exit(ExitCode.parserError.rawValue)
-        }
+        let functionName = expectIdentifier(&tokenStream)
         
         let _ = expect(.openParen, &tokenStream)
         let params : [Parser.AST.Parameter]
@@ -689,11 +682,16 @@ class Parser {
         }
         let _ = expect(.closeParen, &tokenStream)
         
+        if peek(tokenStream) == .semicolon {
+            let _ = expect(.semicolon, &tokenStream)
+            return .FunctionDeclaration(convertType(returnType), functionName, params)
+        }
+
         return .Function(convertType(returnType), functionName, params, parseBlock(tokenStream: &tokenStream))
     }
 
     func parseProgram(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
-        // right now, only functions
+        // right now, only functions and function declarations
         var functions : [Parser.AST.ProgramLevelStatement] = []
         while !tokenStream.isEmpty {
             functions.append(parseFunction(tokenStream: &tokenStream))
@@ -772,6 +770,8 @@ class Parser {
                     case .Block(let body):
                         return .Function(returnType, name, parameters, .Block(body.map { fixUpCompoundAssignments($0) }))
                 }
+            case .FunctionDeclaration(_, _, _):
+                return statement
         }
     }
 

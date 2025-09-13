@@ -147,9 +147,12 @@ class SemanticAnalyzer {
                 case .Function(let returnType, let name, let parameters, let body):
                     switch body {
                         case .Block(let items):
-                            nameMap[name] = (makeTemp(name), true)
+                            nameMap[name] = (name, true)    // function names don't get mangled!
                             return .Function(returnType, name, parameters, .Block(items.map { resolveBlockItem($0, &nameMap) }))
                     }
+                case .FunctionDeclaration(let returnType, let name, let params):
+                    nameMap[name] = (name, true)
+                    return .FunctionDeclaration(returnType, name, params)
             }
         }
 
@@ -315,6 +318,7 @@ class SemanticAnalyzer {
             switch pls {
                 case .Function(let returnType, let name, let parameters, let body):
                     return .Function(returnType, name, parameters, labelLoops(body, loopLabel: nil, switchLabel: nil))
+                case .FunctionDeclaration(_, _, _): return pls
             }
         }
 
@@ -435,6 +439,7 @@ class SemanticAnalyzer {
             switch pls {
                 case .Function(let returnType, let name, let parameters, let body):
                     return .Function(returnType, name, parameters, placeCases(body, isInSwitch: isInSwitch))
+                case .FunctionDeclaration(_, _, _): return pls
             }
         }
 

@@ -400,7 +400,7 @@ class Tacky {
         }
     }
 
-    func generateTACKYPLS(statement: Parser.AST.ProgramLevelStatement) -> Tacky.IR.ProgramLevelStatement {
+    func generateTACKYPLS(statement: Parser.AST.ProgramLevelStatement) -> Tacky.IR.ProgramLevelStatement? {
         switch statement {
             case .Function(let returnType, let name, let parameters, let body):
                 switch body {
@@ -418,13 +418,16 @@ class Tacky {
                         // TODO: absorb type information
                         return .Function(name, instrs)
                 }
+            case .FunctionDeclaration(_, _, _):
+                // generates no code, only used for type checking
+                return nil
         }
     }
 
     func generateTACKYProgram(program: Parser.AST.Program) -> Tacky.IR.Program {
         switch program {
             case .Statement(let statements):
-                return .Statement(statements.map{ generateTACKYPLS(statement: $0) })
+                return .Statement(statements.compactMap{ generateTACKYPLS(statement: $0) })
         }
     }
 
