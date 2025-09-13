@@ -55,6 +55,7 @@ class Assembly {
             case SetCC(ConditionCode, Operand)
             case Label(String /* identifier */)
             case AllocateStack(Int)
+            case Call(String /* identifier */)
             case Ret
         }
 
@@ -179,6 +180,14 @@ class Assembly {
                     out.append(.JmpCC(.NE, label))
                 case .Label(let name):
                     out.append(.Label(name))
+                case .Call(let name, let params, let result):
+                    // save context (currently not an issue we only use scratch registers)
+                    // move parameters into place
+                    // EJP - MARK
+                    // call the function
+                    out.append(.Call(name))
+                    // move the result
+                    out.append(.Mov(.Register(.AX), convert(result)))
             }
         }
 
@@ -247,6 +256,7 @@ class Assembly {
                 case .SetCC(let cc, let op):
                     out.append(.SetCC(cc, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
                 case .Label(_): out.append(instr)
+                case .Call(_): out.append(instr)
             }
         }
 
@@ -361,6 +371,7 @@ class Assembly {
                 case .JmpCC(_, _): out.append(instr)
                 case .SetCC(_, _): out.append(instr)
                 case .Label(_): out.append(instr)
+                case .Call(_): out.append(instr)
             }
         }
         return out

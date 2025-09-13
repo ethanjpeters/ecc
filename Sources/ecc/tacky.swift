@@ -47,6 +47,7 @@ class Tacky {
             case JumpIfZero(Value /* condition */, String /* identifier target */)
             case JumpIfNotZero(Value /* condition */, String /* identifier target */)
             case Label(String /* identifier */)
+            case Call(String /* function name */, [Value] /* parameters */, Value /* result */)
         }
 
         enum ProgramLevelStatement {
@@ -255,11 +256,25 @@ class Tacky {
                 out.append(.Copy(e2Value, dst))
                 out.append(.Label(endLabel))
                 return dst
-            case .FunctionCall(_, _):
-                print("Unsupported expression \(exp) found while generating tacky")
-                exit(ExitCode.internalError.rawValue)
-
-}
+            case .FunctionCall(let fun, let params):
+                // fun has already been constrained to an lValue, currently just a name
+                let funName : String
+                switch fun {
+                    case .Var(let fnNm):
+                        funName = fnNm
+                    default:
+                        print("Unreachable non-lValue function \(fun)")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                var paramValues : [Tacky.IR.Value] = []
+                for p in params {
+                    paramValues.append(generateTACKYExpression(p, out: &out))
+                }
+                let dstName = makeTemp()
+                let dst : Tacky.IR.Value = .Var(dstName)
+                out.append(.Call(funName, paramValues, dst))
+                return dst
+        }
     }
 
     func generateTACKYStatement(statement: Parser.AST.Statement, out : inout [Tacky.IR.Instruction], switchValue: Tacky.IR.Value?, fallthroughValue: Tacky.IR.Value?) {

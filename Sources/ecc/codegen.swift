@@ -97,6 +97,9 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tset\(convert(cc))\t\(convert(op, false))")
             case .Label(let name):
                 out.append("\(name):")
+            case .Call(_):
+                print("Unsupported instruction \(instr) found while emitting code")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 }
