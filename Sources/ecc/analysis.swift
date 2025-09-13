@@ -451,6 +451,275 @@ class SemanticAnalyzer {
         }
     }
 
+    class TypeChecker {
+        indirect enum CheckerType : Equatable {
+            case Int
+            case Void
+            case Function(CheckerType /* return */, [CheckerType] /* params */)
+        }
+
+        func convert(_ pType : Parser.AST.CType) -> CheckerType {
+            switch pType {
+                case .Int: return .Int
+                case .Void: return .Void
+            }
+        }
+
+        func copyNameMap(_ nameMap: [String : (CheckerType, Bool)]) -> [String : (CheckerType, Bool)] {
+            var out : [String : (CheckerType, Bool)] = [:]
+            for (name, entry) in nameMap {
+                out[name] = entry
+            }
+            return out
+        }
+
+        func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, Bool)]) -> CheckerType {
+            switch expression {
+                case .Constant(let v): return .Int  // TODO: other types of constants
+                case .Unary(let unOp, let e): return typeCheck(e, nameMap) // TODO: not all operators make sense on every type
+                case .Binary(let binOp, let left, let right):
+                    // TODO: not all binary operations on all pairs of types make sense and types should match
+                    let leftType = typeCheck(left, nameMap)
+                    let rightType = typeCheck(right, nameMap)
+                    if leftType != rightType {
+                        // TODO: this is sometimes ok and currently impossible
+                        print("Mismatched expression types between \(left) and \(right) (\(leftType), \(rightType)))")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                    return leftType
+                case .Var(let name):
+                    // name is enforced to exist
+                    let (tp, def) = nameMap[name]!
+                    if !def {
+                        // NOTE: this is actually permitted in C
+                        // print("WARNING: Use of undefined variable \(name)")
+                        // exit(ExitCode.semanticError.rawValue)
+                    }
+                    return tp
+                case .Assignment(let lValue, let exp):
+                    // lValue is already enforced to be a valid lValue
+                    let name: String
+                    switch lValue {
+                        case .Var(let nm):
+                            name = nm
+                        default:
+                            print("Unreachable non lValue in assignment \(lValue)")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                    // TODO: this is where we would update defined-ness but we messed up
+                    let (tp, _) = nameMap[name]!
+                    let expType = typeCheck(exp, nameMap)
+                    if tp != expType {
+                        // TODO: this is sometimes ok and currently impossible
+                        print("Mismatched expression types during assignment -- \(lValue): \(tp), \(exp): \(expType)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                    return tp
+                case .CompoundAssignment(_, _, _):
+                    print("Unreachable compound assignment found during type checking")
+                    exit(ExitCode.internalError.rawValue)
+                case .Conditional(let cond, let left, let right):
+                    let _ = typeCheck(cond, nameMap)
+                    let leftType = typeCheck(left, nameMap)
+                    let rightType = typeCheck(right, nameMap)
+                    if leftType != rightType {
+                        // NOTE: C is not a strongly typed language and this is an unacceptable level of pedantry
+                        print("Sides of conditional expression do not match -- \(left): \(leftType), \(right): \(rightType)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                    return leftType
+                case .FunctionCall(let lValue, let params):
+                    // lValue is already enforced to be a valid lValue
+                    let name: String
+                    switch lValue {
+                        case .Var(let nm):
+                            name = nm
+                        default:
+                            print("Unreachable non lValue in function call \(lValue)")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                    var paramsType : [TypeChecker.CheckerType] = []
+                    for p in params {
+                        paramsType.append(typeCheck(p, nameMap))
+                    }
+                    let (fType, _) = nameMap[name]!
+                    switch fType {
+                        case .Function(let rType, let pType):
+                            if pType != paramsType {
+                                print("Function call \(expression) of type \(paramsType), does not match \(pType)")
+                            }
+                            return rType
+                        case .Int: fallthrough
+                        case .Void:
+                            print("Can not call value \(lValue) of type \(fType)")
+                            exit(ExitCode.semanticError.rawValue)
+                    }
+            }
+        }
+
+        func typeCheck(_ statement: Parser.AST.Statement, _ nameMap: inout [String: (CheckerType, Bool)]) -> CheckerType {
+            switch statement {
+                case .Return(let exp):
+                    if let e = exp {
+                        return typeCheck(e, nameMap)
+                    } else { return .Void }
+                case .Expression(let exp):
+                    return typeCheck(exp, nameMap)
+                case .If(let condition, let thenClause, let elseClause):
+                    let _ = typeCheck(condition, nameMap)
+                    let _ = typeCheck(thenClause, &nameMap)
+                    if let els = elseClause {
+                        let _ = typeCheck(els, &nameMap)
+                    }
+                    return .Void   // statements don't generally return
+                case .Compound(let block):
+                    return typeCheck(block, &nameMap)
+                case .Null: return .Void
+                case .Break(_): return .Void
+                case .Continue(_): return .Void
+                case .While(let condition, let body, _):
+                    let _ = typeCheck(condition, nameMap)
+                    var copiedNameMap = copyNameMap(nameMap)
+                    let _ = typeCheck(body, &copiedNameMap)
+                    return .Void
+                case .DoWhile(let body, let condition, _):
+                    var copiedNameMap = copyNameMap(nameMap)
+                    let _ = typeCheck(body, &copiedNameMap)
+                    let _ = typeCheck(condition, nameMap)
+                    return .Void
+                case .For(let forInit, let condition, let post, let body, _):
+                    var copiedNameMap = copyNameMap(nameMap)
+                    switch forInit {
+                        case .InitDecl(let decl):
+                            switch decl {
+                                case .Declaration(let tp, let name, let exp):
+                                    let initType : CheckerType
+                                    if let e = exp {
+                                        initType = typeCheck(e, copiedNameMap)
+                                    } else {
+                                        initType = convert(tp)
+                                    }
+                                    if initType != convert(tp) {
+                                        print("Declaration \(decl) is ill-typed")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
+                                    copiedNameMap[name] = (initType, exp != nil)
+                            }
+                        case .InitExp(let exp):
+                            if let e = exp {
+                                let _ = typeCheck(e, copiedNameMap)
+                            }
+                    }
+                case .Switch(let toggle, let body, _):
+                    let _ = typeCheck(toggle, nameMap)
+                    var copiedNameMap = copyNameMap(nameMap)
+                    let _ = typeCheck(body, &copiedNameMap)
+                    return .Void
+                case .Labeled(let ls):
+                    switch ls {
+                        // TODO: some type checking that should be happening isn't happening inside of switch statements
+                        case .CaseStatement(_, let line):    // don't bother type checking a constant
+                            let _ = typeCheck(line, &nameMap)
+                        case .DefaultStatement(let line):
+                            let _ = typeCheck(line, &nameMap)
+                        case .IdentifiedLine(_, let line):
+                            let _ = typeCheck(line, &nameMap)
+                    }
+            }
+        }
+
+        // NOTE: this does not match return statements with function return types
+        func typeCheck(_ block: Parser.AST.Block, _ nameMap : inout [String : (CheckerType, Bool)]) -> CheckerType {
+            switch block {
+                case .Block(let blockItems):
+                    for item in blockItems {
+                        switch item {
+                            case .D(let decl):
+                                switch decl {
+                                    case .Declaration(let tp, let name, let exp):
+                                        let initType : CheckerType
+                                        if let e = exp {
+                                            initType = typeCheck(e, nameMap)
+                                        } else {
+                                            initType = convert(tp)
+                                        }
+                                        if initType != convert(tp) {
+                                            print("Declaration \(decl) is ill-typed")
+                                            exit(ExitCode.semanticError.rawValue)
+                                        }
+                                        nameMap[name] = (initType, exp != nil)
+                                }
+                            case .S(let stmt):
+                                let _ = typeCheck(stmt, &nameMap)
+                        }
+                    }
+                    return .Void
+            }
+        }
+
+        func typeCheck(_ pls : Parser.AST.ProgramLevelStatement, _ nameMap : inout [String : (CheckerType, Bool)]) -> CheckerType {
+            switch pls {
+                case .Function(let returnType, let name, let params, let body):
+                    var paramTypes : [CheckerType] = []
+                    for p in params {
+                        switch p {
+                            case .Declaration(let tp, _):
+                                paramTypes.append(convert(tp))
+                        }
+                    }
+                    let constructedType : CheckerType = .Function(convert(returnType), paramTypes)
+                    if let preExistingFunction = nameMap[name] {
+                        let (oldType, oldDefined) = preExistingFunction
+                        if oldDefined {
+                            print("Redefinition of function \(name)")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
+                        if oldType != constructedType {
+                            print("Funciton \(name) was redeclared with a different type")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
+                    } else {
+                        nameMap[name] = (constructedType, true)
+                    }
+                    var copy = copyNameMap(nameMap)
+                    return typeCheck(body, &copy)
+                case .FunctionDeclaration(let returnType, let name, let params):
+                    var paramTypes : [CheckerType] = []
+                    for p: Parser.AST.Parameter in params {
+                        switch p {
+                            case .Declaration(let tp, _):
+                                paramTypes.append(convert(tp))
+                        }
+                    }
+                    let constructedType : CheckerType = .Function(convert(returnType), paramTypes)
+                    if let preExistingFunction = nameMap[name] {
+                        let (oldType, _) = preExistingFunction
+                        if oldType != constructedType {
+                            print("Funciton \(name) was redeclared with a different type")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
+                    } else {
+                        nameMap[name] = (constructedType, false)
+                    }
+                    return constructedType
+            }
+        }
+
+        func typeCheck(_ program: Parser.AST.Program) {
+            var overallNameMap : [String : (
+                CheckerType,    // the value's type
+                Bool            // whether the value has been defined
+            )] = [:]
+
+            switch program {
+                case .Statement(let pls):
+                    for p in pls {
+                        let _ = typeCheck(p, &overallNameMap)
+                    }
+            }
+        }
+    }
+
     func analyze(_ program: Parser.AST.Program) -> Parser.AST.Program {
         // currently our only semantic analysis step
         let resolvedProgram = VariableResolver().resolveVariables(program)

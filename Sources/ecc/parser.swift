@@ -49,7 +49,7 @@ class Parser {
         }
         
         enum Declaration {
-            case Declaration(String /* identifier name */, Expression?)
+            case Declaration(CType /* type */, String /* identifier name */, Expression?)
         }
         
         enum BlockItem {
