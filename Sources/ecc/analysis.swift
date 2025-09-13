@@ -18,19 +18,23 @@ class SemanticAnalyzer {
             return out
         }
 
+        func isValidLValue(_ exp: Parser.AST.Expression) -> Bool {
+            switch exp {
+                case .Var(_): return true
+                default: return false
+            }
+        }
+
         func resolveExpression(_ exp : Parser.AST.Expression, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Expression {
             switch exp {
                 case .Assignment(let lValue, let rValue):
-                    switch lValue {
-                        case .Var(_):
-                            ()
-                        default:
-                            print("Invalid lvalue in assignment \(exp)")
-                            exit(ExitCode.semanticError.rawValue)
+                    if !isValidLValue(lValue) {
+                        print("Invalid lvalue in assignment \(exp)")
+                        exit(ExitCode.semanticError.rawValue)
                     }
                     return .Assignment(resolveExpression(lValue, &nameMap), resolveExpression(rValue, &nameMap))
                 case .CompoundAssignment(_,_,_):
-                    print("Unreachable: Unsupported compound assignment found while generating tacky")
+                    print("Unreachable: Unsupported compound assignment found while analyzing")
                     exit(ExitCode.internalError.rawValue)
                 case .Binary(let op, let left, let right):
                     return .Binary(op, resolveExpression(left, &nameMap), resolveExpression(right, &nameMap))
@@ -50,9 +54,12 @@ class SemanticAnalyzer {
                     }
                 case .Conditional(let cond, let left, let right):
                     return .Conditional(resolveExpression(cond, &nameMap), resolveExpression(left, &nameMap), resolveExpression(right, &nameMap))
-                case .FunctionCall(_, _):
-                    print("Unsupported expression found while trying to resolve expressions \(exp)")
-                    exit(ExitCode.internalError.rawValue)
+                case .FunctionCall(let fun, let parameters):
+                    if !isValidLValue(fun) {    // TODO: is this actually all we need for something to be callable?
+                        print("Function \(fun) could not be resolved to valid lvalue")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                    return .FunctionCall(resolveExpression(fun, &nameMap), parameters.map { resolveExpression($0, &nameMap) })
             }
         }
 
