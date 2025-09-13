@@ -94,7 +94,8 @@ class Assembly {
         for instr in instructions {
             switch instr {
                 case .Return(let val):
-                    out.append(.Mov(convert(val), .Register(.AX)))
+                    let v : Tacky.IR.Value = (val == nil ? .Constant(0) : val!)
+                    out.append(.Mov(convert(v), .Register(.AX)))
                     out.append(.Ret)
                 case .Unary(let op, let src, let dst):
                     if op == .Not {

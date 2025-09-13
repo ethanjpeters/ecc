@@ -73,7 +73,7 @@ class Parser {
         }
         
         indirect enum Statement {
-            case Return(Expression)
+            case Return(Expression?)
             case Expression(Expression)
             case If(Expression /* condition */, Statement /* then */, Statement? /* else */)
             case Compound(Block)
@@ -461,7 +461,12 @@ class Parser {
         switch maybeReturn {
         case .keywordReturn:
             let _ = expect(.keywordReturn, &tokenStream)
-            let exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+            let exp : Parser.AST.Expression?
+            if peek(tokenStream) != .semicolon {
+                exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+            } else {
+                exp = nil
+            }
             let _ = expect(.semicolon, &tokenStream)
             return .Return(exp)
         case .semicolon:
@@ -712,7 +717,7 @@ class Parser {
         switch statement {
         case .Expression(let exp): return .Expression(fixUpCompoundAssignments(exp))
         case .Null: return statement
-        case .Return(let exp): return .Return(fixUpCompoundAssignments(exp))
+        case .Return(let exp): return .Return(exp == nil ? nil : fixUpCompoundAssignments(exp!))
         case .If(let exp, let thenStatement, let elseStatement):
             return .If(fixUpCompoundAssignments(exp), fixUpCompoundAssignments(thenStatement), elseStatement == nil ? nil : fixUpCompoundAssignments(elseStatement!))
         case .Compound(let block):

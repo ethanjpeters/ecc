@@ -66,7 +66,7 @@ class SemanticAnalyzer {
         func resolveStatement(_ stmt : Parser.AST.Statement, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Statement {
             switch stmt {
                 case .Expression(let exp): return .Expression(resolveExpression(exp, &nameMap))
-                case .Return(let exp): return .Return(resolveExpression(exp, &nameMap))
+                case .Return(let exp): return .Return(exp == nil ? nil : resolveExpression(exp!, &nameMap))
                 case .Null: return .Null
                 case .If(let cond, let thenStatement, let elseStatement):
                     return .If(resolveExpression(cond, &nameMap), resolveStatement(thenStatement, &nameMap),
@@ -235,7 +235,7 @@ class SemanticAnalyzer {
                     let labeledBody = labelLoops(body, loopLabel: newLabel, switchLabel: nil)
                     return .For(labeledForInit, labeledCondition, labeledIncrement, labeledBody, newLabel)
                 case .Return(let exp):
-                    return .Return(labelLoops(exp, loopLabel: loopLabel, switchLabel: nil))
+                    return .Return(exp == nil ? nil : labelLoops(exp!, loopLabel: loopLabel, switchLabel: nil))
                 case .Expression(let exp):
                     return .Expression(labelLoops(exp, loopLabel: loopLabel, switchLabel: nil))
                 case .If(let cond, let thenStatement, let elseStatement):
@@ -333,7 +333,7 @@ class SemanticAnalyzer {
 
         func placeCases(_ statement: Parser.AST.Statement, isInSwitch: Bool) -> Parser.AST.Statement {
             switch statement {
-                case .Return(let exp): return .Return(placeCases(exp, isInSwitch: isInSwitch))
+                case .Return(let exp): return .Return(exp == nil ? nil : placeCases(exp!, isInSwitch: isInSwitch))
                 case .Expression(let exp): return .Expression(placeCases(exp, isInSwitch: isInSwitch))
                 case .If(let condition, let thenClause, let elseClause):
                     let placedCondition = placeCases(condition, isInSwitch: isInSwitch)

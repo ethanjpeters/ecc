@@ -39,7 +39,7 @@ class Tacky {
         }
 
         enum Instruction {
-            case Return(Value)
+            case Return(Value?)
             case Unary(UnaryOperator, Value/* src */, Value /* dst */)
             case Binary(BinaryOperator, Value /* src1 */, Value /* src2 */, Value /* dst */)
             case Copy(Value /* src */, Value /* dst */)
@@ -265,7 +265,12 @@ class Tacky {
     func generateTACKYStatement(statement: Parser.AST.Statement, out : inout [Tacky.IR.Instruction], switchValue: Tacky.IR.Value?, fallthroughValue: Tacky.IR.Value?) {
         switch statement {
             case .Return(let exp):
-                let child = generateTACKYExpression(exp, out: &out)
+                let child : Tacky.IR.Value?
+                if let e = exp {
+                    child = generateTACKYExpression(e, out: &out)
+                } else {
+                    child = nil
+                }
                 out.append(.Return(child))
             case .Expression(let exp):
                 let _ = generateTACKYExpression(exp, out: &out)
