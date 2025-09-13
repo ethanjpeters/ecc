@@ -123,6 +123,50 @@ class Parser {
         return nextToken
     }
     
+    func expectType(_ tokenStream: inout [Lexer.Token]) -> Lexer.Token {
+        if tokenStream.isEmpty {
+            print("Expected type but encountered end of token stream")
+            exit(ExitCode.parserError.rawValue)
+        }
+
+        let next = tokenStream.removeFirst()
+        switch next {
+            case .keywordInt: fallthrough
+            case .keywordVoid: return next
+            default:
+                print("Found unexpected token \(next) when looking for type")
+                exit(ExitCode.parserError.rawValue)
+        }
+    }
+
+    func expectIdentifier(_ tokenStream: inout [Lexer.Token]) -> String /* identifier */ {
+        if tokenStream.isEmpty {
+            print("Expected identifier but encountered end of token stream")
+            exit(ExitCode.parserError.rawValue)
+        }
+
+        let next = tokenStream.removeFirst()
+        switch next {
+            case .identifier(let name): return name
+            default:
+                print("Found unexpected token \(next) while looking for identifier")
+                // DEBUG
+                print(tokenStream)
+                // END DEBUG
+                exit(ExitCode.parserError.rawValue)
+        }
+    }
+
+    func convertType(_ token: Lexer.Token) -> Parser.AST.CType {
+        switch token {
+            case .keywordInt: return .Int
+            case .keywordVoid: return .Void
+            default:
+                print("Unreachable not-a-type while converting lexical type to AST")
+                exit(ExitCode.internalError.rawValue)
+        }
+    }
+
     func peek(_ tokenStream: [Lexer.Token]) -> Lexer.Token {
         if tokenStream.isEmpty {
             print("Expected token but encountered end of token stream")
@@ -587,13 +631,34 @@ class Parser {
         }
     }
     
+    func parseFunctionParameters(tokenStream: inout [Lexer.Token]) -> [Parser.AST.Parameter] {
+        let pType = expectType(&tokenStream)
+
+        // technically you're allowed not to name "void"
+        if pType == .keywordVoid {
+            return []
+        }
+
+        let pName = expectIdentifier(&tokenStream)
+        var params : [Parser.AST.Parameter] = [.Declaration(convertType(pType), pName)]
+
+        while peek(tokenStream) == .comma {
+            let _ = expect(.comma, &tokenStream)
+            let nextType = expectType(&tokenStream)
+            let nextName = expectIdentifier(&tokenStream)
+            params.append(.Declaration(convertType(nextType), nextName))
+        }
+
+        return params
+    }
+
     func parseFunction(tokenStream: inout [Lexer.Token]) -> Parser.AST.ProgramLevelStatement {
         if tokenStream.isEmpty {
             print("Empty token stream encountered when expecting a function")
             exit(ExitCode.parserError.rawValue)
         }
         
-        let _ = expect(.keywordInt, &tokenStream)
+        let returnType = expectType(&tokenStream)
         
         if tokenStream.isEmpty {
             print("Empty token stream encountered when expecting a function identifier")
@@ -611,11 +676,15 @@ class Parser {
         }
         
         let _ = expect(.openParen, &tokenStream)
-        let _ = expect(.keywordVoid, &tokenStream)    // currently the only acceptable parameter type
+        let params : [Parser.AST.Parameter]
+        if peek(tokenStream) != .closeParen {
+            params = parseFunctionParameters(tokenStream: &tokenStream)
+        } else {
+            params = []
+        }
         let _ = expect(.closeParen, &tokenStream)
         
-        // TODO: fill in type information
-        return .Function(.Int, functionName, [], parseBlock(tokenStream: &tokenStream))
+        return .Function(convertType(returnType), functionName, params, parseBlock(tokenStream: &tokenStream))
     }
 
     func parseProgram(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
