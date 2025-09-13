@@ -144,11 +144,11 @@ class SemanticAnalyzer {
 
         func resolveVariables(_ pls: Parser.AST.ProgramLevelStatement, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.ProgramLevelStatement {
            switch pls {
-                case .Function(let name, let body):
+                case .Function(let returnType, let name, let parameters, let body):
                     switch body {
                         case .Block(let items):
                             nameMap[name] = (makeTemp(name), true)
-                            return .Function(name, .Block(items.map { resolveBlockItem($0, &nameMap) }))
+                            return .Function(returnType, name, parameters, .Block(items.map { resolveBlockItem($0, &nameMap) }))
                     }
             }
         }
@@ -313,8 +313,8 @@ class SemanticAnalyzer {
 
         func labelLoops(_ pls: Parser.AST.ProgramLevelStatement) -> Parser.AST.ProgramLevelStatement {
             switch pls {
-                case .Function(let name, let body):
-                    return .Function(name, labelLoops(body, loopLabel: nil, switchLabel: nil))
+                case .Function(let returnType, let name, let parameters, let body):
+                    return .Function(returnType, name, parameters, labelLoops(body, loopLabel: nil, switchLabel: nil))
             }
         }
 
@@ -433,8 +433,8 @@ class SemanticAnalyzer {
 
         func placeCases(_ pls: Parser.AST.ProgramLevelStatement, isInSwitch: Bool) -> Parser.AST.ProgramLevelStatement {
             switch pls {
-                case .Function(let name, let body):
-                    return .Function(name, placeCases(body, isInSwitch: isInSwitch))
+                case .Function(let returnType, let name, let parameters, let body):
+                    return .Function(returnType, name, parameters, placeCases(body, isInSwitch: isInSwitch))
             }
         }
 

@@ -87,8 +87,17 @@ class Parser {
             case Labeled(LabeledStatement)
         }
         
+        enum CType {
+            case Int
+            case Void
+        }
+
+        enum Parameter {
+            case Declaration(CType /* type */, String /* name */)
+        }
+
         enum ProgramLevelStatement {
-            case Function(String /* name */, Block /* body */)
+            case Function(CType /* return type */, String /* name */, [Parameter] /* type signature */, Block /* body */)
         }
 
         enum Program {
@@ -605,7 +614,8 @@ class Parser {
         let _ = expect(.keywordVoid, &tokenStream)    // currently the only acceptable parameter type
         let _ = expect(.closeParen, &tokenStream)
         
-        return .Function(functionName, parseBlock(tokenStream: &tokenStream))
+        // TODO: fill in type information
+        return .Function(.Int, functionName, [], parseBlock(tokenStream: &tokenStream))
     }
 
     func parseProgram(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
@@ -683,10 +693,10 @@ class Parser {
     
     func fixUpCompoundAssignments(_ statement: Parser.AST.ProgramLevelStatement) -> Parser.AST.ProgramLevelStatement {
         switch statement {
-            case .Function(let name, let body):
+            case .Function(let returnType, let name, let parameters, let body):
                 switch body {
                     case .Block(let body):
-                        return .Function(name, .Block(body.map { fixUpCompoundAssignments($0) }))
+                        return .Function(returnType, name, parameters, .Block(body.map { fixUpCompoundAssignments($0) }))
                 }
         }
     }

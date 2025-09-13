@@ -397,7 +397,7 @@ class Tacky {
 
     func generateTACKYPLS(statement: Parser.AST.ProgramLevelStatement) -> Tacky.IR.ProgramLevelStatement {
         switch statement {
-            case .Function(let name, let body):
+            case .Function(let returnType, let name, let parameters, let body):
                 switch body {
                     case .Block(let items):
                         var instrs : [Tacky.IR.Instruction] = []
@@ -410,6 +410,7 @@ class Tacky {
                             }
                         }
                         instrs.append(.Return(.Constant(0)))
+                        // TODO: absorb type information
                         return .Function(name, instrs)
                 }
         }
