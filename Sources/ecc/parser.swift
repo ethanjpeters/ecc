@@ -290,17 +290,12 @@ class Parser {
     func parseFunctionCallParameters(tokenStream: inout [Lexer.Token]) -> Parser.AST.Expression {
         let _ = expect(.openParen, &tokenStream)
         var expressionList : [Parser.AST.Expression] = []
-        var firstPass = true
-        while peek(tokenStream) != .closeParen {
-            if peek(tokenStream) == .comma {
-                if firstPass {
-                    print("Found a comma at the beginning of function call parameters")
-                    exit(ExitCode.parserError.rawValue)
-                }
-                let _ = expect(.comma, &tokenStream)
-            }
+        if peek(tokenStream) != .closeParen {
             expressionList.append(parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0))
-            firstPass = false
+        }
+        while peek(tokenStream) != .closeParen {
+            let _ = expect(.comma, &tokenStream)
+            expressionList.append(parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0))
         }
         let _ = expect(.closeParen, &tokenStream)
 
