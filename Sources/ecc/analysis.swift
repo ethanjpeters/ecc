@@ -50,7 +50,7 @@ class SemanticAnalyzer {
                     }
                 case .Conditional(let cond, let left, let right):
                     return .Conditional(resolveExpression(cond, &nameMap), resolveExpression(left, &nameMap), resolveExpression(right, &nameMap))
-                case .FunctionCallParameters(_):
+                case .FunctionCall(_, _):
                     print("Unsupported expression found while trying to resolve expressions \(exp)")
                     exit(ExitCode.internalError.rawValue)
             }

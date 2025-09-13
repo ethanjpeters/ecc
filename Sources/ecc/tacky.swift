@@ -255,7 +255,7 @@ class Tacky {
                 out.append(.Copy(e2Value, dst))
                 out.append(.Label(endLabel))
                 return dst
-            case .FunctionCallParameters(_):
+            case .FunctionCall(_, _):
                 print("Unsupported expression \(exp) found while generating tacky")
                 exit(ExitCode.internalError.rawValue)
 

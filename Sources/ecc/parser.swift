@@ -45,7 +45,7 @@ class Parser {
             case Assignment(Expression, Expression)
             case CompoundAssignment(BinaryOperator, Expression, Expression)
             case Conditional(Expression /* condition */, Expression, Expression)
-            case FunctionCallParameters([Expression])
+            case FunctionCall(Expression /* "name" */, [Expression] /* parameters */)
         }
         
         enum Declaration {
@@ -287,7 +287,7 @@ class Parser {
         return left
     }
     
-    func parseFunctionCallParameters(tokenStream: inout [Lexer.Token]) -> Parser.AST.Expression {
+    func parseFunctionCallParameters(tokenStream: inout [Lexer.Token]) -> [Parser.AST.Expression] {
         let _ = expect(.openParen, &tokenStream)
         var expressionList : [Parser.AST.Expression] = []
         if peek(tokenStream) != .closeParen {
@@ -299,7 +299,7 @@ class Parser {
         }
         let _ = expect(.closeParen, &tokenStream)
 
-        return .FunctionCallParameters(expressionList)
+        return expressionList
     }
 
     func parseFactor(tokenStream: inout [Lexer.Token]) -> Parser.AST.Expression {
@@ -359,7 +359,7 @@ class Parser {
                 // function call
                 // get paremeters
                 let params = parseFunctionCallParameters(tokenStream: &tokenStream)
-                lhs = .Binary(.FunctionCall, lhs, params)
+                lhs = .FunctionCall(lhs, params)
             default:
                 break
         }
