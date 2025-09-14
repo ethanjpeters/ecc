@@ -318,11 +318,21 @@ class Lexer {
         var out : [Token] = []
         var i = 0
 
+        var lineCounter : Int = 1
+        var columnCounter : Int = 1
+
         while i < sourceFileCharacters.count {
             enforceAscii(index: i)
 
             if sourceFileCharacters[i].isWhitespace {
                 i = i + 1
+
+                if sourceFileCharacters[i].isNewline {
+                    columnCounter = 1
+                    lineCounter = lineCounter + 1
+                } else {
+                    columnCounter = columnCounter + 1
+                }
             } else if let identifier = matchIdentifier(startingIndex: i) {
                 if let kw = matchKeyword(identifier: identifier) {
                     out.append(kw)
@@ -331,26 +341,32 @@ class Lexer {
                 }
 
                 i = i + identifier.count
+                columnCounter = columnCounter + identifier.count
             } else if let constant = matchConstant(startingIndex: i) {
                 out.append(.constant(constant))
 
                 i = i + constant.count
+                columnCounter = columnCounter + constant.count
             } else if let op = matchThreeCharacterOperator(startingIndex: i) {
                 out.append(op)
 
                 i = i + 3
+                columnCounter = columnCounter + 3
             } else if let op = matchTwoCharacterOperator(startingIndex: i) {
                 out.append(op)
 
                 i = i + 2
+                columnCounter = columnCounter + 2
             } else if let op = matchOneCharacterOperator(startingIndex: i) {
                 out.append(op)
 
                 i = i + 1
+                columnCounter = columnCounter + 1
             } else if let del = matchDelimiter(startingIndex: i) {
                 out.append(del)
 
                 i = i + 1
+                columnCounter = columnCounter + 1
             }
         }
 
