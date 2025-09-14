@@ -116,7 +116,7 @@ class SemanticAnalyzer {
 
         func resolveDeclaration(_ decl: Parser.AST.Declaration, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Declaration {
             switch decl {
-                case .Declaration(let name, let exp):
+                case .Declaration(let tp, let name, let exp):
                     if let n = nameMap[name] {
                         if n.1 {
                             print("Duplicate variable name found: \(n)")
@@ -129,7 +129,7 @@ class SemanticAnalyzer {
                     if let initializer = exp {
                         outInit = resolveExpression(initializer, &nameMap)
                     }
-                    return .Declaration(uniqueName, outInit)
+                    return .Declaration(tp, uniqueName, outInit)
             }
         }
 
@@ -216,8 +216,9 @@ class SemanticAnalyzer {
                     switch forInit {
                         case .InitDecl(let decl):
                             switch decl {
-                                case .Declaration(let name, let exp):
+                                case .Declaration(let tp, let name, let exp):
                                     labeledForInit = .InitDecl(.Declaration(
+                                        tp,
                                         name,
                                         exp == nil ? nil : labelLoops(
                                             exp!,
@@ -289,14 +290,14 @@ class SemanticAnalyzer {
             switch blockItem {
                 case .D(let decl):
                     switch decl {
-                        case .Declaration(let name, let exp):
+                        case .Declaration(let tp, let name, let exp):
                             let outExp : Parser.AST.Expression?
                             if let e = exp {
                                 outExp = labelLoops(e, loopLabel: loopLabel, switchLabel: switchLabel)
                             } else {
                                 outExp = nil
                             }
-                            return .D(.Declaration(name, outExp))
+                            return .D(.Declaration(tp, name, outExp))
                     }
                 case .S(let stmt):
                     return .S(labelLoops(stmt, loopLabel: loopLabel, switchLabel: switchLabel))
@@ -421,8 +422,9 @@ class SemanticAnalyzer {
                         switch itm {
                             case .D(let decl):
                                 switch decl {
-                                    case .Declaration(let name, let initializer):
+                                    case .Declaration(let tp, let name, let initializer):
                                         placedItems.append(.D(.Declaration(
+                                            tp,
                                             name,
                                             initializer == nil ? nil : placeCases(initializer!, isInSwitch: isInSwitch)
                                         )))
@@ -475,12 +477,26 @@ class SemanticAnalyzer {
 
         func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, Bool)]) -> CheckerType {
             switch expression {
-                case .Constant(let v): return .Int  // TODO: other types of constants
-                case .Unary(let unOp, let e): return typeCheck(e, nameMap) // TODO: not all operators make sense on every type
+                case .Constant(_): return .Int  // TODO: other types of constants
+                case .Unary(let unOp, let e):
+                    let eType = typeCheck(e, nameMap) // TODO: not all operators make sense on every type
+                    if eType == .Void {
+                        print("Tried to perform unary operation \(unOp) on void expression \(e)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                    return eType
                 case .Binary(let binOp, let left, let right):
                     // TODO: not all binary operations on all pairs of types make sense and types should match
                     let leftType = typeCheck(left, nameMap)
+                    if leftType == .Void {
+                        print("Left hand side (\(left)) of binary operatino \(binOp) is void")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
                     let rightType = typeCheck(right, nameMap)
+                    if rightType == .Void {
+                        print("Right hand side (\(right)) of binary operatino \(binOp) is void")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
                     if leftType != rightType {
                         // TODO: this is sometimes ok and currently impossible
                         print("Mismatched expression types between \(left) and \(right) (\(leftType), \(rightType)))")
@@ -610,6 +626,14 @@ class SemanticAnalyzer {
                                 let _ = typeCheck(e, copiedNameMap)
                             }
                     }
+                    if let c = condition {
+                        let _ = typeCheck(c, copiedNameMap)
+                    }
+                    if let p = post {
+                        let _ = typeCheck(p, copiedNameMap)
+                    }
+                    let _ = typeCheck(body, &copiedNameMap)
+                    return .Void
                 case .Switch(let toggle, let body, _):
                     let _ = typeCheck(toggle, nameMap)
                     var copiedNameMap = copyNameMap(nameMap)
@@ -625,6 +649,7 @@ class SemanticAnalyzer {
                         case .IdentifiedLine(_, let line):
                             let _ = typeCheck(line, &nameMap)
                     }
+                    return .Void
             }
         }
 

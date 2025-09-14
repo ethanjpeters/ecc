@@ -593,12 +593,14 @@ class Parser {
     }
     
     func parseDeclaration(tokenStream: inout [Lexer.Token]) -> Parser.AST.Declaration {
-        let _ = expect(.keywordInt, &tokenStream)
-        if tokenStream.isEmpty {
-            print("Unexpected end of stream hit while parsing declaration")
-            exit(ExitCode.parserError.rawValue)
-        }
+        let declType = convertType(expectType(&tokenStream))
         
+        // does this check belong here?
+        if declType == .Void {
+            print("Variable declaration cannot be void")
+            exit(ExitCode.semanticError.rawValue)
+        }
+
         let idToken = tokenStream.removeFirst()
         
         let varName : String
@@ -620,7 +622,7 @@ class Parser {
         
         let _ = expect(.semicolon, &tokenStream)
         
-        return .Declaration(varName, exp)
+        return .Declaration(declType, varName, exp)
     }
     
     func parseForInit(tokenStream: inout [Lexer.Token]) -> Parser.AST.ForInit {
