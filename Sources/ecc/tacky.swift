@@ -51,7 +51,7 @@ class Tacky {
         }
 
         enum ProgramLevelStatement {
-            case Function(String /* name */, [Instruction] /* body */)
+            case Function(String /* name */, [String] /* params */, [Instruction] /* body */)
         }
 
         enum Program {
@@ -431,8 +431,14 @@ class Tacky {
                             }
                         }
                         instrs.append(.Return(.Constant(0)))
-                        // TODO: absorb type information
-                        return .Function(name, instrs)
+                        var tackyIds : [String] = []
+                        for p in parameters {
+                            switch p {
+                                case .Declaration(_, let name):
+                                    tackyIds.append(name)
+                            }
+                        }
+                        return .Function(name, tackyIds, instrs)
                 }
             case .FunctionDeclaration(_, _, _):
                 // generates no code, only used for type checking

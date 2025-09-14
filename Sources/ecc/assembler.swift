@@ -196,7 +196,7 @@ class Assembly {
 
     func generate(_ pls: Tacky.IR.ProgramLevelStatement) -> Tree.ProgramLevelStatement {
         switch pls {
-            case .Function(let name, let instrs):
+            case .Function(let name, _, let instrs):
                 return .Function(name, generate(instrs))
         }
     }
