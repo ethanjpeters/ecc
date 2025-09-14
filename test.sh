@@ -1,5 +1,25 @@
 #!/bin/bash
 
+swift run ecc TestSources/fib.c
+./fib
+if [[ $? -ne 21 ]]; then
+    echo "fib: Expected exit code 21 but got $?"
+    exit 1
+else
+    echo "fib: success"
+fi
+rm fib
+
+swift run ecc TestSources/multiple_functions.c
+./multiple_functions
+if [[ $? -ne 3 ]]; then
+    echo "multiple_functions: Expected exit code 3 but got $?"
+    exit 1
+else
+    echo "multiple_functions: success"
+fi
+rm multiple_functions
+
 swift run ecc TestSources/switch.c
 ./switch
 if [[ $? -ne 21 ]]; then
