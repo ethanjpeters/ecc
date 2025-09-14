@@ -185,11 +185,57 @@ class Assembly {
                 case .Label(let name):
                     out.append(.Label(name))
                 case .Call(let name, let params, let result):
-                    // save context (currently not an issue we only use scratch registers)
+                    // save context (currently not an issue because we only use scratch registers)
                     // move parameters into place
-                    // EJP - MARK
+                    var copiedParams = params
+                    if !copiedParams.isEmpty {
+                        let p = copiedParams.removeFirst()
+                        out.append(.Mov(convert(p), .Register(.DI)))
+                    }
+                    if !copiedParams.isEmpty {
+                        let p = copiedParams.removeFirst()
+                        out.append(.Mov(convert(p), .Register(.SI)))
+                    }
+                    if !copiedParams.isEmpty {
+                        let p = copiedParams.removeFirst()
+                        out.append(.Mov(convert(p), .Register(.CX)))
+                    }
+                    if !copiedParams.isEmpty {
+                        let p = copiedParams.removeFirst()
+                        out.append(.Mov(convert(p), .Register(.R8)))
+                    }
+                    if !copiedParams.isEmpty {
+                        let p = copiedParams.removeFirst()
+                        out.append(.Mov(convert(p), .Register(.R9)))
+                    }
+
+                    // the System V ABI requires the stack to be 16-byte aligned
+                    let stackPadding = copiedParams.count % 2 == 0 ? 0 : 8
+
+                    if stackPadding != 0 {
+                        out.append(.AllocateStack(stackPadding))
+                    }
+
+                    copiedParams.reverse()
+                    for p in copiedParams {
+                        let src = convert(p)
+                        switch src {
+                            case .Register(_): fallthrough
+                            case .Immediate(_):
+                                out.append(.Push(src))
+                            default:
+                                out.append(.Mov(src, .Register(.AX)))
+                                out.append(.Push(.Register(.AX)))
+                        }
+                    }
                     // call the function
                     out.append(.Call(name))
+
+                    let bytesToRemove = 8 * copiedParams.count + stackPadding
+                    if bytesToRemove != 0 {
+                        out.append(.DeallocateStack(bytesToRemove))
+                    }
+
                     // move the result
                     out.append(.Mov(.Register(.AX), convert(result)))
             }
@@ -222,8 +268,10 @@ class Assembly {
                     out.append(.Mov(.Register(.R9), .Pseudo(p)))
                 }
                 copiedParams.reverse()
+                var counter = 0
                 for p in copiedParams {
-                    out.append(.Push(.Pseudo(p)))
+                    out.append(.Mov(.Stack(16 + counter), .Pseudo(p)))
+                    counter = counter + 8
                 }
                 generate(instrs, &out)
                 return .Function(name, out)
@@ -286,10 +334,9 @@ class Assembly {
                     out.append(.SetCC(cc, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
                 case .Label(_): out.append(instr)
                 case .Call(_): out.append(instr)
-                case .DeallocateStack(_): fallthrough
-                case .Push(_):
-                    print("Unsupported assembly instruction found during assembly: \(instr)")
-                    exit(ExitCode.internalError.rawValue)
+                case .DeallocateStack(_): out.append(instr)
+                case .Push(let op):
+                    out.append(.Push(replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
             }
         }
 
