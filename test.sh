@@ -1,5 +1,15 @@
 #!/bin/bash
 
+swift run ecc TestSources/polyparam.c
+./polyparam
+if [[ $? -ne 78 ]]; then
+    echo "polyparam: Expected exit code 78 but got $?"
+    exit 1
+else
+    echo "polyparam: success"
+fi
+rm polyparam
+
 swift run ecc TestSources/fib.c
 ./fib
 if [[ $? -ne 21 ]]; then
