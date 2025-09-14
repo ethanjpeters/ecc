@@ -1,6 +1,13 @@
 import Foundation
 
-func convert(_ operand: Assembly.Tree.Operand, _ fourByte: Bool = true) -> String {
+enum RegisterWidth {
+    case oneByte
+    case twoByte
+    case fourByte
+    case eightByte
+}
+
+func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByte) -> String {
     switch operand {
         case .Immediate(let val):
             return "$\(val)"
@@ -10,26 +17,74 @@ func convert(_ operand: Assembly.Tree.Operand, _ fourByte: Bool = true) -> Strin
         case .Register(let reg):
             switch reg {
                 case .AX:
-                    return fourByte ? "%eax" : "%al"
+                    switch width {
+                        case .oneByte: return "%al"
+                        case .twoByte: return "%ax"
+                        case .fourByte: return "%eax"
+                        case .eightByte: return "%rax"
+                    }
                 case .DX:
-                    return fourByte ? "%edx" : "%dl"
+                    switch width {
+                        case .oneByte: return "%dl"
+                        case .twoByte: return "%dx"
+                        case .fourByte: return "%edx"
+                        case .eightByte: return "%rdx"
+                    }
                 case .CL:
                     return "%cl"
                 case .CX:
-                    return fourByte ? "%ecx" : "%cl"
-                case .R10:
-                    return fourByte ? "%r10d" : "%r10b"
-                case .R11:
-                    return fourByte ? "%r11d" : "%r11b"
-                case .DI:
-                    // ummm, di is not a single byte 🤔
-                    return fourByte ? "%edi" : "%di"
-                case .SI:
-                    return fourByte ? "%esi" : "%si"
+                    switch width {
+                        case .oneByte: return "%cl"
+                        case .twoByte: return "%cx"
+                        case .fourByte: return "%ecx"
+                        case .eightByte: return "%rcx"
+                    }
                 case .R8:
-                    return fourByte ? "%r8d" : "%r8b"
+                    switch width {
+                        case .oneByte: return "%r8b"
+                        case .twoByte: return "%r8w"
+                        case .fourByte: return "%r8d"
+                        case .eightByte: return "%r8"
+                    }
                 case .R9:
-                    return fourByte ? "%r9d" : "%r9b"
+                    switch width {
+                        case .oneByte: return "%r9b"
+                        case .twoByte: return "%r9w"
+                        case .fourByte: return "%r9d"
+                        case .eightByte: return "%r9"
+                    }
+                case .R10:
+                    switch width {
+                        case .oneByte: return "%r10b"
+                        case .twoByte: return "%r10w"
+                        case .fourByte: return "%r10d"
+                        case .eightByte: return "%r10"
+                    }
+                case .R11:
+                    switch width {
+                        case .oneByte: return "%r11b"
+                        case .twoByte: return "%r11w"
+                        case .fourByte: return "%r11d"
+                        case .eightByte: return "%r11"
+                    }
+                case .DI:
+                    switch width {
+                        case .oneByte:
+                            print("No oneByte option for register rdi/edi/di")
+                            exit(ExitCode.internalError.rawValue)
+                        case .twoByte: return "%di"
+                        case .fourByte: return "%edi"
+                        case .eightByte: return "%rdi"
+                    }
+                case .SI:
+                    switch width {
+                        case .oneByte:
+                            print("No oneByte option for register rsi/esi/si")
+                            exit(ExitCode.internalError.rawValue)
+                        case .twoByte: return "%si"
+                        case .fourByte: return "%esi"
+                        case .eightByte: return "%rsi"
+                    }
             }
         case .Stack(let slot):
             return "\(slot)(%rbp)"
@@ -77,6 +132,11 @@ func convert(_ cc: Assembly.Tree.ConditionCode) -> String {
     }
 }
 
+func makeFunctionName(_ name : String) -> String {
+    // macOS-only for now
+    return "_\(name)"
+}
+
 func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [String]) {
     for instr in instructions {
         switch instr {
@@ -103,23 +163,25 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
             case .JmpCC(let cc, let label):
                 out.append("\tj\(convert(cc))\t\(label)")
             case .SetCC(let cc, let op):
-                out.append("\tset\(convert(cc))\t\(convert(op, false))")
+                out.append("\tset\(convert(cc))\t\(convert(op, .oneByte))")
             case .Label(let name):
                 out.append("\(name):")
-            case .DeallocateStack(_): fallthrough
-            case .Push(_): fallthrough
-            case .Call(_):
-                print("Unsupported instruction \(instr) found while emitting code")
-                exit(ExitCode.internalError.rawValue)
-}
+            case .DeallocateStack(let count):
+                if count != 0 { out.append("\taddq\t$\(count), %rsp")}
+            case .Push(let operand):
+                out.append("\tpushq\t\(convert(operand))")
+            case .Call(let fName):
+                out.append("\tcall\t\(makeFunctionName(fName))")
+        }
     }
 }
 
 func emitProgramLevelStatement(_ pls: Assembly.Tree.ProgramLevelStatement, out: inout [String]) {
     switch pls {
         case .Function(let name, let instrs):
-            out.append("\t.global _\(name)")
-            out.append("_\(name):")
+            let fName = makeFunctionName(name)
+            out.append("\t.global \(fName)")
+            out.append("\(fName):")
             out.append("\tpushq\t%rbp")
             out.append("\tmovq\t%rsp, %rbp")
             emitInstructions(instrs, out: &out)
