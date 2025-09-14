@@ -21,6 +21,15 @@ func convert(_ operand: Assembly.Tree.Operand, _ fourByte: Bool = true) -> Strin
                     return fourByte ? "%r10d" : "%r10b"
                 case .R11:
                     return fourByte ? "%r11d" : "%r11b"
+                case .DI:
+                    // ummm, di is not a single byte 🤔
+                    return fourByte ? "%edi" : "%di"
+                case .SI:
+                    return fourByte ? "%esi" : "%si"
+                case .R8:
+                    return fourByte ? "%r8d" : "%r8b"
+                case .R9:
+                    return fourByte ? "%r9d" : "%r9b"
             }
         case .Stack(let slot):
             return "\(slot)(%rbp)"
@@ -97,10 +106,12 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tset\(convert(cc))\t\(convert(op, false))")
             case .Label(let name):
                 out.append("\(name):")
+            case .DeallocateStack(_): fallthrough
+            case .Push(_): fallthrough
             case .Call(_):
                 print("Unsupported instruction \(instr) found while emitting code")
                 exit(ExitCode.internalError.rawValue)
-        }
+}
     }
 }
 

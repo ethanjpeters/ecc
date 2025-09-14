@@ -16,6 +16,10 @@ class Assembly {
             case CL
             case CX
             case DX
+            case DI
+            case SI
+            case R8
+            case R9
             case R10
             case R11
         }
@@ -55,6 +59,8 @@ class Assembly {
             case SetCC(ConditionCode, Operand)
             case Label(String /* identifier */)
             case AllocateStack(Int)
+            case DeallocateStack(Int)
+            case Push(Operand)
             case Call(String /* identifier */)
             case Ret
         }
@@ -89,9 +95,7 @@ class Assembly {
         }
     }
 
-    func generate(_ instructions: [Tacky.IR.Instruction]) -> [Tree.Instruction] {
-        var out : [Tree.Instruction] = []
-
+    func generate(_ instructions: [Tacky.IR.Instruction], _ out: inout [Tree.Instruction]) {
         for instr in instructions {
             switch instr {
                 case .Return(let val):
@@ -190,14 +194,39 @@ class Assembly {
                     out.append(.Mov(.Register(.AX), convert(result)))
             }
         }
-
-        return out
     }
 
     func generate(_ pls: Tacky.IR.ProgramLevelStatement) -> Tree.ProgramLevelStatement {
         switch pls {
-            case .Function(let name, _, let instrs):
-                return .Function(name, generate(instrs))
+            case .Function(let name, let params, let instrs):
+                var out : [Tree.Instruction] = []
+                var copiedParams = params
+                if !copiedParams.isEmpty {
+                    let p = copiedParams.removeFirst()
+                    out.append(.Mov(.Register(.DI), .Pseudo(p)))
+                }
+                if !copiedParams.isEmpty {
+                    let p = copiedParams.removeFirst()
+                    out.append(.Mov(.Register(.SI), .Pseudo(p)))
+                }
+                if !copiedParams.isEmpty {
+                    let p = copiedParams.removeFirst()
+                    out.append(.Mov(.Register(.CX), .Pseudo(p)))
+                }
+                if !copiedParams.isEmpty {
+                    let p = copiedParams.removeFirst()
+                    out.append(.Mov(.Register(.R8), .Pseudo(p)))
+                }
+                if !copiedParams.isEmpty {
+                    let p = copiedParams.removeFirst()
+                    out.append(.Mov(.Register(.R9), .Pseudo(p)))
+                }
+                copiedParams.reverse()
+                for p in copiedParams {
+                    out.append(.Push(.Pseudo(p)))
+                }
+                generate(instrs, &out)
+                return .Function(name, out)
         }
     }
 
@@ -257,6 +286,10 @@ class Assembly {
                     out.append(.SetCC(cc, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
                 case .Label(_): out.append(instr)
                 case .Call(_): out.append(instr)
+                case .DeallocateStack(_): fallthrough
+                case .Push(_):
+                    print("Unsupported assembly instruction found during assembly: \(instr)")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -372,6 +405,8 @@ class Assembly {
                 case .SetCC(_, _): out.append(instr)
                 case .Label(_): out.append(instr)
                 case .Call(_): out.append(instr)
+                case .DeallocateStack(_): out.append(instr)
+                case .Push(_): out.append(instr)
             }
         }
         return out
