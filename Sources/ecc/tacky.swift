@@ -105,9 +105,6 @@ class Tacky {
             case .BitwiseXor: return .BitwiseXor
             case .BitwiseShiftLeft: return .BitwiseShiftLeft
             case .BitwiseShiftRight: return .BitwiseShiftRight
-            case .FunctionCall:
-                print("Unsupported binary operator \(op) found while generating tacky")
-                exit(ExitCode.internalError.rawValue)
             case .And: fallthrough
             case .Or:
                 print("Unreachable 4")

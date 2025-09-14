@@ -33,8 +33,6 @@ class Parser {
             case BitwiseXor
             case BitwiseShiftRight
             case BitwiseShiftLeft
-            // does this go here?
-            case FunctionCall
         }
         
         indirect enum Expression {
