@@ -47,9 +47,6 @@ class SemanticAnalyzer {
                         return .Var(uniqueName.0)
                     } else {
                         print("Undeclared variable \(name)")
-                        // DEBUG
-                        print("\(nameMap)")
-                        // END DEBUG
                         exit(ExitCode.semanticError.rawValue)
                     }
                 case .Conditional(let cond, let left, let right):
@@ -145,10 +142,21 @@ class SemanticAnalyzer {
         func resolveVariables(_ pls: Parser.AST.ProgramLevelStatement, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.ProgramLevelStatement {
            switch pls {
                 case .Function(let returnType, let name, let parameters, let body):
+                    nameMap[name] = (name, true)
+                    var copiedNameMap = copyNameMap(nameMap)
+                    var mangledPNames: [Parser.AST.Parameter] = []
+                    for p in parameters {
+                        switch p {
+                            case .Declaration(let pType, let pName):
+                                let uniqueName = makeTemp(pName)
+                                copiedNameMap[pName] = (uniqueName, true)
+                                mangledPNames.append(.Declaration(pType, uniqueName))
+                        }
+                    }
                     switch body {
                         case .Block(let items):
-                            nameMap[name] = (name, true)    // function names don't get mangled!
-                            return .Function(returnType, name, parameters, .Block(items.map { resolveBlockItem($0, &nameMap) }))
+                            copiedNameMap[name] = (name, true)    // function names don't get mangled!
+                            return .Function(returnType, name, mangledPNames, .Block(items.map { resolveBlockItem($0, &copiedNameMap) }))
                     }
                 case .FunctionDeclaration(let returnType, let name, let params):
                     nameMap[name] = (name, true)
@@ -563,6 +571,7 @@ class SemanticAnalyzer {
                         case .Function(let rType, let pType):
                             if pType != paramsType {
                                 print("Function call \(expression) of type \(paramsType), does not match \(pType)")
+                                exit(ExitCode.semanticError.rawValue)
                             }
                             return rType
                         case .Int: fallthrough
@@ -707,6 +716,12 @@ class SemanticAnalyzer {
                         nameMap[name] = (constructedType, true)
                     }
                     var copy = copyNameMap(nameMap)
+                    for p in params {
+                        switch p {
+                            case .Declaration(let tp, let name):
+                                copy[name] = (convert(tp), true)
+                        }
+                    }
                     return typeCheck(body, &copy)
                 case .FunctionDeclaration(let returnType, let name, let params):
                     var paramTypes : [CheckerType] = []
@@ -749,6 +764,8 @@ class SemanticAnalyzer {
         // currently our only semantic analysis step
         let resolvedProgram = VariableResolver().resolveVariables(program)
         let labeledProgram = LoopLabeler().labelLoops(resolvedProgram)
-        return CasePlacer().placeCases(labeledProgram)
+        let casedProgram = CasePlacer().placeCases(labeledProgram)
+        let _ = TypeChecker().typeCheck(casedProgram)
+        return casedProgram
     }
 }
