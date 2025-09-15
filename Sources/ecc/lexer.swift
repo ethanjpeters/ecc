@@ -1,5 +1,7 @@
 import Foundation
 
+typealias LexerPosition = (Int /* line */, Int /* column */)
+
 class Lexer {
     enum Token : Equatable {
         // types
@@ -314,8 +316,8 @@ class Lexer {
         }
     }
 
-    func lex() -> [Token] {
-        var out : [Token] = []
+    func lex() -> [(Token, LexerPosition)] {
+        var out : [(Token, LexerPosition)] = []
         var i = 0
 
         var lineCounter : Int = 1
@@ -325,45 +327,44 @@ class Lexer {
             enforceAscii(index: i)
 
             if sourceFileCharacters[i].isWhitespace {
-                i = i + 1
-
                 if sourceFileCharacters[i].isNewline {
                     columnCounter = 1
                     lineCounter = lineCounter + 1
                 } else {
                     columnCounter = columnCounter + 1
                 }
+                i = i + 1
             } else if let identifier = matchIdentifier(startingIndex: i) {
                 if let kw = matchKeyword(identifier: identifier) {
-                    out.append(kw)
+                    out.append((kw, (lineCounter, columnCounter)))
                 } else {
-                    out.append(.identifier(identifier))
+                    out.append((.identifier(identifier), (lineCounter, columnCounter)))
                 }
 
                 i = i + identifier.count
                 columnCounter = columnCounter + identifier.count
             } else if let constant = matchConstant(startingIndex: i) {
-                out.append(.constant(constant))
+                out.append((.constant(constant), (lineCounter, columnCounter)))
 
                 i = i + constant.count
                 columnCounter = columnCounter + constant.count
             } else if let op = matchThreeCharacterOperator(startingIndex: i) {
-                out.append(op)
+                out.append((op, (lineCounter, columnCounter)))
 
                 i = i + 3
                 columnCounter = columnCounter + 3
             } else if let op = matchTwoCharacterOperator(startingIndex: i) {
-                out.append(op)
+                out.append((op, (lineCounter, columnCounter)))
 
                 i = i + 2
                 columnCounter = columnCounter + 2
             } else if let op = matchOneCharacterOperator(startingIndex: i) {
-                out.append(op)
+                out.append((op, (lineCounter, columnCounter)))
 
                 i = i + 1
                 columnCounter = columnCounter + 1
             } else if let del = matchDelimiter(startingIndex: i) {
-                out.append(del)
+                out.append((del, (lineCounter, columnCounter)))
 
                 i = i + 1
                 columnCounter = columnCounter + 1

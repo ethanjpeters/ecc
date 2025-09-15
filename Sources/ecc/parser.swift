@@ -104,15 +104,16 @@ class Parser {
         }
     }
     
-    func expect(_ tok: Lexer.Token, _ tokenStream: inout [Lexer.Token]) -> Lexer.Token {
+    func expect(_ tok: Lexer.Token, _ tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Lexer.Token {
         if tokenStream.isEmpty {
             print("Expected \(tok) but encountered end of token stream")
             exit(ExitCode.parserError.rawValue)
         }
         
-        let nextToken = tokenStream.removeFirst()
+        let (nextToken, position) = tokenStream.removeFirst()
         if nextToken != tok {
-            print("Expected \(tok) but encountered \(nextToken)")
+            let (line, col) = position
+            print("Expected \(tok) at line \(line), column \(col) but encountered \(nextToken)")
             // DEBUG
             print("REAMAINING TOKEN STREAM: \(tokenStream)")
             // END DEBUG
@@ -122,36 +123,33 @@ class Parser {
         return nextToken
     }
     
-    func expectType(_ tokenStream: inout [Lexer.Token]) -> Lexer.Token {
+    func expectType(_ tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Lexer.Token {
         if tokenStream.isEmpty {
             print("Expected type but encountered end of token stream")
             exit(ExitCode.parserError.rawValue)
         }
 
-        let next = tokenStream.removeFirst()
-        switch next {
+        let (nextToken, position) = tokenStream.removeFirst()
+        switch nextToken {
             case .keywordInt: fallthrough
-            case .keywordVoid: return next
+            case .keywordVoid: return nextToken
             default:
-                print("Found unexpected token \(next) when looking for type")
+                print("Found unexpected token \(nextToken) at line \(position.0), column \(position.1) when looking for type")
                 exit(ExitCode.parserError.rawValue)
         }
     }
 
-    func expectIdentifier(_ tokenStream: inout [Lexer.Token]) -> String /* identifier */ {
+    func expectIdentifier(_ tokenStream: inout [(Lexer.Token, LexerPosition)]) -> String /* identifier */ {
         if tokenStream.isEmpty {
             print("Expected identifier but encountered end of token stream")
             exit(ExitCode.parserError.rawValue)
         }
 
-        let next = tokenStream.removeFirst()
+        let (next, position) = tokenStream.removeFirst()
         switch next {
             case .identifier(let name): return name
             default:
-                print("Found unexpected token \(next) while looking for identifier")
-                // DEBUG
-                print(tokenStream)
-                // END DEBUG
+                print("Found unexpected token \(next) at line \(position.0), column \(position.1) while looking for identifier")
                 exit(ExitCode.parserError.rawValue)
         }
     }
@@ -166,13 +164,13 @@ class Parser {
         }
     }
 
-    func peek(_ tokenStream: [Lexer.Token]) -> Lexer.Token {
+    func peek(_ tokenStream: [(Lexer.Token, LexerPosition)]) -> Lexer.Token {
         if tokenStream.isEmpty {
             print("Expected token but encountered end of token stream")
             exit(ExitCode.parserError.rawValue)
         }
         
-        return tokenStream.first!
+        return tokenStream.first!.0
     }
     
     func precedence(_ token: Lexer.Token) -> Int {
@@ -267,7 +265,7 @@ class Parser {
         }
     }
     
-    func parseExpression(tokenStream: inout [Lexer.Token], minimumPrecedence: Int) -> Parser.AST.Expression {
+    func parseExpression(tokenStream: inout [(Lexer.Token, LexerPosition)], minimumPrecedence: Int) -> Parser.AST.Expression {
         if tokenStream.isEmpty {
             print("Expected expression but encountered end of token stream")
             exit(ExitCode.parserError.rawValue)
@@ -339,7 +337,7 @@ class Parser {
         return left
     }
     
-    func parseFunctionCallParameters(tokenStream: inout [Lexer.Token]) -> [Parser.AST.Expression] {
+    func parseFunctionCallParameters(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> [Parser.AST.Expression] {
         let _ = expect(.openParen, &tokenStream)
         var expressionList : [Parser.AST.Expression] = []
         if peek(tokenStream) != .closeParen {
@@ -354,13 +352,13 @@ class Parser {
         return expressionList
     }
 
-    func parseFactor(tokenStream: inout [Lexer.Token]) -> Parser.AST.Expression {
+    func parseFactor(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Expression {
         if tokenStream.isEmpty {
             print("Expected factor but encountered end of token stream")
             exit(ExitCode.parserError.rawValue)
         }
         
-        let next = tokenStream.removeFirst()
+        let (next, position) = tokenStream.removeFirst()
         var lhs : Parser.AST.Expression
         switch next {
             // parse an integer constant
@@ -395,7 +393,7 @@ class Parser {
             let child = parseFactor(tokenStream: &tokenStream)
             lhs = .Unary(.PreDecrement, child)
         default:
-            print("Expected expression but encountered \(next)")
+            print("Expected expression but encountered \(next) at line \(position.0), column \(position.1)")
             exit(ExitCode.parserError.rawValue)
         }
         
@@ -419,7 +417,7 @@ class Parser {
         return lhs
     }
     
-    func parseLabeledStatement(tokenStream: inout [Lexer.Token]) -> Parser.AST.LabeledStatement {
+    func parseLabeledStatement(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.LabeledStatement {
         func finishParsingLabeledStatement() -> Parser.AST.LabeledStatement {
             switch peek(tokenStream) {
                 case .constant(let val):
@@ -454,7 +452,7 @@ class Parser {
         }
     }
     
-    func parseStatement(tokenStream: inout [Lexer.Token]) -> Parser.AST.Statement {
+    func parseStatement(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Statement {
         let maybeReturn = peek(tokenStream)
         
         switch maybeReturn {
@@ -539,7 +537,7 @@ class Parser {
             return .Switch(condition, body, "")
         case .identifier(_):
             if tokenStream.count > 1 {
-                if tokenStream[1] == .colon {
+                if tokenStream[1].0 == .colon {
                     // labeled statement
                     let out : Parser.AST.Statement = .Labeled(parseLabeledStatement(tokenStream: &tokenStream))
                     let _ = expect(.semicolon, &tokenStream)
@@ -565,7 +563,7 @@ class Parser {
         }
     }
     
-    func parseBlockItem(tokenStream: inout [Lexer.Token]) -> Parser.AST.BlockItem {
+    func parseBlockItem(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.BlockItem {
         // <block-item> = <statement> | <declaration>
         
         // determine if we're lookoing at a statement or a declaration
@@ -580,7 +578,7 @@ class Parser {
         }
     }
     
-    func parseBlock(tokenStream: inout [Lexer.Token]) -> Parser.AST.Block {
+    func parseBlock(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Block {
         let _ = expect(.openBrace, &tokenStream)
         var body : [Parser.AST.BlockItem] = []
         while peek(tokenStream) != .closeBrace {
@@ -590,7 +588,7 @@ class Parser {
         return .Block(body)
     }
     
-    func parseDeclaration(tokenStream: inout [Lexer.Token]) -> Parser.AST.Declaration {
+    func parseDeclaration(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Declaration {
         let declType = convertType(expectType(&tokenStream))
         
         // does this check belong here?
@@ -599,14 +597,14 @@ class Parser {
             exit(ExitCode.semanticError.rawValue)
         }
 
-        let idToken = tokenStream.removeFirst()
+        let (idToken, position) = tokenStream.removeFirst()
         
         let varName : String
         switch idToken {
         case .identifier(let name):
             varName = name
         default:
-            print("Expected identifier in declaration but found \(idToken) instead")
+            print("Expected identifier in declaration but found \(idToken) at line \(position.0), column \(position.1) instead")
             exit(ExitCode.parserError.rawValue)
         }
         
@@ -623,7 +621,7 @@ class Parser {
         return .Declaration(declType, varName, exp)
     }
     
-    func parseForInit(tokenStream: inout [Lexer.Token]) -> Parser.AST.ForInit {
+    func parseForInit(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.ForInit {
         if peek(tokenStream) == .keywordInt {
             let out : Parser.AST.ForInit = .InitDecl(parseDeclaration(tokenStream: &tokenStream))
             return out;
@@ -637,7 +635,7 @@ class Parser {
         }
     }
     
-    func parseFunctionParameters(tokenStream: inout [Lexer.Token]) -> [Parser.AST.Parameter] {
+    func parseFunctionParameters(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> [Parser.AST.Parameter] {
         let pType = expectType(&tokenStream)
 
         // technically you're allowed not to name "void"
@@ -658,7 +656,7 @@ class Parser {
         return params
     }
 
-    func parseFunction(tokenStream: inout [Lexer.Token]) -> Parser.AST.ProgramLevelStatement {
+    func parseFunction(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.ProgramLevelStatement {
         if tokenStream.isEmpty {
             print("Empty token stream encountered when expecting a function")
             exit(ExitCode.parserError.rawValue)
@@ -690,7 +688,7 @@ class Parser {
         return .Function(convertType(returnType), functionName, params, parseBlock(tokenStream: &tokenStream))
     }
 
-    func parseProgram(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
+    func parseProgram(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Program {
         // right now, only functions and function declarations
         var functions : [Parser.AST.ProgramLevelStatement] = []
         while !tokenStream.isEmpty {
@@ -782,7 +780,7 @@ class Parser {
         }
     }
     
-    func parse(tokenStream: inout [Lexer.Token]) -> Parser.AST.Program {
+    func parse(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Program {
         let initialForm = parseProgram(tokenStream: &tokenStream)
         
         if !tokenStream.isEmpty {
