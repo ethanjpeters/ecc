@@ -91,7 +91,7 @@ class Assembly {
                 return .Neg
             default:
                 print("Unreachable 3")
-                exit(ExitCode.parserError.rawValue)
+                exit(ExitCode.internalError.rawValue)
         }
     }
 

@@ -108,7 +108,7 @@ class Tacky {
             case .And: fallthrough
             case .Or:
                 print("Unreachable 4")
-                exit(ExitCode.parserError.rawValue)
+                exit(ExitCode.internalError.rawValue)
         }
     }
 

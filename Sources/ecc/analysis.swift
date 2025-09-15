@@ -497,12 +497,12 @@ class SemanticAnalyzer {
                     // TODO: not all binary operations on all pairs of types make sense and types should match
                     let leftType = typeCheck(left, nameMap)
                     if leftType == .Void {
-                        print("Left hand side (\(left)) of binary operatino \(binOp) is void")
+                        print("Left hand side (\(left)) of binary operation \(binOp) is void")
                         exit(ExitCode.semanticError.rawValue)
                     }
                     let rightType = typeCheck(right, nameMap)
                     if rightType == .Void {
-                        print("Right hand side (\(right)) of binary operatino \(binOp) is void")
+                        print("Right hand side (\(right)) of binary operation \(binOp) is void")
                         exit(ExitCode.semanticError.rawValue)
                     }
                     if leftType != rightType {
