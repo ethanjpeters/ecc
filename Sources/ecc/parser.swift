@@ -86,15 +86,6 @@ class Parser {
             case Void
         }
 
-        // enum Parameter {
-        //     case Declaration(CType /* type */, String /* name */)
-        // }
-
-        // enum ProgramLevelStatement {
-        //     case Function(CType /* return type */, String /* name */, [Parameter] /* type signature */, Block /* body */)
-        //     case FunctionDeclaration(CType /* return type */, String /* name */, [Parameter] /* type signature */)
-        // }
-
         enum Parameter {
             case NamedParameter(CType /* type */, String /* identifier name */)
             // it is sometimes technically valid for a parameter to be unnamed, but not in my America
@@ -754,22 +745,30 @@ class Parser {
         }
     }
     
-    func fixUpCompoundAssignments(_ statement: Parser.AST.ProgramLevelStatement) -> Parser.AST.ProgramLevelStatement {
-        switch statement {
-            case .Function(let returnType, let name, let parameters, let body):
-                switch body {
-                    case .Block(let body):
-                        return .Function(returnType, name, parameters, .Block(body.map { fixUpCompoundAssignments($0) }))
+    func fixUpCompoundAssignments(_ decl: Parser.AST.Declaration) -> Parser.AST.Declaration {
+        switch decl {
+            case .FunctionDeclaration(let returnType, let name, let params, let body):
+                if let b = body {
+                    switch b {
+                        case .Block(let items):
+                            return .FunctionDeclaration(returnType, name, params, .Block(items.map { fixUpCompoundAssignments($0) }))
+                    }
+                } else {
+                    return .FunctionDeclaration(returnType, name, params, nil)
                 }
-            case .FunctionDeclaration(_, _, _):
-                return statement
+            case .VariableDeclaration(let tp, let name, let initializer):
+                if let e = initializer {
+                    return .VariableDeclaration(tp, name, fixUpCompoundAssignments(e))
+                } else {
+                    return .VariableDeclaration(tp, name, nil)
+                }
         }
     }
 
     func fixUpCompoundAssignments(_ program: Parser.AST.Program) -> Parser.AST.Program {
         switch program {
-            case .Statement(let stmt):
-                return .Statement(stmt.map { fixUpCompoundAssignments($0) })
+            case .Statement(let decls):
+                return .Statement(decls.map { fixUpCompoundAssignments($0) })
         }
     }
     
