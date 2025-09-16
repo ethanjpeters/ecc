@@ -46,10 +46,6 @@ class Parser {
             case FunctionCall(Expression /* "name" */, [Expression] /* parameters */)
         }
         
-        enum Declaration {
-            case Declaration(CType /* type */, String /* identifier name */, Expression?)
-        }
-        
         enum BlockItem {
             case S(Statement)
             case D(Declaration)
@@ -90,17 +86,27 @@ class Parser {
             case Void
         }
 
+        // enum Parameter {
+        //     case Declaration(CType /* type */, String /* name */)
+        // }
+
+        // enum ProgramLevelStatement {
+        //     case Function(CType /* return type */, String /* name */, [Parameter] /* type signature */, Block /* body */)
+        //     case FunctionDeclaration(CType /* return type */, String /* name */, [Parameter] /* type signature */)
+        // }
+
         enum Parameter {
-            case Declaration(CType /* type */, String /* name */)
+            case NamedParameter(CType /* type */, String /* identifier name */)
+            // it is sometimes technically valid for a parameter to be unnamed, but not in my America
         }
 
-        enum ProgramLevelStatement {
-            case Function(CType /* return type */, String /* name */, [Parameter] /* type signature */, Block /* body */)
-            case FunctionDeclaration(CType /* return type */, String /* name */, [Parameter] /* type signature */)
+        enum Declaration {
+            case VariableDeclaration(CType /* type */, String /* identifier name */, Expression?)
+            case FunctionDeclaration(CType /* return type */, String /* name */, [Parameter] /* type signature */, Block? /* body */)
         }
 
         enum Program {
-            case Statement([ProgramLevelStatement])
+            case Statement([Declaration])
         }
     }
     
@@ -122,7 +128,7 @@ class Parser {
         
         return nextToken
     }
-    
+
     func expectType(_ tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Lexer.Token {
         if tokenStream.isEmpty {
             print("Expected type but encountered end of token stream")
@@ -590,40 +596,59 @@ class Parser {
     
     func parseDeclaration(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Declaration {
         let declType = convertType(expectType(&tokenStream))
-        
-        // does this check belong here?
-        if declType == .Void {
-            print("Variable declaration cannot be void")
-            exit(ExitCode.semanticError.rawValue)
-        }
 
-        let (idToken, position) = tokenStream.removeFirst()
+        let varName = expectIdentifier(&tokenStream)
         
-        let varName : String
-        switch idToken {
-        case .identifier(let name):
-            varName = name
-        default:
-            print("Expected identifier in declaration but found \(idToken) at line \(position.0), column \(position.1) instead")
-            exit(ExitCode.parserError.rawValue)
-        }
-        
-        let exp : Parser.AST.Expression?
-        if peek(tokenStream) == .equal {
-            let _ = expect(.equal, &tokenStream)
-            exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+        if peek(tokenStream) == .openParen {
+            // we're looking at a function declaration
+            let _ = expect(.openParen, &tokenStream)
+            let params : [Parser.AST.Parameter]
+            if peek(tokenStream) != .closeParen {
+                params = parseFunctionParameters(tokenStream: &tokenStream)
+            } else {
+                params = []
+            }
+
+            let _ = expect(.closeParen, &tokenStream)
+
+            if peek(tokenStream) == .semicolon {
+                let _ = expect(.semicolon, &tokenStream)
+                return .FunctionDeclaration(declType, varName, params, nil)
+            }
+
+            return .FunctionDeclaration(declType, varName, params, parseBlock(tokenStream: &tokenStream))
         } else {
-            exp = nil
+            // // does this check belong here?
+            if declType == .Void {
+                print("Variable declaration \(varName) cannot be void")
+                exit(ExitCode.semanticError.rawValue)
+            }
+            let exp : Parser.AST.Expression?
+            if peek(tokenStream) == .equal {
+                let _ = expect(.equal, &tokenStream)
+                exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+            } else {
+                exp = nil
+            }
+            
+            let _ = expect(.semicolon, &tokenStream)
+            
+            return .VariableDeclaration(declType, varName, exp)
         }
-        
-        let _ = expect(.semicolon, &tokenStream)
-        
-        return .Declaration(declType, varName, exp)
     }
     
     func parseForInit(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.ForInit {
+        // NOTE: will need to modify this when we introduce more types
         if peek(tokenStream) == .keywordInt {
-            let out : Parser.AST.ForInit = .InitDecl(parseDeclaration(tokenStream: &tokenStream))
+            let childDecl = parseDeclaration(tokenStream: &tokenStream)
+            // weird edge case
+            switch childDecl {
+                case .FunctionDeclaration(_, let name, _, _):
+                    print("Can't provide a function as a for loop initializer: \(name)")
+                    exit(ExitCode.parserError.rawValue)
+                default: ()
+            }
+            let out : Parser.AST.ForInit = .InitDecl(childDecl)
             return out;
         } else {
             let exp : Parser.AST.Expression?
@@ -644,57 +669,25 @@ class Parser {
         }
 
         let pName = expectIdentifier(&tokenStream)
-        var params : [Parser.AST.Parameter] = [.Declaration(convertType(pType), pName)]
+        var params : [Parser.AST.Parameter] = [.NamedParameter(convertType(pType), pName)]
 
         while peek(tokenStream) == .comma {
             let _ = expect(.comma, &tokenStream)
             let nextType = expectType(&tokenStream)
             let nextName = expectIdentifier(&tokenStream)
-            params.append(.Declaration(convertType(nextType), nextName))
+            params.append(.NamedParameter(convertType(nextType), nextName))
         }
 
         return params
     }
 
-    func parseFunction(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.ProgramLevelStatement {
-        if tokenStream.isEmpty {
-            print("Empty token stream encountered when expecting a function")
-            exit(ExitCode.parserError.rawValue)
-        }
-        
-        let returnType = expectType(&tokenStream)
-        
-        if tokenStream.isEmpty {
-            print("Empty token stream encountered when expecting a function identifier")
-            exit(ExitCode.parserError.rawValue)
-        }
-        
-        let functionName = expectIdentifier(&tokenStream)
-        
-        let _ = expect(.openParen, &tokenStream)
-        let params : [Parser.AST.Parameter]
-        if peek(tokenStream) != .closeParen {
-            params = parseFunctionParameters(tokenStream: &tokenStream)
-        } else {
-            params = []
-        }
-        let _ = expect(.closeParen, &tokenStream)
-        
-        if peek(tokenStream) == .semicolon {
-            let _ = expect(.semicolon, &tokenStream)
-            return .FunctionDeclaration(convertType(returnType), functionName, params)
-        }
-
-        return .Function(convertType(returnType), functionName, params, parseBlock(tokenStream: &tokenStream))
-    }
-
     func parseProgram(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Program {
         // right now, only functions and function declarations
-        var functions : [Parser.AST.ProgramLevelStatement] = []
+        var declarations : [Parser.AST.Declaration] = []
         while !tokenStream.isEmpty {
-            functions.append(parseFunction(tokenStream: &tokenStream))
+            declarations.append(parseDeclaration(tokenStream: &tokenStream))
         }
-        return .Statement(functions)
+        return .Statement(declarations)
     }
     
     func fixUpCompoundAssignments(_ exp: Parser.AST.Expression) -> Parser.AST.Expression {
