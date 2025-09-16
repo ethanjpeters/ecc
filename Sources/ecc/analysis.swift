@@ -113,7 +113,7 @@ class SemanticAnalyzer {
 
         func resolveDeclaration(_ decl: Parser.AST.Declaration, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Declaration {
             switch decl {
-                case .Declaration(let tp, let name, let exp):
+                case .VariableDeclaration(let tp, let name, let exp):
                     if let n = nameMap[name] {
                         if n.1 {
                             print("Duplicate variable name found: \(n)")
@@ -126,7 +126,28 @@ class SemanticAnalyzer {
                     if let initializer = exp {
                         outInit = resolveExpression(initializer, &nameMap)
                     }
-                    return .Declaration(tp, uniqueName, outInit)
+                    return .VariableDeclaration(tp, uniqueName, outInit)
+                case .FunctionDeclaration(let returnType, let name, let params, let body):
+                    nameMap[name] = (name, true)
+                    var copiedNameMap = copyNameMap(nameMap)
+                    var mangledPNames: [Parser.AST.Parameter] = []
+                    for p in params {
+                        switch p {
+                            case .NamedParameter(let pType, let pName):
+                                let uniqueName = makeTemp(pName)
+                                copiedNameMap[pName] = (uniqueName, true)
+                                mangledPNames.append(.NamedParameter(pType, uniqueName))
+                        }
+                    }
+                    if let b = body {
+                        switch b {
+                            case .Block(let items):
+                                copiedNameMap[name] = (name, true)    // function names don't get mangled!
+                                return .FunctionDeclaration(returnType, name, mangledPNames, .Block(items.map { resolveBlockItem($0, &copiedNameMap) }))
+                        }
+                    } else {
+                        return .FunctionDeclaration(returnType, name, mangledPNames, nil)
+                    }
             }
         }
 
@@ -139,36 +160,15 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveVariables(_ pls: Parser.AST.ProgramLevelStatement, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.ProgramLevelStatement {
-           switch pls {
-                case .Function(let returnType, let name, let parameters, let body):
-                    nameMap[name] = (name, true)
-                    var copiedNameMap = copyNameMap(nameMap)
-                    var mangledPNames: [Parser.AST.Parameter] = []
-                    for p in parameters {
-                        switch p {
-                            case .Declaration(let pType, let pName):
-                                let uniqueName = makeTemp(pName)
-                                copiedNameMap[pName] = (uniqueName, true)
-                                mangledPNames.append(.Declaration(pType, uniqueName))
-                        }
-                    }
-                    switch body {
-                        case .Block(let items):
-                            copiedNameMap[name] = (name, true)    // function names don't get mangled!
-                            return .Function(returnType, name, mangledPNames, .Block(items.map { resolveBlockItem($0, &copiedNameMap) }))
-                    }
-                case .FunctionDeclaration(let returnType, let name, let params):
-                    nameMap[name] = (name, true)
-                    return .FunctionDeclaration(returnType, name, params)
-            }
-        }
-
         func resolveVariables(_ program: Parser.AST.Program) -> Parser.AST.Program {
             var variableNameMapping : [String : (String, Bool)] = [:]
             switch program {
-                case .Statement(let statements):
-                    return .Statement(statements.map { resolveVariables($0, &variableNameMapping) })
+                case .Statement(let declarations):
+                    var resolvedDecls : [Parser.AST.Declaration] = []
+                    for decl in declarations {
+                        resolvedDecls.append(resolveDeclaration(decl, &variableNameMapping))
+                    }
+                    return .Statement(resolvedDecls)
             }
         }
     }
