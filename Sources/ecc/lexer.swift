@@ -7,6 +7,9 @@ class Lexer {
         // types
         case keywordInt
         case keywordVoid
+        // storage specifiers
+        case keywordStatic
+        case keywordExtern
         // control flow
         case keywordReturn
         case keywordIf
@@ -301,6 +304,8 @@ class Lexer {
         switch identifier {
             case "int": return .keywordInt
             case "void": return .keywordVoid
+            case "static": return .keywordStatic
+            case "extern": return .keywordExtern
             case "return": return .keywordReturn
             case "if": return .keywordIf
             case "else": return .keywordElse
