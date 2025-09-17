@@ -50,12 +50,13 @@ class Tacky {
             case Call(String /* function name */, [Value] /* parameters */, Value /* result */)
         }
 
-        enum ProgramLevelStatement {
+        enum Declaration {
             case Function(String /* name */, [String] /* params */, [Instruction] /* body */)
+            case GlobalVariable(String /* name */)  // TODO: type information
         }
 
         enum Program {
-            case Statement([ProgramLevelStatement])
+            case Statement([Declaration])
         }
     }
 
@@ -402,51 +403,59 @@ class Tacky {
         }
     }
 
-    func generateTACKYDeclaration(decl: Parser.AST.Declaration, out : inout [Tacky.IR.Instruction]) {
+    func generateTACKYDeclaration(decl: Parser.AST.Declaration, out : inout [Tacky.IR.Instruction]) -> Tacky.IR.Declaration {
         switch decl {
             // TODO: use type information to determine size of parameters
-            case .Declaration(_, let name, let exp):
+            case .VariableDeclaration(_, let name, let exp):
                 if exp != nil {
                     let child = generateTACKYExpression(exp!, out: &out)
                     out.append(.Copy(child, .Var(name)))
                 }
-        }
-    }
-
-    func generateTACKYPLS(statement: Parser.AST.ProgramLevelStatement) -> Tacky.IR.ProgramLevelStatement? {
-        switch statement {
-            case .Function(_, let name, let parameters, let body):
-                switch body {
-                    case .Block(let items):
-                        var instrs : [Tacky.IR.Instruction] = []
-                        for blockItem in items {
-                            switch blockItem {
-                                case .S(let stmt):
-                                    generateTACKYStatement(statement: stmt, out: &instrs, switchValue: nil, fallthroughValue: nil)
-                                case .D(let decl):
-                                    generateTACKYDeclaration(decl: decl, out: &instrs)
+            case .FunctionDeclaration(_, let name, let parameters, let body):
+                if let b = body {
+                    switch b {
+                        case .Block(let items):
+                            var instrs : [Tacky.IR.Instruction] = []
+                            for blockItem in items {
+                                switch blockItem {
+                                    case .S(let stmt):
+                                        generateTACKYStatement(statement: stmt, out: &instrs, switchValue: nil, fallthroughValue: nil)
+                                    case .D(let decl):
+                                        let _ = generateTACKYDeclaration(decl: decl, out: &instrs)
+                                }
                             }
-                        }
-                        instrs.append(.Return(.Constant(0)))
-                        var tackyIds : [String] = []
-                        for p in parameters {
-                            switch p {
-                                case .Declaration(_, let name):
-                                    tackyIds.append(name)
+                            instrs.append(.Return(.Constant(0)))
+                            var tackyIds : [String] = []
+                            for p in parameters {
+                                switch p {
+                                    case .NamedParameter(_, let name):
+                                        tackyIds.append(name)
+                                }
                             }
-                        }
-                        return .Function(name, tackyIds, instrs)
+                            return .Function(name, tackyIds, instrs)
+                    }
+                } else {
+                    // no code for undefined functions
                 }
-            case .FunctionDeclaration(_, _, _):
-                // generates no code, only used for type checking
-                return nil
         }
     }
 
     func generateTACKYProgram(program: Parser.AST.Program) -> Tacky.IR.Program {
+        var out : [Tacky.IR.Instruction] = []
         switch program {
-            case .Statement(let statements):
-                return .Statement(statements.compactMap{ generateTACKYPLS(statement: $0) })
+            case .Statement(let declarations):
+                var tackyDecls : [Tacky.IR.Declaration] = []
+                for decl in declarations {
+                    switch decl {
+                        case .VariableDeclaration(_, _, _):
+                            // global variable declaration; to be handled
+                            print("As yet unhandled global variable declaration")
+                            exit(ExitCode.internalError.rawValue)
+                        case .FunctionDeclaration(_, _, _, _):
+                            tackyDecls.append(generateTACKYDeclaration(decl: decl, out: &out))
+                    }
+                }
+                return .Statement(tackyDecls)
         }
     }
 
