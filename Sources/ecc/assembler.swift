@@ -65,12 +65,12 @@ class Assembly {
             case Ret
         }
 
-        enum ProgramLevelStatement {
+        enum Declaration {
             case Function(String, [Instruction])
         }
 
         enum Program {
-            case Statement([ProgramLevelStatement])
+            case Statement([Declaration])
         }
     }
 
@@ -242,7 +242,7 @@ class Assembly {
         }
     }
 
-    func generate(_ pls: Tacky.IR.ProgramLevelStatement) -> Tree.ProgramLevelStatement {
+    func generate(_ pls: Tacky.IR.Declaration) -> Tree.Declaration {
         switch pls {
             case .Function(let name, let params, let instrs):
                 var out : [Tree.Instruction] = []
@@ -275,13 +275,16 @@ class Assembly {
                 }
                 generate(instrs, &out)
                 return .Function(name, out)
+            case .GlobalVariable(_):
+                print("As yet unhandled global variable caught while generating assembly")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 
     func generate(program: Tacky.IR.Program) -> Tree.Program {
         switch program {
-            case .Statement(let statements):
-                return .Statement(statements.map { generate($0) })
+            case .Statement(let declarations):
+                return .Statement(declarations.map { generate($0) })
         }
     }
 
@@ -345,7 +348,7 @@ class Assembly {
         return out
     }
 
-    func replacePseudoRegisters(_ pls: Tree.ProgramLevelStatement) -> Tree.ProgramLevelStatement {
+    func replacePseudoRegisters(_ pls: Tree.Declaration) -> Tree.Declaration {
         switch pls {
             case .Function(let name, let instrs):
                 return .Function(name, replacePseudoRegisters(instrs))
@@ -354,8 +357,8 @@ class Assembly {
 
     func replacePseudoRegisters(program: Tree.Program) -> Tree.Program {
         switch program {
-            case .Statement(let statements):
-                return .Statement(statements.map{ replacePseudoRegisters($0) })
+            case .Statement(let declarations):
+                return .Statement(declarations.map{ replacePseudoRegisters($0) })
         }
     }
 
@@ -459,7 +462,7 @@ class Assembly {
         return out
     }
 
-    func fixUpMoves(_ pls: Tree.ProgramLevelStatement) -> Tree.ProgramLevelStatement {
+    func fixUpMoves(_ pls: Tree.Declaration) -> Tree.Declaration {
         switch pls {
             case .Function(let name, let instrs):
                 return .Function(name, fixUpMoves(instrs))
@@ -468,8 +471,8 @@ class Assembly {
 
     func fixUpMoves(program: Tree.Program) -> Tree.Program {
         switch program {
-            case .Statement(let statements):
-                return .Statement(statements.map { fixUpMoves($0) })
+            case .Statement(let declarations):
+                return .Statement(declarations.map { fixUpMoves($0) })
         }
     }
 }
