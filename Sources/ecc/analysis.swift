@@ -703,7 +703,7 @@ class SemanticAnalyzer {
                             exit(ExitCode.semanticError.rawValue)
                         }
                     }
-                    nameMap[name] = (constructedType, true)
+                    nameMap[name] = (constructedType, body != nil)
                     var copy = copyNameMap(nameMap)
                     for p in params {
                         switch p {
