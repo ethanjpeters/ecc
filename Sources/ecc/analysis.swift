@@ -224,8 +224,8 @@ class SemanticAnalyzer {
                     switch forInit {
                         case .InitDecl(let decl):
                             switch decl {
-                                case .Declaration(let tp, let name, let exp):
-                                    labeledForInit = .InitDecl(.Declaration(
+                                case .VariableDeclaration(let tp, let name, let exp):
+                                    labeledForInit = .InitDecl(.VariableDeclaration(
                                         tp,
                                         name,
                                         exp == nil ? nil : labelLoops(
@@ -234,6 +234,9 @@ class SemanticAnalyzer {
                                             switchLabel: nil
                                         )
                                     ))
+                                default:
+                                    print("Unreachable case where something other than a variable was declared as the initializer to a for loop: \(decl)")
+                                    exit(ExitCode.internalError.rawValue)
                             }
                         case .InitExp(let exp):
                             labeledForInit = .InitExp(exp == nil ? nil : labelLoops(
@@ -294,19 +297,31 @@ class SemanticAnalyzer {
             return expression
         }
 
+        func labelLoops(_ declaration: Parser.AST.Declaration, loopLabel: String?, switchLabel: String?) -> Parser.AST.Declaration {
+            switch declaration {
+                case .VariableDeclaration(let tp, let name, let exp):
+                    let outExp : Parser.AST.Expression?
+                    if let e = exp {
+                        outExp = labelLoops(e, loopLabel: loopLabel, switchLabel: switchLabel)
+                    } else {
+                        outExp = nil
+                    }
+                    return .VariableDeclaration(tp, name, outExp)
+                case .FunctionDeclaration(let returnType, let name, let params, let body):
+                    let outBody : Parser.AST.Block?
+                    if let b = body {
+                        outBody = labelLoops(b, loopLabel: loopLabel, switchLabel: switchLabel)
+                    } else {
+                        outBody = nil
+                    }
+                    return .FunctionDeclaration(returnType, name, params, outBody)
+            }
+        }
+
         func labelLoops(_ blockItem: Parser.AST.BlockItem, loopLabel: String?, switchLabel: String?) -> Parser.AST.BlockItem {
             switch blockItem {
                 case .D(let decl):
-                    switch decl {
-                        case .Declaration(let tp, let name, let exp):
-                            let outExp : Parser.AST.Expression?
-                            if let e = exp {
-                                outExp = labelLoops(e, loopLabel: loopLabel, switchLabel: switchLabel)
-                            } else {
-                                outExp = nil
-                            }
-                            return .D(.Declaration(tp, name, outExp))
-                    }
+                    return .D(labelLoops(decl, loopLabel: loopLabel, switchLabel: switchLabel))
                 case .S(let stmt):
                     return .S(labelLoops(stmt, loopLabel: loopLabel, switchLabel: switchLabel))
             }
@@ -323,18 +338,10 @@ class SemanticAnalyzer {
             }
         }
 
-        func labelLoops(_ pls: Parser.AST.ProgramLevelStatement) -> Parser.AST.ProgramLevelStatement {
-            switch pls {
-                case .Function(let returnType, let name, let parameters, let body):
-                    return .Function(returnType, name, parameters, labelLoops(body, loopLabel: nil, switchLabel: nil))
-                case .FunctionDeclaration(_, _, _): return pls
-            }
-        }
-
         func labelLoops(_ program: Parser.AST.Program) -> Parser.AST.Program {
             switch program {
-                case .Statement(let statements):
-                    return .Statement(statements.map { labelLoops($0) })
+                case .Statement(let decls):
+                    return .Statement(decls.map { labelLoops($0, loopLabel: nil, switchLabel: nil) })
             }
         }
     }
@@ -422,6 +429,15 @@ class SemanticAnalyzer {
             }
         }
 
+        func placeCases(_ declaration: Parser.AST.Declaration, isInSwitch: Bool) -> Parser.AST.Declaration {
+            switch declaration {
+                case .FunctionDeclaration(let returnType, let name, let params, let body):
+                    return .FunctionDeclaration(returnType, name, params, body == nil ? nil : placeCases(body!, isInSwitch: false))
+                case .VariableDeclaration(let tp, let name, let exp):
+                    return .VariableDeclaration(tp, name, exp == nil ? nil : placeCases(exp!, isInSwitch: isInSwitch))
+            }
+        }
+
         func placeCases(_ block: Parser.AST.Block, isInSwitch: Bool) -> Parser.AST.Block {
             switch block {
                 case .Block(let items):
@@ -429,14 +445,7 @@ class SemanticAnalyzer {
                     for itm in items {
                         switch itm {
                             case .D(let decl):
-                                switch decl {
-                                    case .Declaration(let tp, let name, let initializer):
-                                        placedItems.append(.D(.Declaration(
-                                            tp,
-                                            name,
-                                            initializer == nil ? nil : placeCases(initializer!, isInSwitch: isInSwitch)
-                                        )))
-                                }
+                                placedItems.append(.D(placeCases(decl, isInSwitch: isInSwitch)))
                             case .S(let stmt):
                                 placedItems.append(.S(placeCases(stmt, isInSwitch: isInSwitch)))
                         }
@@ -445,18 +454,10 @@ class SemanticAnalyzer {
             }
         }
 
-        func placeCases(_ pls: Parser.AST.ProgramLevelStatement, isInSwitch: Bool) -> Parser.AST.ProgramLevelStatement {
-            switch pls {
-                case .Function(let returnType, let name, let parameters, let body):
-                    return .Function(returnType, name, parameters, placeCases(body, isInSwitch: isInSwitch))
-                case .FunctionDeclaration(_, _, _): return pls
-            }
-        }
-
         func placeCases(_ program: Parser.AST.Program) -> Parser.AST.Program {
             switch program {
-                case .Statement(let statements):
-                    return .Statement(statements.map { placeCases($0, isInSwitch: false) })
+                case .Statement(let declarations):
+                    return .Statement(declarations.map { placeCases($0, isInSwitch: false) })
             }
         }
     }
@@ -617,18 +618,11 @@ class SemanticAnalyzer {
                     switch forInit {
                         case .InitDecl(let decl):
                             switch decl {
-                                case .Declaration(let tp, let name, let exp):
-                                    let initType : CheckerType
-                                    if let e = exp {
-                                        initType = typeCheck(e, copiedNameMap)
-                                    } else {
-                                        initType = convert(tp)
-                                    }
-                                    if initType != convert(tp) {
-                                        print("Declaration \(decl) is ill-typed")
-                                        exit(ExitCode.semanticError.rawValue)
-                                    }
-                                    copiedNameMap[name] = (initType, exp != nil)
+                                case .FunctionDeclaration(_, let name, _, _):
+                                    print("Unreachable totally guano-on-toast insanse situation where a function \(name) was declared in the initializer of a for loop")
+                                    exit(ExitCode.internalError.rawValue)
+                                case .VariableDeclaration(_, _ , _):
+                                    let _ = typeCheck(decl, &copiedNameMap)
                             }
                         case .InitExp(let exp):
                             if let e = exp {
@@ -666,38 +660,34 @@ class SemanticAnalyzer {
         func typeCheck(_ block: Parser.AST.Block, _ nameMap : inout [String : (CheckerType, Bool)]) -> CheckerType {
             switch block {
                 case .Block(let blockItems):
+                    var copiedNameItems = copyNameMap(nameMap)
                     for item in blockItems {
                         switch item {
                             case .D(let decl):
                                 switch decl {
-                                    case .Declaration(let tp, let name, let exp):
-                                        let initType : CheckerType
-                                        if let e = exp {
-                                            initType = typeCheck(e, nameMap)
-                                        } else {
-                                            initType = convert(tp)
-                                        }
-                                        if initType != convert(tp) {
-                                            print("Declaration \(decl) is ill-typed")
+                                    case .FunctionDeclaration(_, let name, _, let body):
+                                        if let _ = body {
+                                            print("Inline functions are disallowed: \(name)")
                                             exit(ExitCode.semanticError.rawValue)
                                         }
-                                        nameMap[name] = (initType, exp != nil)
+                                    case .VariableDeclaration(_, _, _):
+                                        let _ = typeCheck(decl, &copiedNameItems)
                                 }
                             case .S(let stmt):
-                                let _ = typeCheck(stmt, &nameMap)
+                                let _ = typeCheck(stmt, &copiedNameItems)
                         }
                     }
                     return .Void
             }
         }
 
-        func typeCheck(_ pls : Parser.AST.ProgramLevelStatement, _ nameMap : inout [String : (CheckerType, Bool)]) -> CheckerType {
-            switch pls {
-                case .Function(let returnType, let name, let params, let body):
+        func typeCheck(_ declaration: Parser.AST.Declaration, _ nameMap : inout [String : (CheckerType, Bool)]) -> CheckerType {
+            switch declaration {
+                case .FunctionDeclaration(let returnType, let name, let params, let body):
                     var paramTypes : [CheckerType] = []
                     for p in params {
                         switch p {
-                            case .Declaration(let tp, _):
+                            case .NamedParameter(let tp, _):
                                 paramTypes.append(convert(tp))
                         }
                     }
@@ -712,36 +702,33 @@ class SemanticAnalyzer {
                             print("Funciton \(name) was redeclared with a different type")
                             exit(ExitCode.semanticError.rawValue)
                         }
-                    } else {
-                        nameMap[name] = (constructedType, true)
                     }
+                    nameMap[name] = (constructedType, true)
                     var copy = copyNameMap(nameMap)
                     for p in params {
                         switch p {
-                            case .Declaration(let tp, let name):
+                            case .NamedParameter(let tp, let name):
                                 copy[name] = (convert(tp), true)
                         }
                     }
-                    return typeCheck(body, &copy)
-                case .FunctionDeclaration(let returnType, let name, let params):
-                    var paramTypes : [CheckerType] = []
-                    for p: Parser.AST.Parameter in params {
-                        switch p {
-                            case .Declaration(let tp, _):
-                                paramTypes.append(convert(tp))
-                        }
-                    }
-                    let constructedType : CheckerType = .Function(convert(returnType), paramTypes)
-                    if let preExistingFunction = nameMap[name] {
-                        let (oldType, _) = preExistingFunction
-                        if oldType != constructedType {
-                            print("Funciton \(name) was redeclared with a different type")
-                            exit(ExitCode.semanticError.rawValue)
-                        }
+                    if let b = body {
+                        return typeCheck(b, &copy)
                     } else {
-                        nameMap[name] = (constructedType, false)
+                        return constructedType
                     }
-                    return constructedType
+                case .VariableDeclaration(let tp, let name, let initExp):
+                    let initType : CheckerType
+                    if let e = initExp {
+                        initType = typeCheck(e, nameMap)
+                    } else {
+                        initType = convert(tp)
+                    }
+                    if initType != convert(tp) {
+                        print("Declaration \(declaration) is ill-typed (left: \(convert(tp)), right: \(initType))")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                    nameMap[name] = (initType, initExp != nil)
+                    return .Void
             }
         }
 
@@ -752,9 +739,9 @@ class SemanticAnalyzer {
             )] = [:]
 
             switch program {
-                case .Statement(let pls):
-                    for p in pls {
-                        let _ = typeCheck(p, &overallNameMap)
+                case .Statement(let decls):
+                    for d in decls {
+                        let _ = typeCheck(d, &overallNameMap)
                     }
             }
         }
