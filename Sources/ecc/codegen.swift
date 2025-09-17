@@ -176,7 +176,7 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
     }
 }
 
-func emitProgramLevelStatement(_ pls: Assembly.Tree.ProgramLevelStatement, out: inout [String]) {
+func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [String]) {
     switch pls {
         case .Function(let name, let instrs):
             let fName = makeFunctionName(name)
@@ -193,9 +193,9 @@ func emitProgram(program: Assembly.Tree.Program) -> [String] {
     var out : [String] = []
 
     switch program {
-        case .Statement(let statements):
-            for stmt in statements {
-                emitProgramLevelStatement(stmt, out: &out)
+        case .Statement(let declarations):
+            for decl in declarations {
+                emitProgramLevelStatement(decl, out: &out)
             }
     }
 

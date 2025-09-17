@@ -403,7 +403,7 @@ class Tacky {
         }
     }
 
-    func generateTACKYDeclaration(decl: Parser.AST.Declaration, out : inout [Tacky.IR.Instruction]) -> Tacky.IR.Declaration {
+    func generateTACKYDeclaration(decl: Parser.AST.Declaration, out : inout [Tacky.IR.Instruction]) -> Tacky.IR.Declaration? {
         switch decl {
             // TODO: use type information to determine size of parameters
             case .VariableDeclaration(_, let name, let exp):
@@ -411,6 +411,7 @@ class Tacky {
                     let child = generateTACKYExpression(exp!, out: &out)
                     out.append(.Copy(child, .Var(name)))
                 }
+                return nil
             case .FunctionDeclaration(_, let name, let parameters, let body):
                 if let b = body {
                     switch b {
@@ -436,6 +437,7 @@ class Tacky {
                     }
                 } else {
                     // no code for undefined functions
+                    return nil
                 }
         }
     }
@@ -452,7 +454,9 @@ class Tacky {
                             print("As yet unhandled global variable declaration")
                             exit(ExitCode.internalError.rawValue)
                         case .FunctionDeclaration(_, _, _, _):
-                            tackyDecls.append(generateTACKYDeclaration(decl: decl, out: &out))
+                            if let d = generateTACKYDeclaration(decl: decl, out: &out) {
+                                tackyDecls.append(d)
+                            }
                     }
                 }
                 return .Statement(tackyDecls)
