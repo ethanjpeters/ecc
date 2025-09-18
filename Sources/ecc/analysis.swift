@@ -2,6 +2,13 @@ import Foundation
 
 class SemanticAnalyzer {
     class VariableResolver {
+        struct NameMapEntry {
+            public let newName : String
+            public let currentScope : Bool
+            public let hasLinkage : Bool
+        }
+
+
         private var tempNameCounter : Int = 0
 
         func makeTemp(_ base : String) -> String {
@@ -10,10 +17,10 @@ class SemanticAnalyzer {
             return out
         }
 
-        func copyNameMap(_ nameMap: [String : (String, Bool)]) -> [String : (String, Bool)] {
-            var out : [String : (String, Bool)] = [:]
-            for (k, v) in nameMap {
-                out[k] = (v.0, false)
+        func copyNameMap(_ nameMap: [String : NameMapEntry]) -> [String : NameMapEntry] {
+            var out : [String : NameMapEntry] = [:]
+            for (name, entry) in nameMap {
+                out[name] = .init(newName: entry.newName, currentScope: false, hasLinkage: entry.hasLinkage)
             }
             return out
         }
@@ -25,7 +32,7 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveExpression(_ exp : Parser.AST.Expression, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Expression {
+        func resolveExpression(_ exp : Parser.AST.Expression, _ nameMap: inout [String : NameMapEntry]) -> Parser.AST.Expression {
             switch exp {
                 case .Assignment(let lValue, let rValue):
                     if !isValidLValue(lValue) {
@@ -44,7 +51,7 @@ class SemanticAnalyzer {
                     return .Unary(op, resolveExpression(child, &nameMap))
                 case .Var(let name):
                     if let uniqueName = nameMap[name] {
-                        return .Var(uniqueName.0)
+                        return .Var(uniqueName.newName)
                     } else {
                         print("Undeclared variable \(name)")
                         exit(ExitCode.semanticError.rawValue)
@@ -60,7 +67,7 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveStatement(_ stmt : Parser.AST.Statement, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Statement {
+        func resolveStatement(_ stmt : Parser.AST.Statement, _ nameMap: inout [String : NameMapEntry]) -> Parser.AST.Statement {
             switch stmt {
                 case .Expression(let exp): return .Expression(resolveExpression(exp, &nameMap))
                 case .Return(let exp): return .Return(exp == nil ? nil : resolveExpression(exp!, &nameMap))
@@ -89,7 +96,7 @@ class SemanticAnalyzer {
                     let resolvedForInit : Parser.AST.ForInit
                     switch forInit {
                         case .InitDecl(let decl):
-                            resolvedForInit = .InitDecl(resolveDeclaration(decl, &copiedNameMap))
+                            resolvedForInit = .InitDecl(resolveDeclaration(decl, false, &copiedNameMap))
                         case .InitExp(let exp):
                             resolvedForInit = .InitExp(exp == nil ? nil : resolveExpression(exp!, &copiedNameMap))
                     }
@@ -111,38 +118,49 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveDeclaration(_ decl: Parser.AST.Declaration, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Declaration {
+        func resolveDeclaration(_ decl: Parser.AST.Declaration, _ fileScope: Bool, _ nameMap: inout [String : NameMapEntry]) -> Parser.AST.Declaration {
             switch decl {
                 case .VariableDeclaration(let tp, let name, let exp, let storageClass):
-                    if let n = nameMap[name] {
-                        if n.1 {
-                            print("Duplicate variable name found: \(n)")
-                            exit(ExitCode.semanticError.rawValue)
+                    if fileScope {
+                        nameMap[name] = .init(newName: name, currentScope: true, hasLinkage: true)
+                        return decl
+                    } else {
+                        if let n = nameMap[name] {
+                            if n.currentScope {
+                                if !(n.hasLinkage && storageClass == .Extern) {
+                                    print("Duplicate variable name found: \(n)")
+                                    exit(ExitCode.semanticError.rawValue)
+                                }
+                            }
+                        }
+                        if storageClass == .Extern {
+                            nameMap[name] = .init(newName: name, currentScope: true, hasLinkage: true)
+                            return decl
+                        } else {
+                            let uniqueName = makeTemp(name)
+                            nameMap[name] = .init(newName: uniqueName, currentScope: true, hasLinkage: false)
+                            var outInit : Parser.AST.Expression? = nil
+                            if let initializer = exp {
+                                outInit = resolveExpression(initializer, &nameMap)
+                            }
+                            return .VariableDeclaration(tp, uniqueName, outInit, storageClass)
                         }
                     }
-                    let uniqueName = makeTemp(name)
-                    nameMap[name] = (uniqueName, true)
-                    var outInit : Parser.AST.Expression? = nil
-                    if let initializer = exp {
-                        outInit = resolveExpression(initializer, &nameMap)
-                    }
-                    return .VariableDeclaration(tp, uniqueName, outInit, storageClass)
                 case .FunctionDeclaration(let returnType, let name, let params, let body,  let storageClass):
-                    nameMap[name] = (name, true)
+                    nameMap[name] = .init(newName: name, currentScope: true, hasLinkage: true)
                     var copiedNameMap = copyNameMap(nameMap)
                     var mangledPNames: [Parser.AST.Parameter] = []
                     for p in params {
                         switch p {
                             case .NamedParameter(let pType, let pName):
                                 let uniqueName = makeTemp(pName)
-                                copiedNameMap[pName] = (uniqueName, true)
+                                copiedNameMap[pName] = .init(newName: uniqueName, currentScope: true, hasLinkage: false)
                                 mangledPNames.append(.NamedParameter(pType, uniqueName))
                         }
                     }
                     if let b = body {
                         switch b {
                             case .Block(let items):
-                                copiedNameMap[name] = (name, true)    // function names don't get mangled!
                                 return .FunctionDeclaration(returnType, name, mangledPNames, .Block(items.map { resolveBlockItem($0, &copiedNameMap) }), storageClass)
                         }
                     } else {
@@ -151,22 +169,22 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveBlockItem(_ blockItem: Parser.AST.BlockItem, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.BlockItem {
+        func resolveBlockItem(_ blockItem: Parser.AST.BlockItem, _ nameMap: inout [String : NameMapEntry]) -> Parser.AST.BlockItem {
             switch blockItem {
                 case .D(let decl):
-                    return .D(resolveDeclaration(decl, &nameMap))
+                    return .D(resolveDeclaration(decl, false, &nameMap))
                 case .S(let stmt):
                     return .S(resolveStatement(stmt, &nameMap))
             }
         }
 
         func resolveVariables(_ program: Parser.AST.Program) -> Parser.AST.Program {
-            var variableNameMapping : [String : (String, Bool)] = [:]
+            var variableNameMapping : [String : NameMapEntry] = [:]
             switch program {
                 case .Statement(let declarations):
                     var resolvedDecls : [Parser.AST.Declaration] = []
                     for decl in declarations {
-                        resolvedDecls.append(resolveDeclaration(decl, &variableNameMapping))
+                        resolvedDecls.append(resolveDeclaration(decl, true, &variableNameMapping))
                     }
                     return .Statement(resolvedDecls)
             }
