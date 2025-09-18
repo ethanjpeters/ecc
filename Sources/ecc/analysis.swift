@@ -113,7 +113,7 @@ class SemanticAnalyzer {
 
         func resolveDeclaration(_ decl: Parser.AST.Declaration, _ nameMap: inout [String : (String, Bool)]) -> Parser.AST.Declaration {
             switch decl {
-                case .VariableDeclaration(let tp, let name, let exp):
+                case .VariableDeclaration(let tp, let name, let exp, let storageClass):
                     if let n = nameMap[name] {
                         if n.1 {
                             print("Duplicate variable name found: \(n)")
@@ -126,8 +126,8 @@ class SemanticAnalyzer {
                     if let initializer = exp {
                         outInit = resolveExpression(initializer, &nameMap)
                     }
-                    return .VariableDeclaration(tp, uniqueName, outInit)
-                case .FunctionDeclaration(let returnType, let name, let params, let body):
+                    return .VariableDeclaration(tp, uniqueName, outInit, storageClass)
+                case .FunctionDeclaration(let returnType, let name, let params, let body,  let storageClass):
                     nameMap[name] = (name, true)
                     var copiedNameMap = copyNameMap(nameMap)
                     var mangledPNames: [Parser.AST.Parameter] = []
@@ -143,10 +143,10 @@ class SemanticAnalyzer {
                         switch b {
                             case .Block(let items):
                                 copiedNameMap[name] = (name, true)    // function names don't get mangled!
-                                return .FunctionDeclaration(returnType, name, mangledPNames, .Block(items.map { resolveBlockItem($0, &copiedNameMap) }))
+                                return .FunctionDeclaration(returnType, name, mangledPNames, .Block(items.map { resolveBlockItem($0, &copiedNameMap) }), storageClass)
                         }
                     } else {
-                        return .FunctionDeclaration(returnType, name, mangledPNames, nil)
+                        return .FunctionDeclaration(returnType, name, mangledPNames, nil, storageClass)
                     }
             }
         }
@@ -224,7 +224,7 @@ class SemanticAnalyzer {
                     switch forInit {
                         case .InitDecl(let decl):
                             switch decl {
-                                case .VariableDeclaration(let tp, let name, let exp):
+                                case .VariableDeclaration(let tp, let name, let exp, let storageClass):
                                     labeledForInit = .InitDecl(.VariableDeclaration(
                                         tp,
                                         name,
@@ -232,7 +232,8 @@ class SemanticAnalyzer {
                                             exp!,
                                             loopLabel: newLabel,
                                             switchLabel: nil
-                                        )
+                                        ),
+                                        storageClass
                                     ))
                                 default:
                                     print("Unreachable case where something other than a variable was declared as the initializer to a for loop: \(decl)")
@@ -299,22 +300,22 @@ class SemanticAnalyzer {
 
         func labelLoops(_ declaration: Parser.AST.Declaration, loopLabel: String?, switchLabel: String?) -> Parser.AST.Declaration {
             switch declaration {
-                case .VariableDeclaration(let tp, let name, let exp):
+                case .VariableDeclaration(let tp, let name, let exp, let storageClass):
                     let outExp : Parser.AST.Expression?
                     if let e = exp {
                         outExp = labelLoops(e, loopLabel: loopLabel, switchLabel: switchLabel)
                     } else {
                         outExp = nil
                     }
-                    return .VariableDeclaration(tp, name, outExp)
-                case .FunctionDeclaration(let returnType, let name, let params, let body):
+                    return .VariableDeclaration(tp, name, outExp, storageClass)
+                case .FunctionDeclaration(let returnType, let name, let params, let body, let storageClass):
                     let outBody : Parser.AST.Block?
                     if let b = body {
                         outBody = labelLoops(b, loopLabel: loopLabel, switchLabel: switchLabel)
                     } else {
                         outBody = nil
                     }
-                    return .FunctionDeclaration(returnType, name, params, outBody)
+                    return .FunctionDeclaration(returnType, name, params, outBody, storageClass)
             }
         }
 
@@ -431,10 +432,10 @@ class SemanticAnalyzer {
 
         func placeCases(_ declaration: Parser.AST.Declaration, isInSwitch: Bool) -> Parser.AST.Declaration {
             switch declaration {
-                case .FunctionDeclaration(let returnType, let name, let params, let body):
-                    return .FunctionDeclaration(returnType, name, params, body == nil ? nil : placeCases(body!, isInSwitch: false))
-                case .VariableDeclaration(let tp, let name, let exp):
-                    return .VariableDeclaration(tp, name, exp == nil ? nil : placeCases(exp!, isInSwitch: isInSwitch))
+                case .FunctionDeclaration(let returnType, let name, let params, let body, let storageClass):
+                    return .FunctionDeclaration(returnType, name, params, body == nil ? nil : placeCases(body!, isInSwitch: false), storageClass)
+                case .VariableDeclaration(let tp, let name, let exp, let storageClass):
+                    return .VariableDeclaration(tp, name, exp == nil ? nil : placeCases(exp!, isInSwitch: isInSwitch), storageClass)
             }
         }
 
@@ -618,10 +619,10 @@ class SemanticAnalyzer {
                     switch forInit {
                         case .InitDecl(let decl):
                             switch decl {
-                                case .FunctionDeclaration(_, let name, _, _):
+                                case .FunctionDeclaration(_, let name, _, _, _):
                                     print("Unreachable totally guano-on-toast insanse situation where a function \(name) was declared in the initializer of a for loop")
                                     exit(ExitCode.internalError.rawValue)
-                                case .VariableDeclaration(_, _ , _):
+                                case .VariableDeclaration(_, _ , _, _):
                                     let _ = typeCheck(decl, &copiedNameMap)
                             }
                         case .InitExp(let exp):
@@ -665,12 +666,12 @@ class SemanticAnalyzer {
                         switch item {
                             case .D(let decl):
                                 switch decl {
-                                    case .FunctionDeclaration(_, let name, _, let body):
+                                    case .FunctionDeclaration(_, let name, _, let body, _):
                                         if let _ = body {
                                             print("Inline functions are disallowed: \(name)")
                                             exit(ExitCode.semanticError.rawValue)
                                         }
-                                    case .VariableDeclaration(_, _, _):
+                                    case .VariableDeclaration(_, _, _, _):
                                         let _ = typeCheck(decl, &copiedNameItems)
                                 }
                             case .S(let stmt):
@@ -683,7 +684,7 @@ class SemanticAnalyzer {
 
         func typeCheck(_ declaration: Parser.AST.Declaration, _ nameMap : inout [String : (CheckerType, Bool)]) -> CheckerType {
             switch declaration {
-                case .FunctionDeclaration(let returnType, let name, let params, let body):
+                case .FunctionDeclaration(let returnType, let name, let params, let body, _):
                     var paramTypes : [CheckerType] = []
                     for p in params {
                         switch p {
@@ -716,7 +717,7 @@ class SemanticAnalyzer {
                     } else {
                         return constructedType
                     }
-                case .VariableDeclaration(let tp, let name, let initExp):
+                case .VariableDeclaration(let tp, let name, let initExp, _):
                     let initType : CheckerType
                     if let e = initExp {
                         initType = typeCheck(e, nameMap)

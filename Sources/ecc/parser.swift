@@ -91,9 +91,14 @@ class Parser {
             // it is sometimes technically valid for a parameter to be unnamed, but not in my America
         }
 
+        enum StorageClass {
+            case Static
+            case Extern
+        }
+
         enum Declaration {
-            case VariableDeclaration(CType /* type */, String /* identifier name */, Expression?)
-            case FunctionDeclaration(CType /* return type */, String /* name */, [Parameter] /* type signature */, Block? /* body */)
+            case VariableDeclaration(CType /* type */, String /* identifier name */, Expression?, StorageClass?)
+            case FunctionDeclaration(CType /* return type */, String /* name */, [Parameter] /* type signature */, Block? /* body */, StorageClass?)
         }
 
         enum Program {
@@ -136,6 +141,22 @@ class Parser {
         }
     }
 
+    func expectStorageClass(_ tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Lexer.Token {
+        if tokenStream.isEmpty {
+            print("Expected storage class but encountered end of token stream")
+            exit(ExitCode.parserError.rawValue)
+        }
+
+        let (nextToken, position) = tokenStream.removeFirst()
+        switch nextToken {
+            case .keywordStatic: fallthrough
+            case .keywordExtern: return nextToken
+            default:
+                print("Found unexpected token \(nextToken) at line \(position.0), column \(position.1) when looking for storage class")
+                exit(ExitCode.parserError.rawValue)
+        }
+    }
+
     func expectIdentifier(_ tokenStream: inout [(Lexer.Token, LexerPosition)]) -> String /* identifier */ {
         if tokenStream.isEmpty {
             print("Expected identifier but encountered end of token stream")
@@ -157,6 +178,16 @@ class Parser {
             case .keywordVoid: return .Void
             default:
                 print("Unreachable not-a-type while converting lexical type to AST")
+                exit(ExitCode.internalError.rawValue)
+        }
+    }
+
+    func convertStorageClass(_ token: Lexer.Token) -> Parser.AST.StorageClass {
+        switch token {
+            case .keywordStatic: return .Static
+            case .keywordExtern: return .Extern
+            default:
+                print("Unreachable not-a-storage-class while converting lexical storage class to AST")
                 exit(ExitCode.internalError.rawValue)
         }
     }
@@ -584,11 +615,42 @@ class Parser {
         let _ = expect(.closeBrace, &tokenStream)
         return .Block(body)
     }
-    
+
     func parseDeclaration(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Declaration {
-        let declType = convertType(expectType(&tokenStream))
+        // parse a "specifier"
+
+        var declaredType : Parser.AST.CType? = nil
+        var storageClass : Parser.AST.StorageClass? = nil
+
+        var parsedOneSpecifier = false
+        while true {
+            switch peek(tokenStream) {
+                case .keywordVoid: fallthrough
+                case .keywordInt:
+                    declaredType = convertType(expectType(&tokenStream))
+                case .keywordStatic: fallthrough
+                case .keywordExtern:
+                    storageClass = convertStorageClass(expectStorageClass(&tokenStream))
+                default:
+                    if parsedOneSpecifier {
+                        break
+                    } else {
+                        let (next, position) = tokenStream[0]
+                        let (line, col) = position
+                        print("Found unexpected token \(next) at line \(line), column \(col) when looking for specifier")
+                        exit(ExitCode.parserError.rawValue)
+                    }
+            }
+            parsedOneSpecifier = true
+        }
 
         let varName = expectIdentifier(&tokenStream)
+
+        guard let declType = declaredType else {
+            // NOTE: "unsigned" changes the meaning of this block
+            print("No type specified for function/variable \(varName)")
+            exit(ExitCode.parserError.rawValue)
+        }
         
         if peek(tokenStream) == .openParen {
             // we're looking at a function declaration
@@ -604,10 +666,10 @@ class Parser {
 
             if peek(tokenStream) == .semicolon {
                 let _ = expect(.semicolon, &tokenStream)
-                return .FunctionDeclaration(declType, varName, params, nil)
+                return .FunctionDeclaration(declType, varName, params, nil, storageClass)
             }
 
-            return .FunctionDeclaration(declType, varName, params, parseBlock(tokenStream: &tokenStream))
+            return .FunctionDeclaration(declType, varName, params, parseBlock(tokenStream: &tokenStream), storageClass)
         } else {
             // // does this check belong here?
             if declType == .Void {
@@ -624,7 +686,7 @@ class Parser {
             
             let _ = expect(.semicolon, &tokenStream)
             
-            return .VariableDeclaration(declType, varName, exp)
+            return .VariableDeclaration(declType, varName, exp, storageClass)
         }
     }
     
@@ -634,7 +696,7 @@ class Parser {
             let childDecl = parseDeclaration(tokenStream: &tokenStream)
             // weird edge case
             switch childDecl {
-                case .FunctionDeclaration(_, let name, _, _):
+                case .FunctionDeclaration(_, let name, _, _, _):
                     print("Can't provide a function as a for loop initializer: \(name)")
                     exit(ExitCode.parserError.rawValue)
                 default: ()
@@ -747,20 +809,20 @@ class Parser {
     
     func fixUpCompoundAssignments(_ decl: Parser.AST.Declaration) -> Parser.AST.Declaration {
         switch decl {
-            case .FunctionDeclaration(let returnType, let name, let params, let body):
+            case .FunctionDeclaration(let returnType, let name, let params, let body, let storageClass):
                 if let b = body {
                     switch b {
                         case .Block(let items):
-                            return .FunctionDeclaration(returnType, name, params, .Block(items.map { fixUpCompoundAssignments($0) }))
+                            return .FunctionDeclaration(returnType, name, params, .Block(items.map { fixUpCompoundAssignments($0) }), storageClass)
                     }
                 } else {
-                    return .FunctionDeclaration(returnType, name, params, nil)
+                    return .FunctionDeclaration(returnType, name, params, nil, storageClass)
                 }
-            case .VariableDeclaration(let tp, let name, let initializer):
+            case .VariableDeclaration(let tp, let name, let initializer, let storageClass):
                 if let e = initializer {
-                    return .VariableDeclaration(tp, name, fixUpCompoundAssignments(e))
+                    return .VariableDeclaration(tp, name, fixUpCompoundAssignments(e), storageClass)
                 } else {
-                    return .VariableDeclaration(tp, name, nil)
+                    return .VariableDeclaration(tp, name, nil, storageClass)
                 }
         }
     }

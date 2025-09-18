@@ -308,7 +308,7 @@ class Tacky {
                                 case .S(let stmt):
                                     generateTACKYStatement(statement: stmt, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue)
                                 case .D(let decl):
-                                    generateTACKYDeclaration(decl: decl, out: &out)
+                                    let _ = generateTACKYDeclaration(decl: decl, out: &out)
                             }
                         }
                 }
@@ -339,7 +339,7 @@ class Tacky {
             case .For(let forInit, let condition, let increment, let body, let label):
                 switch forInit {
                     case .InitDecl(let decl):
-                        generateTACKYDeclaration(decl: decl, out: &out)
+                        let _ = generateTACKYDeclaration(decl: decl, out: &out)
                     case .InitExp(let exp):
                         if let e = exp {
                             let _ = generateTACKYExpression(e, out: &out)
@@ -406,13 +406,13 @@ class Tacky {
     func generateTACKYDeclaration(decl: Parser.AST.Declaration, out : inout [Tacky.IR.Instruction]) -> Tacky.IR.Declaration? {
         switch decl {
             // TODO: use type information to determine size of parameters
-            case .VariableDeclaration(_, let name, let exp):
+            case .VariableDeclaration(_, let name, let exp, _):
                 if exp != nil {
                     let child = generateTACKYExpression(exp!, out: &out)
                     out.append(.Copy(child, .Var(name)))
                 }
                 return nil
-            case .FunctionDeclaration(_, let name, let parameters, let body):
+            case .FunctionDeclaration(_, let name, let parameters, let body, _):
                 if let b = body {
                     switch b {
                         case .Block(let items):
@@ -449,11 +449,11 @@ class Tacky {
                 var tackyDecls : [Tacky.IR.Declaration] = []
                 for decl in declarations {
                     switch decl {
-                        case .VariableDeclaration(_, _, _):
+                        case .VariableDeclaration(_, _, _, _):
                             // global variable declaration; to be handled
                             print("As yet unhandled global variable declaration")
                             exit(ExitCode.internalError.rawValue)
-                        case .FunctionDeclaration(_, _, _, _):
+                        case .FunctionDeclaration(_, _, _, _, _):
                             if let d = generateTACKYDeclaration(decl: decl, out: &out) {
                                 tackyDecls.append(d)
                             }
