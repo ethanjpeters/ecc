@@ -628,9 +628,21 @@ class Parser {
             switch peek(tokenStream) {
                 case .keywordVoid: fallthrough
                 case .keywordInt:
+                    if let _ = declaredType {
+                        let (next, position) = tokenStream[0]
+                        let (line, col) = position
+                        print("Duplicate type specifier \(next) found at line \(line), column \(col)")
+                        exit(ExitCode.parserError.rawValue)
+                    }
                     declaredType = convertType(expectType(&tokenStream))
                 case .keywordStatic: fallthrough
                 case .keywordExtern:
+                    if let _ = storageClass {
+                        let (next, position) = tokenStream[0]
+                        let (line, col) = position
+                        print("Duplicate storage class specifier \(next) found at line \(line), column \(col)")
+                        exit(ExitCode.parserError.rawValue)
+                    }
                     storageClass = convertStorageClass(expectStorageClass(&tokenStream))
                 default:
                     if parsedOneSpecifier {
