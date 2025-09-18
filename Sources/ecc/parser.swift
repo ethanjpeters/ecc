@@ -623,7 +623,8 @@ class Parser {
         var storageClass : Parser.AST.StorageClass? = nil
 
         var parsedOneSpecifier = false
-        while true {
+        var doneParsingSpecs = false
+        while !doneParsingSpecs {
             switch peek(tokenStream) {
                 case .keywordVoid: fallthrough
                 case .keywordInt:
@@ -633,6 +634,7 @@ class Parser {
                     storageClass = convertStorageClass(expectStorageClass(&tokenStream))
                 default:
                     if parsedOneSpecifier {
+                        doneParsingSpecs = true
                         break
                     } else {
                         let (next, position) = tokenStream[0]
