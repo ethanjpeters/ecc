@@ -51,8 +51,8 @@ class Tacky {
         }
 
         enum Declaration {
-            case Function(String /* name */, [String] /* params */, [Instruction] /* body */)
-            case GlobalVariable(String /* name */)  // TODO: type information
+            case Function(String /* name */, Bool /* is global */, [String] /* params */, [Instruction] /* body */)
+            case StaticVariable(String /* name */, Bool /* is global */, Int /* init */)
         }
 
         enum Program {
@@ -412,7 +412,7 @@ class Tacky {
                     out.append(.Copy(child, .Var(name)))
                 }
                 return nil
-            case .FunctionDeclaration(_, let name, let parameters, let body, _):
+            case .FunctionDeclaration(_, let name, let parameters, let body, let storageClass):
                 if let b = body {
                     switch b {
                         case .Block(let items):
@@ -433,7 +433,7 @@ class Tacky {
                                         tackyIds.append(name)
                                 }
                             }
-                            return .Function(name, tackyIds, instrs)
+                            return .Function(name, storageClass != .Static, tackyIds, instrs)
                     }
                 } else {
                     // no code for undefined functions
@@ -442,7 +442,7 @@ class Tacky {
         }
     }
 
-    func generateTACKYProgram(program: Parser.AST.Program) -> Tacky.IR.Program {
+    func generateTACKYProgram(program: Parser.AST.Program, symbolTable: [String : (SemanticAnalyzer.TypeChecker.CheckerType, SemanticAnalyzer.TypeChecker.IdentifierAttributes)]) -> Tacky.IR.Program {
         var out : [Tacky.IR.Instruction] = []
         switch program {
             case .Statement(let declarations):

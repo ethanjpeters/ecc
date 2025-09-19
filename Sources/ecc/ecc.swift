@@ -105,7 +105,7 @@ struct ECC : ParsableCommand {
             return
         }
 
-        let validatedAst = SemanticAnalyzer().analyze(ast)
+        let (validatedAst, symbolTable) = SemanticAnalyzer().analyze(ast)
 
         if validate {
             if verbose {
@@ -115,7 +115,7 @@ struct ECC : ParsableCommand {
         }
 
         // tacky IR gen
-        let TAC = Tacky().generateTACKYProgram(program: validatedAst)
+        let TAC = Tacky().generateTACKYProgram(program: validatedAst, symbolTable: symbolTable)
 
         if tacky {
             if verbose {

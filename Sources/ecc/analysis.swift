@@ -877,27 +877,28 @@ class SemanticAnalyzer {
             }
         }
 
-        func typeCheck(_ program: Parser.AST.Program) {
-            var overallNameMap : [String : (
-                CheckerType,            // the value's type
-                IdentifierAttributes    // storage and other attributes
-            )] = [:]
-
+        func typeCheck(_ program: Parser.AST.Program, _ symbolTable: inout [String : (CheckerType, IdentifierAttributes)]) {
             switch program {
                 case .Statement(let decls):
                     for d in decls {
-                        let _ = typeCheck(d, true, &overallNameMap)
+                        let _ = typeCheck(d, true, &symbolTable)
                     }
             }
         }
     }
 
-    func analyze(_ program: Parser.AST.Program) -> Parser.AST.Program {
+    func analyze(_ program: Parser.AST.Program) -> (Parser.AST.Program, [String : (TypeChecker.CheckerType, TypeChecker.IdentifierAttributes)]) {
         // currently our only semantic analysis step
         let resolvedProgram = VariableResolver().resolveVariables(program)
         let labeledProgram = LoopLabeler().labelLoops(resolvedProgram)
         let casedProgram = CasePlacer().placeCases(labeledProgram)
-        let _ = TypeChecker().typeCheck(casedProgram)
-        return casedProgram
+
+        var overallNameMap : [String : (
+            TypeChecker.CheckerType,            // the value's type
+            TypeChecker.IdentifierAttributes    // storage and other attributes
+        )] = [:]
+
+        let _ = TypeChecker().typeCheck(casedProgram, &overallNameMap)
+        return (casedProgram, overallNameMap)
     }
 }

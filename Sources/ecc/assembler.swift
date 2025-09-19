@@ -244,7 +244,7 @@ class Assembly {
 
     func generate(_ pls: Tacky.IR.Declaration) -> Tree.Declaration {
         switch pls {
-            case .Function(let name, let params, let instrs):
+            case .Function(let name, let isGlobal, let params, let instrs):
                 var out : [Tree.Instruction] = []
                 var copiedParams = params
                 if !copiedParams.isEmpty {
@@ -275,7 +275,7 @@ class Assembly {
                 }
                 generate(instrs, &out)
                 return .Function(name, out)
-            case .GlobalVariable(_):
+            case .StaticVariable(_, _, _):
                 print("As yet unhandled global variable caught while generating assembly")
                 exit(ExitCode.internalError.rawValue)
         }
