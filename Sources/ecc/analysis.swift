@@ -488,6 +488,18 @@ class SemanticAnalyzer {
             case Function(CheckerType /* return */, [CheckerType] /* params */)
         }
 
+        enum InitialValue {
+            case Tentative
+            case Initial(Int)   // NOTE: other types will affect this
+            case NoInitializer
+        }
+
+        enum IdentifierAttributes {
+            case FunAttr(Bool /* is defined */, Bool /* is global */)
+            case StaticAttr(InitialValue /* init */, Bool /* is global */)
+            case LocalAttr
+        }
+
         func convert(_ pType : Parser.AST.CType) -> CheckerType {
             switch pType {
                 case .Int: return .Int
@@ -495,15 +507,15 @@ class SemanticAnalyzer {
             }
         }
 
-        func copyNameMap(_ nameMap: [String : (CheckerType, Bool)]) -> [String : (CheckerType, Bool)] {
-            var out : [String : (CheckerType, Bool)] = [:]
+        func copyNameMap(_ nameMap: [String : (CheckerType, IdentifierAttributes)]) -> [String : (CheckerType, IdentifierAttributes)] {
+            var out : [String : (CheckerType, IdentifierAttributes)] = [:]
             for (name, entry) in nameMap {
                 out[name] = entry
             }
             return out
         }
 
-        func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, Bool)]) -> CheckerType {
+        func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> CheckerType {
             switch expression {
                 case .Constant(_): return .Int  // TODO: other types of constants
                 case .Unary(let unOp, let e):
@@ -533,12 +545,12 @@ class SemanticAnalyzer {
                     return leftType
                 case .Var(let name):
                     // name is enforced to exist
-                    let (tp, def) = nameMap[name]!
-                    if !def {
-                        // NOTE: this is actually permitted in C
-                        // print("WARNING: Use of undefined variable \(name)")
-                        // exit(ExitCode.semanticError.rawValue)
-                    }
+                    let (tp, _) = nameMap[name]!
+                    // if !def {
+                    //     // NOTE: this is actually permitted in C
+                    //     // print("WARNING: Use of undefined variable \(name)")
+                    //     // exit(ExitCode.semanticError.rawValue)
+                    // }
                     return tp
                 case .Assignment(let lValue, let exp):
                     // lValue is already enforced to be a valid lValue
@@ -602,7 +614,7 @@ class SemanticAnalyzer {
             }
         }
 
-        func typeCheck(_ statement: Parser.AST.Statement, _ nameMap: inout [String: (CheckerType, Bool)]) -> CheckerType {
+        func typeCheck(_ statement: Parser.AST.Statement, _ nameMap: inout [String: (CheckerType, IdentifierAttributes)]) -> CheckerType {
             switch statement {
                 case .Return(let exp):
                     if let e = exp {
@@ -641,7 +653,7 @@ class SemanticAnalyzer {
                                     print("Unreachable totally guano-on-toast insanse situation where a function \(name) was declared in the initializer of a for loop")
                                     exit(ExitCode.internalError.rawValue)
                                 case .VariableDeclaration(_, _ , _, _):
-                                    let _ = typeCheck(decl, &copiedNameMap)
+                                    let _ = typeCheck(decl, false, &copiedNameMap)
                             }
                         case .InitExp(let exp):
                             if let e = exp {
@@ -676,7 +688,7 @@ class SemanticAnalyzer {
         }
 
         // NOTE: this does not match return statements with function return types
-        func typeCheck(_ block: Parser.AST.Block, _ nameMap : inout [String : (CheckerType, Bool)]) -> CheckerType {
+        func typeCheck(_ block: Parser.AST.Block, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)]) -> CheckerType {
             switch block {
                 case .Block(let blockItems):
                     var copiedNameItems = copyNameMap(nameMap)
@@ -690,7 +702,7 @@ class SemanticAnalyzer {
                                             exit(ExitCode.semanticError.rawValue)
                                         }
                                     case .VariableDeclaration(_, _, _, _):
-                                        let _ = typeCheck(decl, &copiedNameItems)
+                                        let _ = typeCheck(decl, false, &copiedNameItems)
                                 }
                             case .S(let stmt):
                                 let _ = typeCheck(stmt, &copiedNameItems)
@@ -700,9 +712,15 @@ class SemanticAnalyzer {
             }
         }
 
-        func typeCheck(_ declaration: Parser.AST.Declaration, _ nameMap : inout [String : (CheckerType, Bool)]) -> CheckerType {
+        func typeCheck(_ declaration: Parser.AST.Declaration, _ fileLevel: Bool, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)]) -> CheckerType {
             switch declaration {
-                case .FunctionDeclaration(let returnType, let name, let params, let body, _):
+                case .FunctionDeclaration(let returnType, let name, let params, let body, let storageClass):
+                    if !fileLevel && body != nil {
+                        print("Cannot define function \(name) inline")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                    let sc : Parser.AST.StorageClass
+                    if storageClass != nil { sc = storageClass! } else { sc = .Extern }
                     var paramTypes : [CheckerType] = []
                     for p in params {
                         switch p {
@@ -711,23 +729,35 @@ class SemanticAnalyzer {
                         }
                     }
                     let constructedType : CheckerType = .Function(convert(returnType), paramTypes)
+                    let isDefined : Bool = body != nil
+                    let isGlobal : Bool = sc != .Static
                     if let preExistingFunction = nameMap[name] {
-                        let (oldType, oldDefined) = preExistingFunction
-                        if oldDefined {
-                            print("Redefinition of function \(name)")
-                            exit(ExitCode.semanticError.rawValue)
-                        }
+                        let (oldType, oldAttributes) = preExistingFunction
                         if oldType != constructedType {
                             print("Funciton \(name) was redeclared with a different type")
                             exit(ExitCode.semanticError.rawValue)
                         }
+                        switch oldAttributes {
+                            case .FunAttr(let oldDefined, let oldGlobal):
+                                if oldGlobal && sc == .Static {
+                                    print("Static function \(name) declaration follows non-static")
+                                    exit(ExitCode.semanticError.rawValue)
+                                }
+                                if oldDefined && isDefined {
+                                    print("Function \(name) defined twice")
+                                    exit(ExitCode.semanticError.rawValue)
+                                }
+                            default:
+                                print("Unreachable non-function attributes attached to previously declared function")
+                                exit(ExitCode.semanticError.rawValue)
+                        }
                     }
-                    nameMap[name] = (constructedType, body != nil)
+                    nameMap[name] = (constructedType, .FunAttr(isDefined, isGlobal))
                     var copy = copyNameMap(nameMap)
                     for p in params {
                         switch p {
                             case .NamedParameter(let tp, let name):
-                                copy[name] = (convert(tp), true)
+                                copy[name] = (convert(tp), .LocalAttr)
                         }
                     }
                     if let b = body {
@@ -735,7 +765,7 @@ class SemanticAnalyzer {
                     } else {
                         return constructedType
                     }
-                case .VariableDeclaration(let tp, let name, let initExp, _):
+                case .VariableDeclaration(let tp, let name, let initExp, let storageClass):
                     let initType : CheckerType
                     if let e = initExp {
                         initType = typeCheck(e, nameMap)
@@ -746,21 +776,87 @@ class SemanticAnalyzer {
                         print("Declaration \(declaration) is ill-typed (left: \(convert(tp)), right: \(initType))")
                         exit(ExitCode.semanticError.rawValue)
                     }
-                    nameMap[name] = (initType, initExp != nil)
+                    if fileLevel {
+                        var initVal : InitialValue
+                        if let ie = initExp {
+                            switch ie {
+                                case .Constant(let i):
+                                    initVal = .Initial(i)
+                                default:
+                                    // NOTE: we could allow things that evaluate constantly, but we don't yet
+                                    print("Non constant expression \(ie) used to initialize global \(name)")
+                                    exit(ExitCode.semanticError.rawValue)
+                            }
+                        } else {
+                            if storageClass == .Extern {
+                                initVal = .NoInitializer
+                            } else {
+                                initVal = .Tentative
+                            }
+                        }
+                        var isGlobal = storageClass != .Static
+
+                        if let oldEntry = nameMap[name] {
+                            let (oldType, oldAttr) = oldEntry
+                            if oldType != convert(tp) {
+                                print("Variable \(name) redefined as incongruent type")
+                                exit(ExitCode.semanticError.rawValue)
+                            }
+                            switch oldAttr {
+                                case .FunAttr(_, _):
+                                    print("Unreachable function variable")
+                                    exit(ExitCode.internalError.rawValue)
+                                case .LocalAttr:
+                                    print("Unreachabel local that survived to file scope")
+                                    exit(ExitCode.internalError.rawValue)
+                                case .StaticAttr(let oldInit, let glob):
+                                    if storageClass == .Extern {
+                                        isGlobal = glob
+                                    } else {
+                                        if glob != isGlobal {
+                                            print("Conflicting variable linkage for \(name)")
+                                            exit(ExitCode.semanticError.rawValue)
+                                        }
+                                    }
+                                    switch oldInit {
+                                        case .Initial(_):
+                                            switch initVal {
+                                                case .Initial(_):
+                                                    print("Conflicting file scope variable definitions of \(name)")
+                                                    exit(ExitCode.semanticError.rawValue)
+                                                default: ()
+                                            }
+                                            initVal = oldInit
+                                        case .Tentative:
+                                            switch initVal {
+                                                case .Initial(_):
+                                                    ()
+                                                default:
+                                                    initVal = .Tentative
+                                            }
+                                        default:
+                                            ()
+                                    }
+                            }
+                        }
+                        nameMap[name] = (convert(tp), .StaticAttr(initVal, isGlobal))
+                    } else {
+                        nameMap[name] = (initType, .LocalAttr)
+                    }
                     return .Void
             }
         }
 
         func typeCheck(_ program: Parser.AST.Program) {
             var overallNameMap : [String : (
-                CheckerType,    // the value's type
-                Bool            // whether the value has been defined
+                CheckerType,            // the value's type
+                IdentifierAttributes    // storage and other attributes
             )] = [:]
 
             switch program {
                 case .Statement(let decls):
                     for d in decls {
-                        let _ = typeCheck(d, &overallNameMap)
+                        let _ = typeCheck(d, true, &overallNameMap)
                     }
             }
         }
