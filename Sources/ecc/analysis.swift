@@ -841,7 +841,37 @@ class SemanticAnalyzer {
                         }
                         nameMap[name] = (convert(tp), .StaticAttr(initVal, isGlobal))
                     } else {
-                        nameMap[name] = (initType, .LocalAttr)
+                        if storageClass == .Extern {
+                            if initExp != nil {
+                                print("Initializer on local extern variable declaration \(name)")
+                                exit(ExitCode.semanticError.rawValue)
+                            }
+                            if let oldEntry = nameMap[name] {
+                                let (oldType, _) = oldEntry
+                                if oldType != convert(tp) {
+                                    print("Variable \(name) redeclared with incompatible type")
+                                    exit(ExitCode.semanticError.rawValue)
+                                }
+                            } else {
+                                nameMap[name] = (convert(tp), .StaticAttr(.NoInitializer, true))
+                            }
+                        } else if storageClass == .Static {
+                            let initValue : InitialValue
+                            if let e = initExp {
+                                switch e {
+                                    case .Constant(let i):
+                                        initValue = .Initial(i)
+                                    default:
+                                        print("Non-constant initializer on local static variable \(name)")
+                                        exit(ExitCode.semanticError.rawValue)
+                                }
+                            } else {
+                                initValue = .Initial(0)
+                            }
+                            nameMap[name] = (convert(tp), .StaticAttr(initValue, false))
+                        } else {
+                            nameMap[name] = (initType, .LocalAttr)
+                        }
                     }
                     return .Void
             }
