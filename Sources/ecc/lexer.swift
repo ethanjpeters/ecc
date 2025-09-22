@@ -6,6 +6,7 @@ class Lexer {
     enum Token : Equatable {
         // types
         case keywordInt
+        case keywordLong
         case keywordVoid
         // storage specifiers
         case keywordStatic
@@ -308,6 +309,7 @@ class Lexer {
     func matchKeyword(identifier: String) -> Token? {
         switch identifier {
             case "int": return .keywordInt
+            case "long": return .keywordLong
             case "void": return .keywordVoid
             case "static": return .keywordStatic
             case "extern": return .keywordExtern

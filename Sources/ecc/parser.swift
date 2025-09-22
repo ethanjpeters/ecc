@@ -477,7 +477,7 @@ class Parser {
         func finishParsingLabeledStatement() -> Parser.AST.LabeledStatement {
             let next = peek(tokenStream)
             switch next {
-                case .constant(let val):
+                case .constant(_):
                     let c = parseConstant(token: next)
                     tokenStream.removeFirst()
                     let _ = expect(.colon, &tokenStream)
