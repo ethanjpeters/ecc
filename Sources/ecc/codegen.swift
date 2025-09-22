@@ -88,6 +88,8 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
             }
         case .Stack(let slot):
             return "\(slot)(%rbp)"
+        case .Data(let name):
+            return "\(name)(%rip)"
     }
 }
 
@@ -178,14 +180,25 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
 
 func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [String]) {
     switch pls {
-        case .Function(let name, let instrs):
+        case .Function(let name, let isGlobal, let instrs):
             let fName = makeFunctionName(name)
-            out.append("\t.global \(fName)")
+            if isGlobal {
+                out.append("\t.global \(fName)")
+            }
+            out.append("\t.text")
             out.append("\(fName):")
             out.append("\tpushq\t%rbp")
             out.append("\tmovq\t%rsp, %rbp")
             emitInstructions(instrs, out: &out)
             out.append("\n\n")
+        case .StaticVariable(let name, let isGlobal, let initVal):
+            if isGlobal {
+                out.append("\t.globl \(name)")
+            }
+            out.append("\t.data")
+            out.append(".balign\t4")
+            out.append("\(name):")
+            out.append("\t.long\t\(initVal)")
     }
 }
 

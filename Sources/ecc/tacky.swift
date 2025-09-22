@@ -406,7 +406,7 @@ class Tacky {
     func generateTACKYDeclaration(decl: Parser.AST.Declaration, out : inout [Tacky.IR.Instruction]) -> Tacky.IR.Declaration? {
         switch decl {
             // TODO: use type information to determine size of parameters
-            case .VariableDeclaration(_, let name, let exp, _):
+            case .VariableDeclaration(_, let name, let exp, let storageClass):
                 if exp != nil {
                     let child = generateTACKYExpression(exp!, out: &out)
                     out.append(.Copy(child, .Var(name)))
@@ -442,24 +442,36 @@ class Tacky {
         }
     }
 
-    func generateTACKYProgram(program: Parser.AST.Program, symbolTable: [String : (SemanticAnalyzer.TypeChecker.CheckerType, SemanticAnalyzer.TypeChecker.IdentifierAttributes)]) -> Tacky.IR.Program {
+    func generateTACKYSymbolTable(symbolTable: [String : (SemanticAnalyzer.TypeChecker.CheckerType, SemanticAnalyzer.TypeChecker.IdentifierAttributes)]) -> [Tacky.IR.Declaration] {
+        var tackyDefs : [Tacky.IR.Declaration] = []
+        for (name, entry) in symbolTable {
+            let (_, attrs) = entry
+            switch attrs {
+                case .StaticAttr(let initVal, let isGlobal):
+                    switch initVal {
+                        case .Initial(let i):
+                            tackyDefs.append(.StaticVariable(name, isGlobal, i))
+                        case .Tentative:
+                            tackyDefs.append(.StaticVariable(name, isGlobal, 0))
+                        case .NoInitializer: ()
+                    }
+                default: ()
+            }
+        }
+        return tackyDefs
+    }
+
+    func generateTACKYProgram(program: Parser.AST.Program, symbolTable: [String : (SemanticAnalyzer.TypeChecker.CheckerType, SemanticAnalyzer.TypeChecker.IdentifierAttributes)]) -> (Tacky.IR.Program, [Tacky.IR.Declaration]) {
         var out : [Tacky.IR.Instruction] = []
         switch program {
             case .Statement(let declarations):
                 var tackyDecls : [Tacky.IR.Declaration] = []
                 for decl in declarations {
-                    switch decl {
-                        case .VariableDeclaration(_, _, _, _):
-                            // global variable declaration; to be handled
-                            print("As yet unhandled global variable declaration")
-                            exit(ExitCode.internalError.rawValue)
-                        case .FunctionDeclaration(_, _, _, _, _):
-                            if let d = generateTACKYDeclaration(decl: decl, out: &out) {
-                                tackyDecls.append(d)
-                            }
+                    if let d = generateTACKYDeclaration(decl: decl, out: &out) {
+                        tackyDecls.append(d)
                     }
                 }
-                return .Statement(tackyDecls)
+                return (.Statement(tackyDecls), generateTACKYSymbolTable(symbolTable: symbolTable))
         }
     }
 

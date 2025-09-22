@@ -29,6 +29,7 @@ class Assembly {
             case Register(Register)
             case Pseudo(String)
             case Stack(Int)
+            case Data(String /* identifier */)
         }
 
         enum UnaryOperator {
@@ -66,7 +67,8 @@ class Assembly {
         }
 
         enum Declaration {
-            case Function(String, [Instruction])
+            case Function(String, Bool /* is global */, [Instruction])
+            case StaticVariable(String /* name */, Bool /* is global */, Int /* initial value */)
         }
 
         enum Program {
@@ -74,11 +76,14 @@ class Assembly {
         }
     }
 
-    func convert(_ val: Tacky.IR.Value) -> Tree.Operand {
+    func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration]) -> Tree.Operand {
         switch val {
             case .Constant(let c):
                 return .Immediate(c)
             case .Var(let name):
+                if let _ = symbolTable[name] {
+                    return .Data(name)
+                }
                 return .Pseudo(name)
         }
     }
@@ -95,92 +100,95 @@ class Assembly {
         }
     }
 
-    func generate(_ instructions: [Tacky.IR.Instruction], _ out: inout [Tree.Instruction]) {
+    func generate(_ instructions: [Tacky.IR.Instruction], _ symbolTable: [String : Assembly.Tree.Declaration], _ out: inout [Tree.Instruction]) {
         for instr in instructions {
             switch instr {
                 case .Return(let val):
                     let v : Tacky.IR.Value = (val == nil ? .Constant(0) : val!)
-                    out.append(.Mov(convert(v), .Register(.AX)))
+                    out.append(.Mov(convert(v, symbolTable), .Register(.AX)))
                     out.append(.Ret)
                 case .Unary(let op, let src, let dst):
                     if op == .Not {
-                        out.append(.Cmp(.Immediate(0), convert(src)))
-                        out.append(.Mov(.Immediate(0), convert(dst)))
-                        out.append(.SetCC(.E, convert(dst)))
+                        out.append(.Cmp(.Immediate(0), convert(src, symbolTable)))
+                        out.append(.Mov(.Immediate(0), convert(dst, symbolTable)))
+                        out.append(.SetCC(.E, convert(dst, symbolTable)))
                     } else {
-                        out.append(.Mov(convert(src), convert(dst)))
-                        out.append(.Unary(convert(op), convert(dst)))
+                        out.append(.Mov(convert(src, symbolTable), convert(dst, symbolTable)))
+                        out.append(.Unary(convert(op), convert(dst, symbolTable)))
                     }
                 case .Binary(let op, let src1, let src2, let dst):
+                    let src1Conv = convert(src1, symbolTable)
+                    let src2Conv = convert(src2, symbolTable)
+                    let dstConv = convert(dst, symbolTable)
                     switch op {
                         case .Add:
-                            out.append(.Mov(convert(src1), convert(dst)))
-                            out.append(.Binary(.Add, convert(src2), convert(dst)))
+                            out.append(.Mov(src1Conv, dstConv))
+                            out.append(.Binary(.Add, src1Conv, dstConv))
                         case .Subtract:
-                            out.append(.Mov(convert(src1), convert(dst)))
-                            out.append(.Binary(.Sub, convert(src2), convert(dst)))
+                            out.append(.Mov(src1Conv, dstConv))
+                            out.append(.Binary(.Sub, src2Conv, dstConv))
                         case .Multiply:
-                            out.append(.Mov(convert(src1), convert(dst)))
-                            out.append(.Binary(.Mult, convert(src2), convert(dst)))
+                            out.append(.Mov(src1Conv, dstConv))
+                            out.append(.Binary(.Mult, src2Conv, dstConv))
                         case .Divide:
-                            out.append(.Mov(convert(src1), .Register(.AX)))
+                            out.append(.Mov(src1Conv, .Register(.AX)))
                             out.append(.Cdq)
-                            out.append(.Idiv(convert(src2)))
-                            out.append(.Mov(.Register(.AX), convert(dst)))
+                            out.append(.Idiv(src2Conv))
+                            out.append(.Mov(.Register(.AX), dstConv))
                         case .Remainder:
-                            out.append(.Mov(convert(src1), .Register(.AX)))
+                            out.append(.Mov(src1Conv, .Register(.AX)))
                             out.append(.Cdq)
-                            out.append(.Idiv(convert(src2)))
-                            out.append(.Mov(.Register(.DX), convert(dst)))
+                            out.append(.Idiv(src2Conv))
+                            out.append(.Mov(.Register(.DX), dstConv))
                         case .Equal:
-                            out.append(.Cmp(convert(src2), convert(src1)))
-                            out.append(.Mov(.Immediate(0), convert(dst)))
-                            out.append(.SetCC(.E, convert(dst)))
+                            out.append(.Cmp(src2Conv, src1Conv))
+                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.SetCC(.E, dstConv))
                         case .NotEqual:
-                            out.append(.Cmp(convert(src2), convert(src1)))
-                            out.append(.Mov(.Immediate(0), convert(dst)))
-                            out.append(.SetCC(.NE, convert(dst)))
+                            out.append(.Cmp(src2Conv, src1Conv))
+                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.SetCC(.NE, dstConv))
                         case .LessThan:
-                            out.append(.Cmp(convert(src2), convert(src1)))
-                            out.append(.Mov(.Immediate(0), convert(dst)))
-                            out.append(.SetCC(.L, convert(dst)))
+                            out.append(.Cmp(src2Conv, src1Conv))
+                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.SetCC(.L, dstConv))
                         case .LessOrEqual:
-                            out.append(.Cmp(convert(src2), convert(src1)))
-                            out.append(.Mov(.Immediate(0), convert(dst)))
-                            out.append(.SetCC(.LE, convert(dst)))
+                            out.append(.Cmp(src2Conv, src1Conv))
+                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.SetCC(.LE, dstConv))
                         case .GreaterThan: 
-                            out.append(.Cmp(convert(src2), convert(src1)))
-                            out.append(.Mov(.Immediate(0), convert(dst)))
-                            out.append(.SetCC(.G, convert(dst)))
+                            out.append(.Cmp(src2Conv, src1Conv))
+                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.SetCC(.G, dstConv))
                         case .GreaterOrEqual:
-                            out.append(.Cmp(convert(src2), convert(src1)))
-                            out.append(.Mov(.Immediate(0), convert(dst)))
-                            out.append(.SetCC(.GE, convert(dst)))
+                            out.append(.Cmp(src2Conv, src1Conv))
+                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.SetCC(.GE, dstConv))
                         case .BitwiseAnd:
-                            out.append(.Mov(convert(src1), convert(dst)))
-                            out.append(.Binary(.And, convert(src2), convert(dst)))
+                            out.append(.Mov(src1Conv, dstConv))
+                            out.append(.Binary(.And, src2Conv, dstConv))
                         case .BitwiseOr:
-                            out.append(.Mov(convert(src1), convert(dst)))
-                            out.append(.Binary(.Or, convert(src2), convert(dst)))
+                            out.append(.Mov(src1Conv, dstConv))
+                            out.append(.Binary(.Or, src2Conv, dstConv))
                         case .BitwiseXor:
-                            out.append(.Mov(convert(src1), convert(dst)))
-                            out.append(.Binary(.Xor, convert(src2), convert(dst)))
+                            out.append(.Mov(src1Conv, dstConv))
+                            out.append(.Binary(.Xor, src2Conv, dstConv))
                         case .BitwiseShiftRight:
-                            out.append(.Mov(convert(src1), convert(dst)))
-                            out.append(.Binary(.Sar, convert(src2), convert(dst)))
+                            out.append(.Mov(src1Conv, dstConv))
+                            out.append(.Binary(.Sar, src2Conv, dstConv))
                         case .BitwiseShiftLeft:
-                            out.append(.Mov(convert(src1), convert(dst)))
-                            out.append(.Binary(.Shl, convert(src2), convert(dst)))
+                            out.append(.Mov(src1Conv, dstConv))
+                            out.append(.Binary(.Shl, src2Conv, dstConv))
                     }
                 case .Copy(let src, let dst):
-                    out.append(.Mov(convert(src), convert(dst)))
+                    out.append(.Mov(convert(src, symbolTable), convert(dst, symbolTable)))
                 case .Jump(let label):
                     out.append(.Jmp(label))
                 case .JumpIfZero(let val, let label):
-                    out.append(.Cmp(.Immediate(0), convert(val)))
+                    out.append(.Cmp(.Immediate(0), convert(val, symbolTable)))
                     out.append(.JmpCC(.E, label))
                 case .JumpIfNotZero(let val, let label):
-                    out.append(.Cmp(.Immediate(0), convert(val)))
+                    out.append(.Cmp(.Immediate(0), convert(val, symbolTable)))
                     out.append(.JmpCC(.NE, label))
                 case .Label(let name):
                     out.append(.Label(name))
@@ -190,23 +198,23 @@ class Assembly {
                     var copiedParams = params
                     if !copiedParams.isEmpty {
                         let p = copiedParams.removeFirst()
-                        out.append(.Mov(convert(p), .Register(.DI)))
+                        out.append(.Mov(convert(p, symbolTable), .Register(.DI)))
                     }
                     if !copiedParams.isEmpty {
                         let p = copiedParams.removeFirst()
-                        out.append(.Mov(convert(p), .Register(.SI)))
+                        out.append(.Mov(convert(p, symbolTable), .Register(.SI)))
                     }
                     if !copiedParams.isEmpty {
                         let p = copiedParams.removeFirst()
-                        out.append(.Mov(convert(p), .Register(.CX)))
+                        out.append(.Mov(convert(p, symbolTable), .Register(.CX)))
                     }
                     if !copiedParams.isEmpty {
                         let p = copiedParams.removeFirst()
-                        out.append(.Mov(convert(p), .Register(.R8)))
+                        out.append(.Mov(convert(p, symbolTable), .Register(.R8)))
                     }
                     if !copiedParams.isEmpty {
                         let p = copiedParams.removeFirst()
-                        out.append(.Mov(convert(p), .Register(.R9)))
+                        out.append(.Mov(convert(p, symbolTable), .Register(.R9)))
                     }
 
                     // the System V ABI requires the stack to be 16-byte aligned
@@ -218,7 +226,7 @@ class Assembly {
 
                     copiedParams.reverse()
                     for p in copiedParams {
-                        let src = convert(p)
+                        let src = convert(p, symbolTable)
                         switch src {
                             case .Register(_): fallthrough
                             case .Immediate(_):
@@ -237,12 +245,12 @@ class Assembly {
                     }
 
                     // move the result
-                    out.append(.Mov(.Register(.AX), convert(result)))
+                    out.append(.Mov(.Register(.AX), convert(result, symbolTable)))
             }
         }
     }
 
-    func generate(_ pls: Tacky.IR.Declaration) -> Tree.Declaration {
+    func generate(_ pls: Tacky.IR.Declaration, _ symbolTable: [String : Assembly.Tree.Declaration]) -> Tree.Declaration {
         switch pls {
             case .Function(let name, let isGlobal, let params, let instrs):
                 var out : [Tree.Instruction] = []
@@ -273,18 +281,32 @@ class Assembly {
                     out.append(.Mov(.Stack(16 + counter), .Pseudo(p)))
                     counter = counter + 8
                 }
-                generate(instrs, &out)
-                return .Function(name, out)
+                generate(instrs, symbolTable, &out)
+                return .Function(name, isGlobal, out)
             case .StaticVariable(_, _, _):
                 print("As yet unhandled global variable caught while generating assembly")
                 exit(ExitCode.internalError.rawValue)
         }
     }
 
-    func generate(program: Tacky.IR.Program) -> Tree.Program {
+    func generate(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration]) -> Tree.Program {
+        var assemblyDecls : [Assembly.Tree.Declaration] = []
+        var internalSymbolTable : [String : Assembly.Tree.Declaration] = [:]
+        for tackyDef in symbolTable {
+            switch tackyDef {
+                case .StaticVariable(let name, let isGlobal, let initValue):
+                    let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, initValue)
+                    assemblyDecls.append(assemblyEntry)
+                    internalSymbolTable[name] = assemblyEntry
+                default: ()
+            }
+        }
         switch program {
             case .Statement(let declarations):
-                return .Statement(declarations.map { generate($0) })
+                for d in declarations {
+                    assemblyDecls.append(generate(d, internalSymbolTable))
+                }
+                return .Statement(assemblyDecls)
         }
     }
 
@@ -303,6 +325,8 @@ class Assembly {
                 nameStackMapping[name] = tmp
                 return .Stack((tmp+1) * -4)
             case .Stack(_):
+                return op
+            case .Data(_):
                 return op
         }
     }
@@ -350,8 +374,10 @@ class Assembly {
 
     func replacePseudoRegisters(_ pls: Tree.Declaration) -> Tree.Declaration {
         switch pls {
-            case .Function(let name, let instrs):
-                return .Function(name, replacePseudoRegisters(instrs))
+            case .Function(let name, let isGlobal, let instrs):
+                return .Function(name, isGlobal, replacePseudoRegisters(instrs))
+            case .StaticVariable(let name, let isGlobal, let initVal):
+                return .StaticVariable(name, isGlobal, initVal)
         }
     }
 
@@ -369,11 +395,13 @@ class Assembly {
                 case .AllocateStack(_): out.append(instr)
                 case .Mov(let opSrc, let opDst):
                     switch opSrc {
-                        case .Stack(let srcSlot):
+                        case .Stack(_): fallthrough
+                        case .Data(_):
                             switch opDst {
-                                case .Stack(let dstSlot):
-                                    out.append(.Mov(.Stack(srcSlot), .Register(.R10)))
-                                    out.append(.Mov(.Register(.R10), .Stack(dstSlot)))
+                                case .Stack(_): fallthrough
+                                case .Data(_):
+                                    out.append(.Mov(opSrc, .Register(.R10)))
+                                    out.append(.Mov(.Register(.R10), opDst))
                                 default:
                                     out.append(instr)
                             }
@@ -388,11 +416,13 @@ class Assembly {
                         case .Sub: fallthrough
                         case .And:
                             switch src {
-                                case .Stack(let srcSlot):
+                                case .Data(_): fallthrough
+                                case .Stack(_):
                                 switch dst {
-                                    case .Stack(let dstSlot):
-                                        out.append(.Mov(.Stack(srcSlot), .Register(.R10)))
-                                        out.append(.Binary(op, .Register(.R10), .Stack(dstSlot)))
+                                    case .Data(_): fallthrough
+                                    case .Stack(_):
+                                        out.append(.Mov(src, .Register(.R10)))
+                                        out.append(.Binary(op, .Register(.R10), dst))
                                     default: out.append(instr)
                                 }
                                 default: out.append(instr)
@@ -401,20 +431,22 @@ class Assembly {
                         case .Or: fallthrough
                         case .Xor:
                             switch dst {
-                                case .Stack(let val):
-                                    out.append(.Mov(.Stack(val), .Register(.R11)))
+                                case .Data(_): fallthrough
+                                case .Stack(_):
+                                    out.append(.Mov(dst, .Register(.R11)))
                                     out.append(.Binary(op, src, .Register(.R11)))
-                                    out.append(.Mov(.Register(.R11), .Stack(val)))
+                                    out.append(.Mov(.Register(.R11), dst))
                                 default:
                                     out.append(instr)
                             }
                         case .Sar: fallthrough
                         case .Shl:
                             switch src {
-                                case .Stack(let val):
+                                case .Data(_): fallthrough
+                                case .Stack(_):
                                     // move the value off of the stack and into CL, which is currently never used otherwise
                                     // and is in no danger of being overwritten
-                                    out.append(.Mov(.Stack(val), .Register(.CX)))
+                                    out.append(.Mov(src, .Register(.CX)))
                                     out.append(.Binary(op, .Register(.CL), dst))
                                 default:
                                     out.append(instr)
@@ -430,10 +462,12 @@ class Assembly {
                     }
                 case .Cmp(let left, let right):
                     switch left {
-                        case .Stack(let srcSlot):
+                        case .Data(_): fallthrough
+                        case .Stack(_):
                             switch right {
+                                case .Data(_): fallthrough
                                 case .Stack(_):
-                                    out.append(.Mov(.Stack(srcSlot), .Register(.R10)))
+                                    out.append(.Mov(left, .Register(.R10)))
                                     out.append(.Cmp(.Register(.R10), right))
                                 case .Immediate(_):
                                     out.append(.Mov(right, .Register(.R11)))
@@ -464,8 +498,10 @@ class Assembly {
 
     func fixUpMoves(_ pls: Tree.Declaration) -> Tree.Declaration {
         switch pls {
-            case .Function(let name, let instrs):
-                return .Function(name, fixUpMoves(instrs))
+            case .Function(let name, let isGlobal, let instrs):
+                return .Function(name, isGlobal, fixUpMoves(instrs))
+            case .StaticVariable(_, _, _):
+                return pls
         }
     }
 

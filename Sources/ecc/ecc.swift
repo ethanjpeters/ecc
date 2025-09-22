@@ -115,7 +115,7 @@ struct ECC : ParsableCommand {
         }
 
         // tacky IR gen
-        let TAC = Tacky().generateTACKYProgram(program: validatedAst, symbolTable: symbolTable)
+        let (TAC, tackyDefs) = Tacky().generateTACKYProgram(program: validatedAst, symbolTable: symbolTable)
 
         if tacky {
             if verbose {
@@ -128,7 +128,7 @@ struct ECC : ParsableCommand {
 
         let assembler = Assembly()
 
-        var assembly = assembler.generate(program: TAC)
+        var assembly = assembler.generate(program: TAC, symbolTable: tackyDefs)
         assembly = assembler.replacePseudoRegisters(program: assembly)
         assembly = assembler.fixUpMoves(program: assembly)
 
