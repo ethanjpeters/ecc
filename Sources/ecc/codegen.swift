@@ -196,7 +196,7 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                 out.append("\t.globl \(name)")
             }
             out.append("\t.data")
-            out.append(".balign\t4")
+            out.append("\t.balign\t4")
             out.append("\(name):")
             out.append("\t.long\t\(initVal)")
     }

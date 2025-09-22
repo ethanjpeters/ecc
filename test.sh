@@ -1,5 +1,15 @@
 #!/bin/bash
 
+swift run ecc TestSources/storage.c
+./storage
+if [[ $? -ne 13 ]]; then
+    echo "storage: Expected exit code 13 but got $?"
+    exit 1
+else
+    echo "storage: success"
+fi
+rm storage
+
 swift run ecc TestSources/polyparam.c
 ./polyparam
 if [[ $? -ne 78 ]]; then
