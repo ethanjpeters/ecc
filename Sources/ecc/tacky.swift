@@ -138,8 +138,10 @@ class Tacky {
         }
 
         switch exp {
-            case .Constant(let val):
-                return .Constant(val)
+            case .ConstInt(let val):
+                return .Constant(Int(val))
+            case .ConstLong(let val):
+                return .Constant(Int(val))
             case .Unary(let op, let exp):
                 if isIncOrDec(op) {
                     let src = generateTACKYExpression(exp, out: &out)

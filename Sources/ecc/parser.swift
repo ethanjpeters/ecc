@@ -36,7 +36,8 @@ class Parser {
         }
         
         indirect enum Expression {
-            case Constant(Int)
+            case ConstInt(Int32)
+            case ConstLong(Int64)
             case Unary(UnaryOperator, Expression)
             case Binary(BinaryOperator, Expression, Expression)
             case Var(String /* identifier */)
@@ -380,6 +381,37 @@ class Parser {
         return expressionList
     }
 
+    func parseConstant(token: Lexer.Token) -> Parser.AST.Expression {
+        switch token {
+            case .constant(let val):
+                var trimmedVal : String = val
+                var shouldBeLong = false
+                if trimmedVal.last == "l" || trimmedVal.last == "L" {
+                    trimmedVal.removeLast()
+                    shouldBeLong = true
+                }
+
+                guard let longVal = Int64(trimmedVal) else {
+                    print("Integer constant \(trimmedVal) was not a valid integer")
+                    exit(ExitCode.parserError.rawValue)
+                }
+
+                shouldBeLong = shouldBeLong || longVal > Int32.max
+
+                if shouldBeLong {
+                    return .ConstLong(longVal)
+                }
+                guard let int32Val = Int32(trimmedVal) else {
+                    print("Integer constant \(trimmedVal) was not a valid integer")
+                    exit(ExitCode.parserError.rawValue)
+                }
+                return .ConstInt(int32Val)
+            default:
+                print("Unreachable non-constant constant")
+                exit(ExitCode.internalError.rawValue)
+        }
+    }
+
     func parseFactor(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Expression {
         if tokenStream.isEmpty {
             print("Expected factor but encountered end of token stream")
@@ -390,12 +422,8 @@ class Parser {
         var lhs : Parser.AST.Expression
         switch next {
             // parse an integer constant
-        case .constant(let val):
-            guard let intVal = Int(val) else {
-                print("Integer constant \(val) was not a valid integer")
-                exit(ExitCode.parserError.rawValue)
-            }
-            lhs = .Constant(intVal)
+        case .constant(_):
+            lhs = parseConstant(token: next)
             // variable
         case .identifier(let name):
             lhs = .Var(name)
@@ -447,15 +475,13 @@ class Parser {
     
     func parseLabeledStatement(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.LabeledStatement {
         func finishParsingLabeledStatement() -> Parser.AST.LabeledStatement {
-            switch peek(tokenStream) {
+            let next = peek(tokenStream)
+            switch next {
                 case .constant(let val):
+                    let c = parseConstant(token: next)
                     tokenStream.removeFirst()
                     let _ = expect(.colon, &tokenStream)
-                    guard let intVal = Int(val) else {
-                        print("Integer constant \(val) was not a valid integer")
-                        exit(ExitCode.parserError.rawValue)
-                    }
-                    return .CaseStatement(.Constant(intVal), parseStatement(tokenStream: &tokenStream))
+                    return .CaseStatement(c, parseStatement(tokenStream: &tokenStream))
                 default:
                     print("Only constant values may be used in case statements")
                     exit(ExitCode.semanticError.rawValue)

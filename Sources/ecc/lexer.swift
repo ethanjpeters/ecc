@@ -119,6 +119,11 @@ class Lexer {
             let c = sourceFileCharacters[j]
             let ascii = c.asciiValue!
 
+            if c == "l" || c == "L" {
+                matchedString = matchedString + String(c)
+                break
+            }
+
             if !(ascii >= Character("0").asciiValue! && ascii <= Character("9").asciiValue!) {
                 break
             }

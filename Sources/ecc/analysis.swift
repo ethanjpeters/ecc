@@ -45,7 +45,8 @@ class SemanticAnalyzer {
                     exit(ExitCode.internalError.rawValue)
                 case .Binary(let op, let left, let right):
                     return .Binary(op, resolveExpression(left, &nameMap), resolveExpression(right, &nameMap))
-                case .Constant(_):
+                case .ConstInt(_): fallthrough
+                case .ConstLong(_):
                     return exp
                 case .Unary(let op, let child):
                     return .Unary(op, resolveExpression(child, &nameMap))
@@ -517,7 +518,10 @@ class SemanticAnalyzer {
 
         func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> CheckerType {
             switch expression {
-                case .Constant(_): return .Int  // TODO: other types of constants
+                case .ConstInt(_): return .Int
+                case .ConstLong(_):
+                    print("UN_REACH_ABLE")
+                    exit(ExitCode.internalError.rawValue)
                 case .Unary(let unOp, let e):
                     let eType = typeCheck(e, nameMap) // TODO: not all operators make sense on every type
                     if eType == .Void {
@@ -780,8 +784,10 @@ class SemanticAnalyzer {
                         var initVal : InitialValue
                         if let ie = initExp {
                             switch ie {
-                                case .Constant(let i):
-                                    initVal = .Initial(i)
+                                case .ConstInt(let i):
+                                    initVal = .Initial(Int(i))
+                                case .ConstLong(let i):
+                                    initVal = .Initial(Int(i))
                                 default:
                                     // NOTE: we could allow things that evaluate constantly, but we don't yet
                                     print("Non constant expression \(ie) used to initialize global \(name)")
@@ -859,8 +865,10 @@ class SemanticAnalyzer {
                             let initValue : InitialValue
                             if let e = initExp {
                                 switch e {
-                                    case .Constant(let i):
-                                        initValue = .Initial(i)
+                                    case .ConstInt(let i):
+                                        initValue = .Initial(Int(i))
+                                    case .ConstLong(let i):
+                                        initValue = .Initial(Int(i))
                                     default:
                                         print("Non-constant initializer on local static variable \(name)")
                                         exit(ExitCode.semanticError.rawValue)
