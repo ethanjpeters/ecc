@@ -123,7 +123,7 @@ class Assembly {
                     switch op {
                         case .Add:
                             out.append(.Mov(src1Conv, dstConv))
-                            out.append(.Binary(.Add, src1Conv, dstConv))
+                            out.append(.Binary(.Add, src2Conv, dstConv))
                         case .Subtract:
                             out.append(.Mov(src1Conv, dstConv))
                             out.append(.Binary(.Sub, src2Conv, dstConv))
