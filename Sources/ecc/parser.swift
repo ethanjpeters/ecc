@@ -45,6 +45,7 @@ class Parser {
             case CompoundAssignment(BinaryOperator, Expression, Expression)
             case Conditional(Expression /* condition */, Expression, Expression)
             case FunctionCall(Expression /* "name" */, [Expression] /* parameters */)
+            case Cast(CType, Expression)
         }
         
         enum BlockItem {
@@ -436,11 +437,21 @@ class Parser {
             // variable
         case .identifier(let name):
             lhs = .Var(name)
-            // expression wrapped in parentheses
+            // expression wrapped in parentheses, or cast
         case .openParen:
-            let out = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
-            let _ = expect(.closeParen, &tokenStream)
-            lhs = out
+            if isType(tokenStream) {
+                // "(" <type> ")" <exp>
+                // NOTE: we simplify here because I hate the constructs "long int" and "int long"
+                let tp = convertType(expectType(&tokenStream))
+                let _ = expect(.closeParen, &tokenStream)
+                let child = parseFactor(tokenStream: &tokenStream)
+                lhs = .Cast(tp, child)
+            } else {
+                // "(" <exp> ")"
+                let out = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                let _ = expect(.closeParen, &tokenStream)
+                lhs = out
+            }
             // <unop> <exp>
         case .complement:
             let child = parseFactor(tokenStream: &tokenStream)
