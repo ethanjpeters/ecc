@@ -117,9 +117,6 @@ class Parser {
         if nextToken != tok {
             let (line, col) = position
             print("Expected \(tok) at line \(line), column \(col) but encountered \(nextToken)")
-            // DEBUG
-            print("REAMAINING TOKEN STREAM: \(tokenStream)")
-            // END DEBUG
             exit(ExitCode.parserError.rawValue)
         }
         
