@@ -274,6 +274,9 @@ class Tacky {
                 let dst : Tacky.IR.Value = .Var(dstName)
                 out.append(.Call(funName, paramValues, dst))
                 return dst
+            case .Cast(let targetType, let chidl):
+                print("As-yet-unhandled cast expression found during TACKY generation")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 

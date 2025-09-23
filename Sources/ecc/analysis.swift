@@ -65,6 +65,8 @@ class SemanticAnalyzer {
                         exit(ExitCode.semanticError.rawValue)
                     }
                     return .FunctionCall(resolveExpression(fun, &nameMap), parameters.map { resolveExpression($0, &nameMap) })
+                case .Cast(let targetType, let child):
+                    return .Cast(targetType, resolveExpression(child, &nameMap))
             }
         }
 
@@ -618,6 +620,9 @@ class SemanticAnalyzer {
                             print("Can not call value \(lValue) of type \(fType)")
                             exit(ExitCode.semanticError.rawValue)
                     }
+                case .Cast(let targetType, let child):
+                    print("As-yet-unhandled cast expression found during type checking")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
