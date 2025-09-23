@@ -84,6 +84,7 @@ class Parser {
         
         enum CType {
             case Int
+            case Long
             case Void
         }
 
@@ -132,6 +133,7 @@ class Parser {
         let (nextToken, position) = tokenStream.removeFirst()
         switch nextToken {
             case .keywordInt: fallthrough
+            case .keywordLong: fallthrough
             case .keywordVoid: return nextToken
             default:
                 print("Found unexpected token \(nextToken) at line \(position.0), column \(position.1) when looking for type")
@@ -173,6 +175,7 @@ class Parser {
     func convertType(_ token: Lexer.Token) -> Parser.AST.CType {
         switch token {
             case .keywordInt: return .Int
+            case .keywordLong: return .Long
             case .keywordVoid: return .Void
             default:
                 print("Unreachable not-a-type while converting lexical type to AST")
@@ -199,6 +202,15 @@ class Parser {
         return tokenStream.first!.0
     }
     
+    func isType(_ tokenStream: [(Lexer.Token, LexerPosition)]) -> Bool {
+        switch peek(tokenStream) {
+            case .keywordInt: fallthrough
+            case .keywordLong: fallthrough
+            case .keywordVoid: return true
+            default: return false
+        }
+    }
+
     func precedence(_ token: Lexer.Token) -> Int {
         switch token {
         case .asterisk: return 50
@@ -620,7 +632,7 @@ class Parser {
         // determine if we're lookoing at a statement or a declaration
         // for now we can cheat: declarations all start with a type name and statements do not
         
-        if peek(tokenStream) == .keywordInt {
+        if isType(tokenStream) {
             // declaration
             return .D(parseDeclaration(tokenStream: &tokenStream))
         } else {
@@ -650,14 +662,21 @@ class Parser {
         while !doneParsingSpecs {
             switch peek(tokenStream) {
                 case .keywordVoid: fallthrough
-                case .keywordInt:
-                    if let _ = declaredType {
-                        let (next, position) = tokenStream[0]
-                        let (line, col) = position
-                        print("Duplicate type specifier \(next) found at line \(line), column \(col)")
-                        exit(ExitCode.parserError.rawValue)
+                case .keywordInt: fallthrough
+                case .keywordLong:
+                    if let dt = declaredType {
+                        if (dt == .Int && peek(tokenStream) == .keywordLong) || (dt == .Long && peek(tokenStream) == .keywordInt) {
+                            // allow `long int` and `int long`
+                            declaredType = .Long
+                        } else {
+                            let (next, position) = tokenStream[0]
+                            let (line, col) = position
+                            print("Duplicate type specifier \(next) found at line \(line), column \(col)")
+                            exit(ExitCode.parserError.rawValue)
+                        }
+                    } else {
+                        declaredType = convertType(expectType(&tokenStream))
                     }
-                    declaredType = convertType(expectType(&tokenStream))
                 case .keywordStatic: fallthrough
                 case .keywordExtern:
                     if let _ = storageClass {
@@ -729,7 +748,7 @@ class Parser {
     
     func parseForInit(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.ForInit {
         // NOTE: will need to modify this when we introduce more types
-        if peek(tokenStream) == .keywordInt {
+        if peek(tokenStream) == .keywordInt || peek(tokenStream) == .keywordLong {
             let childDecl = parseDeclaration(tokenStream: &tokenStream)
             // weird edge case
             switch childDecl {

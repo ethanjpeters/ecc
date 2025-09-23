@@ -505,6 +505,9 @@ class SemanticAnalyzer {
             switch pType {
                 case .Int: return .Int
                 case .Void: return .Void
+                case .Long:
+                    print("As-yet-unhandled parsed type 'long'")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
