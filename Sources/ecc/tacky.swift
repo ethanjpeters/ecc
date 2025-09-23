@@ -138,11 +138,11 @@ class Tacky {
         }
 
         switch exp {
-            case .ConstInt(let val):
+            case .ConstInt(let val, let tp):
                 return .Constant(Int(val))
-            case .ConstLong(let val):
+            case .ConstLong(let val, let tp):
                 return .Constant(Int(val))
-            case .Unary(let op, let exp):
+            case .Unary(let op, let exp, let tp):
                 if isIncOrDec(op) {
                     let src = generateTACKYExpression(exp, out: &out)
                     let dstName = makeTemp()
@@ -182,7 +182,7 @@ class Tacky {
                     out.append(.Unary(tackyOp, src, dst))
                     return dst
                 }
-            case .Binary(let op, let left, let right):
+            case .Binary(let op, let left, let right, let tp):
                 if op == .And {
                     let v1 = generateTACKYExpression(left, out: &out)
                     let falseLabel = makeLabel("and_false")
@@ -226,22 +226,22 @@ class Tacky {
                     out.append(.Binary(tackyOp, v1, v2, dst))
                     return dst
                 }
-            case .Var(let name):
+            case .Var(let name, let tp):
                 return .Var(name)
-            case .Assignment(let lVal, let rVal):
+            case .Assignment(let lVal, let rVal, let tp):
                 let result = generateTACKYExpression(rVal, out: &out)
                 switch lVal {
-                    case .Var(let name):
+                    case .Var(let name, let tp):
                         out.append(.Copy(result, .Var(name)))
                         return .Var(name)
                     default:
                         print("Unreachable non-variable lValue")
                         exit(ExitCode.internalError.rawValue)
                 }
-            case .CompoundAssignment(_,_,_):
+            case .CompoundAssignment(_,_,_,_):
                 print("Unreachable compound assignment")
                 exit(ExitCode.internalError.rawValue)
-            case .Conditional(let cond, let left, let right):
+            case .Conditional(let cond, let left, let right, let tp):
                 let condValue = generateTACKYExpression(cond, out: &out)
                 let dstName = makeTemp()
                 let dst : Tacky.IR.Value = .Var(dstName)
@@ -256,11 +256,11 @@ class Tacky {
                 out.append(.Copy(e2Value, dst))
                 out.append(.Label(endLabel))
                 return dst
-            case .FunctionCall(let fun, let params):
+            case .FunctionCall(let fun, let params, let tp):
                 // fun has already been constrained to an lValue, currently just a name
                 let funName : String
                 switch fun {
-                    case .Var(let fnNm):
+                    case .Var(let fnNm, let tp):
                         funName = fnNm
                     default:
                         print("Unreachable non-lValue function \(fun)")
@@ -274,7 +274,7 @@ class Tacky {
                 let dst : Tacky.IR.Value = .Var(dstName)
                 out.append(.Call(funName, paramValues, dst))
                 return dst
-            case .Cast(let targetType, let chidl):
+            case .Cast(let targetType, let child, let tp):
                 print("As-yet-unhandled cast expression found during TACKY generation")
                 exit(ExitCode.internalError.rawValue)
         }

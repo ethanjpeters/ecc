@@ -34,39 +34,39 @@ class SemanticAnalyzer {
 
         func resolveExpression(_ exp : Parser.AST.Expression, _ nameMap: inout [String : NameMapEntry]) -> Parser.AST.Expression {
             switch exp {
-                case .Assignment(let lValue, let rValue):
+                case .Assignment(let lValue, let rValue, _):
                     if !isValidLValue(lValue) {
                         print("Invalid lvalue in assignment \(exp)")
                         exit(ExitCode.semanticError.rawValue)
                     }
-                    return .Assignment(resolveExpression(lValue, &nameMap), resolveExpression(rValue, &nameMap))
-                case .CompoundAssignment(_,_,_):
+                    return .Assignment(resolveExpression(lValue, &nameMap), resolveExpression(rValue, &nameMap), nil)
+                case .CompoundAssignment(_,_,_,_):
                     print("Unreachable: Unsupported compound assignment found while analyzing")
                     exit(ExitCode.internalError.rawValue)
-                case .Binary(let op, let left, let right):
-                    return .Binary(op, resolveExpression(left, &nameMap), resolveExpression(right, &nameMap))
-                case .ConstInt(_): fallthrough
-                case .ConstLong(_):
+                case .Binary(let op, let left, let right, _):
+                    return .Binary(op, resolveExpression(left, &nameMap), resolveExpression(right, &nameMap), nil)
+                case .ConstInt(_, _): fallthrough
+                case .ConstLong(_, _):
                     return exp
-                case .Unary(let op, let child):
-                    return .Unary(op, resolveExpression(child, &nameMap))
-                case .Var(let name):
+                case .Unary(let op, let child, _):
+                    return .Unary(op, resolveExpression(child, &nameMap), nil)
+                case .Var(let name, _):
                     if let uniqueName = nameMap[name] {
-                        return .Var(uniqueName.newName)
+                        return .Var(uniqueName.newName, nil)
                     } else {
                         print("Undeclared variable \(name)")
                         exit(ExitCode.semanticError.rawValue)
                     }
-                case .Conditional(let cond, let left, let right):
-                    return .Conditional(resolveExpression(cond, &nameMap), resolveExpression(left, &nameMap), resolveExpression(right, &nameMap))
-                case .FunctionCall(let fun, let parameters):
+                case .Conditional(let cond, let left, let right, _):
+                    return .Conditional(resolveExpression(cond, &nameMap), resolveExpression(left, &nameMap), resolveExpression(right, &nameMap), nil)
+                case .FunctionCall(let fun, let parameters, _):
                     if !isValidLValue(fun) {    // TODO: is this actually all we need for something to be callable?
                         print("Function \(fun) could not be resolved to valid lvalue")
                         exit(ExitCode.semanticError.rawValue)
                     }
-                    return .FunctionCall(resolveExpression(fun, &nameMap), parameters.map { resolveExpression($0, &nameMap) })
-                case .Cast(let targetType, let child):
-                    return .Cast(targetType, resolveExpression(child, &nameMap))
+                    return .FunctionCall(resolveExpression(fun, &nameMap), parameters.map { resolveExpression($0, &nameMap) }, nil)
+                case .Cast(let targetType, let child, _):
+                    return .Cast(targetType, resolveExpression(child, &nameMap), nil)
             }
         }
 
@@ -487,6 +487,7 @@ class SemanticAnalyzer {
     class TypeChecker {
         indirect enum CheckerType : Equatable {
             case Int
+            case Long
             case Void
             case Function(CheckerType /* return */, [CheckerType] /* params */)
         }
@@ -507,9 +508,7 @@ class SemanticAnalyzer {
             switch pType {
                 case .Int: return .Int
                 case .Void: return .Void
-                case .Long:
-                    print("As-yet-unhandled parsed type 'long'")
-                    exit(ExitCode.internalError.rawValue)
+                case .Long: return .Long
             }
         }
 
@@ -616,6 +615,7 @@ class SemanticAnalyzer {
                             }
                             return rType
                         case .Int: fallthrough
+                        case .Long: fallthrough
                         case .Void:
                             print("Can not call value \(lValue) of type \(fType)")
                             exit(ExitCode.semanticError.rawValue)

@@ -36,16 +36,16 @@ class Parser {
         }
         
         indirect enum Expression {
-            case ConstInt(Int32)
-            case ConstLong(Int64)
-            case Unary(UnaryOperator, Expression)
-            case Binary(BinaryOperator, Expression, Expression)
-            case Var(String /* identifier */)
-            case Assignment(Expression, Expression)
-            case CompoundAssignment(BinaryOperator, Expression, Expression)
-            case Conditional(Expression /* condition */, Expression, Expression)
-            case FunctionCall(Expression /* "name" */, [Expression] /* parameters */)
-            case Cast(CType, Expression)
+            case ConstInt(Int32, CType?)
+            case ConstLong(Int64, CType?)
+            case Unary(UnaryOperator, Expression, CType?)
+            case Binary(BinaryOperator, Expression, Expression, CType?)
+            case Var(String /* identifier */, CType?)
+            case Assignment(Expression, Expression, CType?)
+            case CompoundAssignment(BinaryOperator, Expression, Expression, CType?)
+            case Conditional(Expression /* condition */, Expression, Expression, CType?)
+            case FunctionCall(Expression /* "name" */, [Expression] /* parameters */, CType?)
+            case Cast(CType, Expression, CType?)
         }
         
         enum BlockItem {
@@ -317,19 +317,19 @@ class Parser {
                 tokenStream.removeFirst()
                 let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: precedence(nextToken))
                 if nextToken == .equal {
-                    left = .Assignment(left, right)
+                    left = .Assignment(left, right, nil)
                 } else {
                     switch nextToken {
-                    case .plusEqual: left = .CompoundAssignment(.Add, left, right)
-                    case .minusEqual: left = .CompoundAssignment(.Subtract, left, right)
-                    case .asteriskEqual: left = .CompoundAssignment(.Multiply, left, right)
-                    case .slashEqual: left = .CompoundAssignment(.Divide, left, right)
-                    case .percentEqual: left = .CompoundAssignment(.Remainder, left, right)
-                    case .ampersandEqual: left = .CompoundAssignment(.BitwiseAnd, left, right)
-                    case .pipeEqual: left = .CompoundAssignment(.BitwiseOr, left, right)
-                    case .carrotEqual: left = .CompoundAssignment(.BitwiseXor, left, right)
-                    case .shiftLeftEqual: left = .CompoundAssignment(.BitwiseShiftLeft, left, right)
-                    case .shiftRightEqual: left = .CompoundAssignment(.BitwiseShiftRight, left, right)
+                    case .plusEqual: left = .CompoundAssignment(.Add, left, right, nil)
+                    case .minusEqual: left = .CompoundAssignment(.Subtract, left, right, nil)
+                    case .asteriskEqual: left = .CompoundAssignment(.Multiply, left, right, nil)
+                    case .slashEqual: left = .CompoundAssignment(.Divide, left, right, nil)
+                    case .percentEqual: left = .CompoundAssignment(.Remainder, left, right, nil)
+                    case .ampersandEqual: left = .CompoundAssignment(.BitwiseAnd, left, right, nil)
+                    case .pipeEqual: left = .CompoundAssignment(.BitwiseOr, left, right, nil)
+                    case .carrotEqual: left = .CompoundAssignment(.BitwiseXor, left, right, nil)
+                    case .shiftLeftEqual: left = .CompoundAssignment(.BitwiseShiftLeft, left, right, nil)
+                    case .shiftRightEqual: left = .CompoundAssignment(.BitwiseShiftRight, left, right, nil)
                     default:
                         print("Unreachable A")
                         exit(ExitCode.internalError.rawValue)
@@ -340,7 +340,7 @@ class Parser {
                 let middle = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 let _ = expect(.colon, &tokenStream)
                 let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: precedence(nextToken))
-                left = .Conditional(left, middle, right)
+                left = .Conditional(left, middle, right, nil)
             } else {
                 let op : AST.BinaryOperator
                 switch nextToken {
@@ -369,7 +369,7 @@ class Parser {
                 tokenStream.removeFirst()
                 
                 let right = parseExpression(tokenStream: &tokenStream, minimumPrecedence: precedence(nextToken) + 1)
-                left = .Binary(op, left, right)
+                left = .Binary(op, left, right, nil)
             }
             nextToken = peek(tokenStream)
         }
@@ -409,13 +409,13 @@ class Parser {
                 shouldBeLong = shouldBeLong || longVal > Int32.max
 
                 if shouldBeLong {
-                    return .ConstLong(longVal)
+                    return .ConstLong(longVal, nil)
                 }
                 guard let int32Val = Int32(trimmedVal) else {
                     print("Integer constant \(trimmedVal) was not a valid integer")
                     exit(ExitCode.parserError.rawValue)
                 }
-                return .ConstInt(int32Val)
+                return .ConstInt(int32Val, nil)
             default:
                 print("Unreachable non-constant constant")
                 exit(ExitCode.internalError.rawValue)
@@ -436,7 +436,7 @@ class Parser {
             lhs = parseConstant(token: next)
             // variable
         case .identifier(let name):
-            lhs = .Var(name)
+            lhs = .Var(name, nil)
             // expression wrapped in parentheses, or cast
         case .openParen:
             if isType(tokenStream) {
@@ -445,7 +445,7 @@ class Parser {
                 let tp = convertType(expectType(&tokenStream))
                 let _ = expect(.closeParen, &tokenStream)
                 let child = parseFactor(tokenStream: &tokenStream)
-                lhs = .Cast(tp, child)
+                lhs = .Cast(tp, child, nil)
             } else {
                 // "(" <exp> ")"
                 let out = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
@@ -455,19 +455,19 @@ class Parser {
             // <unop> <exp>
         case .complement:
             let child = parseFactor(tokenStream: &tokenStream)
-            lhs = .Unary(.Complement, child)
+            lhs = .Unary(.Complement, child, nil)
         case .negate:
             let child = parseFactor(tokenStream: &tokenStream)
-            lhs = .Unary(.Negate, child)
+            lhs = .Unary(.Negate, child, nil)
         case .exclamation:
             let child = parseFactor(tokenStream: &tokenStream)
-            lhs = .Unary(.Not, child)
+            lhs = .Unary(.Not, child, nil)
         case .increment:
             let child = parseFactor(tokenStream: &tokenStream)
-            lhs = .Unary(.PreIncrement, child)
+            lhs = .Unary(.PreIncrement, child, nil)
         case .decrement:
             let child = parseFactor(tokenStream: &tokenStream)
-            lhs = .Unary(.PreDecrement, child)
+            lhs = .Unary(.PreDecrement, child, nil)
         default:
             print("Expected expression but encountered \(next) at line \(position.0), column \(position.1)")
             exit(ExitCode.parserError.rawValue)
@@ -476,16 +476,16 @@ class Parser {
         // check for postfix operators
         switch peek(tokenStream) {
             case .increment:
-                lhs = .Unary(.PostIncrement, lhs)
+                lhs = .Unary(.PostIncrement, lhs, nil)
                 tokenStream.removeFirst()
             case .decrement:
-                lhs = .Unary(.PostDecrement, lhs)
+                lhs = .Unary(.PostDecrement, lhs, nil)
                 tokenStream.removeFirst()
             case .openParen:
                 // function call
                 // get paremeters
                 let params = parseFunctionCallParameters(tokenStream: &tokenStream)
-                lhs = .FunctionCall(lhs, params)
+                lhs = .FunctionCall(lhs, params, nil)
             default:
                 break
         }
@@ -812,8 +812,8 @@ class Parser {
     
     func fixUpCompoundAssignments(_ exp: Parser.AST.Expression) -> Parser.AST.Expression {
         switch exp {
-        case .CompoundAssignment(let op, let lVal, let rVal):
-            return .Assignment(lVal, .Binary(op, lVal, rVal))
+        case .CompoundAssignment(let op, let lVal, let rVal, _):
+            return .Assignment(lVal, .Binary(op, lVal, rVal, nil), nil)
         default: return exp
         }
     }
