@@ -661,24 +661,33 @@ class Assembly {
                                     case .Mov(let tp, let src, let dst):
                                         switch src {
                                             case .Immediate(let val):
-                                                switch dst {
-                                                    case .Register(_):
-                                                        fixedBody.append(instr)
-                                                    default:
-                                                        if val > Int32.max {
-                                                            fixedBody.append(.Mov(
-                                                                tp,
-                                                                src,
-                                                                .Register(.R10)
-                                                            ))
-                                                            fixedBody.append(.Mov(
-                                                                tp,
-                                                                .Register(.R10),
-                                                                dst
-                                                            ))
-                                                        } else {
+                                                if tp == .Quadword {
+                                                    switch dst {
+                                                        case .Register(_):
                                                             fixedBody.append(instr)
-                                                        }
+                                                        default:
+                                                            if val > Int32.max {
+                                                                fixedBody.append(.Mov(
+                                                                    tp,
+                                                                    src,
+                                                                    .Register(.R10)
+                                                                ))
+                                                                fixedBody.append(.Mov(
+                                                                    tp,
+                                                                    .Register(.R10),
+                                                                    dst
+                                                                ))
+                                                            } else {
+                                                                fixedBody.append(instr)
+                                                            }
+                                                    }
+                                                } else {
+                                                    // truncate
+                                                    fixedBody.append(.Mov(
+                                                        tp,
+                                                        .Immediate(val % Int(Int32.max)),
+                                                        dst
+                                                    ))
                                                 }
                                             default: fixedBody.append(instr)
                                         }
