@@ -79,7 +79,9 @@ class Assembly {
     func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration]) -> Tree.Operand {
         switch val {
             case .Constant(let c):
-                return .Immediate(c)
+                print("We screwed constants up temporarily and have not yet fixed them, please stand by")
+                exit(ExitCode.internalError.rawValue)
+                // return .Immediate(c)
             case .Var(let name):
                 if let _ = symbolTable[name] {
                     return .Data(name)
@@ -104,8 +106,10 @@ class Assembly {
         for instr in instructions {
             switch instr {
                 case .Return(let val):
-                    let v : Tacky.IR.Value = (val == nil ? .Constant(0) : val!)
-                    out.append(.Mov(convert(v, symbolTable), .Register(.AX)))
+                    print("We screwed constants up temporarily and have not yet fixed them, please stand by")
+                    exit(ExitCode.internalError.rawValue)
+                    // let v : Tacky.IR.Value = (val == nil ? .Constant(0) : val!)
+                    // out.append(.Mov(convert(v, symbolTable), .Register(.AX)))
                     out.append(.Ret)
                 case .Unary(let op, let src, let dst):
                     if op == .Not {
@@ -246,6 +250,10 @@ class Assembly {
 
                     // move the result
                     out.append(.Mov(.Register(.AX), convert(result, symbolTable)))
+                case .SignExtend(_, _): fallthrough
+                case .Truncate(_, _):
+                    print("As-yet-unhandled instruction \(instr) found while generating assembly")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
     }
@@ -283,7 +291,7 @@ class Assembly {
                 }
                 generate(instrs, symbolTable, &out)
                 return .Function(name, isGlobal, out)
-            case .StaticVariable(_, _, _):
+            case .StaticVariable(_, _, _, _):
                 print("As yet unhandled global variable caught while generating assembly")
                 exit(ExitCode.internalError.rawValue)
         }
@@ -294,8 +302,8 @@ class Assembly {
         var internalSymbolTable : [String : Assembly.Tree.Declaration] = [:]
         for tackyDef in symbolTable {
             switch tackyDef {
-                case .StaticVariable(let name, let isGlobal, let initValue):
-                    let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, initValue)
+                case .StaticVariable(let name, let isGlobal, let tp, let initValue):
+                    let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, 0) //initValue)
                     assemblyDecls.append(assemblyEntry)
                     internalSymbolTable[name] = assemblyEntry
                 default: ()
