@@ -647,4 +647,11 @@ class Assembly {
                 return .Statement(declarations.map { fixUpMoves($0) })
         }
     }
+
+    func assemble(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration], typedSymbolTable: SymbolTable) -> (Tree.Program, BackendSymbolTable) {
+        let (assembly, backendSymbolTable) = generate(program: program, symbolTable: symbolTable, typedSymbolTable: typedSymbolTable)
+        let dePseudoed = replacePseudoRegisters(program: assembly, typedSymbolTable)
+        let fixedUp = fixUpMoves(program: dePseudoed)
+        return (fixedUp, backendSymbolTable)
+    }
 }
