@@ -7,6 +7,13 @@ enum RegisterWidth {
     case eightByte
 }
 
+func typeToWidth(_ tp: Assembly.Tree.AssemblyType) -> RegisterWidth {
+    switch tp {
+        case .Longword: return .fourByte
+        case .Quadword: return .eightByte
+    }
+}
+
 func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByte) -> String {
     switch operand {
         case .Immediate(let val):
@@ -93,33 +100,33 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
     }
 }
 
-func convert(_ op: Assembly.Tree.UnaryOperator) -> String {
+func convert(_ op: Assembly.Tree.UnaryOperator, _ tp: Assembly.Tree.AssemblyType) -> String {
     switch op {
         case .Neg:
-            return "negl"
+            return "neg\(typeToSuffix(tp))"
         case .Not:
-            return "notl"
+            return "not\(typeToSuffix(tp))"
     }
 }
 
-func convert(_ op: Assembly.Tree.BinaryOperator) -> String {
+func convert(_ op: Assembly.Tree.BinaryOperator, _ tp: Assembly.Tree.AssemblyType) -> String {
     switch op {
         case .Add:
-            return "addl"
+            return "add\(typeToSuffix(tp))"
         case .Sub:
-            return "subl"
+            return "sub\(typeToSuffix(tp))"
         case .Mult:
-            return "imull"
+            return "imul\(typeToSuffix(tp))"
         case .And:
-            return "andl"
+            return "and\(typeToSuffix(tp))"
         case .Or:
-            return "orl"
+            return "or\(typeToSuffix(tp))"
         case .Xor:
-            return "xorl"
+            return "xor\(typeToSuffix(tp))"
         case .Sar:
-            return "sarl"
+            return "sar\(typeToSuffix(tp))"
         case .Shl:
-            return "shll"
+            return "shl\(typeToSuffix(tp))"
     }
 }
 
@@ -139,27 +146,34 @@ func makeFunctionName(_ name : String) -> String {
     return "_\(name)"
 }
 
+func typeToSuffix(_ tp : Assembly.Tree.AssemblyType) -> String {
+    switch tp {
+        case .Longword: return "l"
+        case .Quadword: return "q"
+    }
+}
+
 func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [String]) {
     for instr in instructions {
         switch instr {
             case .AllocateStack(let count):
                 if count != 0 { out.append("\tsubq\t$\(count), %rsp") }
             case .Mov(let tp, let opSrc, let opDst):
-                out.append("\tmovl\t\(convert(opSrc)), \(convert(opDst))")
+                out.append("\tmov\(typeToSuffix(tp))\t\(convert(opSrc, typeToWidth(tp))), \(convert(opDst, typeToWidth(tp)))")
             case .Ret:
                 out.append("\tmovq\t%rbp, %rsp")
                 out.append("\tpopq\t%rbp")
                 out.append("\tret")
             case .Unary(let unOp, let tp, let op):
-                out.append("\t\(convert(unOp))\t\(convert(op))")
+                out.append("\t\(convert(unOp, tp))\t\(convert(op, typeToWidth(tp)))")
             case .Binary(let binOp, let tp, let leftOperand, let rightOperand):
-                out.append("\t\(convert(binOp))\t\(convert(leftOperand)), \(convert(rightOperand))")
+                out.append("\t\(convert(binOp, tp))\t\(convert(leftOperand, typeToWidth(tp))), \(convert(rightOperand, typeToWidth(tp)))")
             case .Cdq:
                 out.append("\tcdq")
             case .Idiv(let tp, let op):
-                out.append("\tidivl\t\(convert(op))")
+                out.append("\tidiv\(typeToSuffix(tp))\t\(convert(op, typeToWidth(tp)))")
             case .Cmp(let tp, let left, let right):
-                out.append("\tcmpl\t\(convert(left)), \(convert(right))")
+                out.append("\tcmp\(typeToSuffix(tp))\t\(convert(left, typeToWidth(tp))), \(convert(right, typeToWidth(tp)))")
             case .Jmp(let label):
                 out.append("\tjmp\t\(label)")
             case .JmpCC(let cc, let label):
@@ -175,7 +189,7 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
             case .Call(let fName):
                 out.append("\tcall\t\(makeFunctionName(fName))")
             case .Movsx(let src, let dst):
-                out.append("\tmovslq\t\(convert(src)), \(convert(dst))")
+                out.append("\tmovslq\t\(convert(src, .fourByte)), \(convert(dst, .eightByte))")
         }
     }
 }
@@ -202,7 +216,7 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
             out.append("\(name):")
             switch initVal {
                 case .IntInit(let i): out.append("\t.long\t\(i)")
-                case .LongInit(let i): out.append("\t.quad\t(i)")
+                case .LongInit(let i): out.append("\t.quad\t\(i)")
             }
     }
 }
