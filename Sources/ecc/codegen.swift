@@ -144,21 +144,21 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
         switch instr {
             case .AllocateStack(let count):
                 if count != 0 { out.append("\tsubq\t$\(count), %rsp") }
-            case .Mov(let opSrc, let opDst):
+            case .Mov(let tp, let opSrc, let opDst):
                 out.append("\tmovl\t\(convert(opSrc)), \(convert(opDst))")
             case .Ret:
                 out.append("\tmovq\t%rbp, %rsp")
                 out.append("\tpopq\t%rbp")
                 out.append("\tret")
-            case .Unary(let unOp, let op):
+            case .Unary(let unOp, let tp, let op):
                 out.append("\t\(convert(unOp))\t\(convert(op))")
-            case .Binary(let binOp, let leftOperand, let rightOperand):
+            case .Binary(let binOp, let tp, let leftOperand, let rightOperand):
                 out.append("\t\(convert(binOp))\t\(convert(leftOperand)), \(convert(rightOperand))")
             case .Cdq:
                 out.append("\tcdq")
-            case .Idiv(let op):
+            case .Idiv(let tp, let op):
                 out.append("\tidivl\t\(convert(op))")
-            case .Cmp(let left, let right):
+            case .Cmp(let tp, let left, let right):
                 out.append("\tcmpl\t\(convert(left)), \(convert(right))")
             case .Jmp(let label):
                 out.append("\tjmp\t\(label)")
@@ -174,6 +174,8 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tpushq\t\(convert(operand))")
             case .Call(let fName):
                 out.append("\tcall\t\(makeFunctionName(fName))")
+            case .Movsx(let src, let dst):
+                out.append("\tmovslq\t\(convert(src)), \(convert(dst))")
         }
     }
 }
@@ -191,14 +193,17 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
             out.append("\tmovq\t%rsp, %rbp")
             emitInstructions(instrs, out: &out)
             out.append("\n\n")
-        case .StaticVariable(let name, let isGlobal, let initVal):
+        case .StaticVariable(let name, let isGlobal, let alignment, let initVal):
             if isGlobal {
                 out.append("\t.globl \(name)")
             }
             out.append("\t.data")
-            out.append("\t.balign\t4")
+            out.append("\t.balign\t\(alignment)")
             out.append("\(name):")
-            out.append("\t.long\t\(initVal)")
+            switch initVal {
+                case .IntInit(let i): out.append("\t.long\t\(i)")
+                case .LongInit(let i): out.append("\t.quad\t(i)")
+            }
     }
 }
 
