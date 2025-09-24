@@ -408,7 +408,10 @@ class Assembly {
                 return op
             case .Pseudo(let name):
                 guard let (tp, _) = symbolTable[name] else {
-                    print("Impossiblie situation where psuedo \(name) is not in the symbol table")
+                    print("Impossible situation where pseudo \(name) is not in the symbol table")
+                    // DEBUG
+                    print("SYMBOL TABLE = \(symbolTable)")
+                    // END DEBUG
                     exit(ExitCode.internalError.rawValue)
                 }
                 let width : Int

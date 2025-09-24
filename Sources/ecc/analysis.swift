@@ -520,14 +520,6 @@ class SemanticAnalyzer {
             }
         }
 
-        func copyNameMap(_ nameMap: [String : (CheckerType, IdentifierAttributes)]) -> [String : (CheckerType, IdentifierAttributes)] {
-            var out : [String : (CheckerType, IdentifierAttributes)] = [:]
-            for (name, entry) in nameMap {
-                out[name] = entry
-            }
-            return out
-        }
-
         func getCommonType(_ left : CheckerType, _ right: CheckerType) -> CheckerType {
             if left == right { return left }
             return .Long
@@ -714,16 +706,13 @@ class SemanticAnalyzer {
                 case .Continue(_): return statement
                 case .While(let condition, let body, let lbl):
                     let checkedCond = typeCheck(condition, nameMap)
-                    var copiedNameMap = copyNameMap(nameMap)
-                    let checkedBody = typeCheck(body, &copiedNameMap, enclosingFuncReturnType)
+                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
                     return .While(checkedCond.0, checkedBody, lbl)
                 case .DoWhile(let body, let condition, let lbl):
-                    var copiedNameMap = copyNameMap(nameMap)
-                    let checkedBody = typeCheck(body, &copiedNameMap, enclosingFuncReturnType)
+                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
                     let checkedCond = typeCheck(condition, nameMap)
                     return .DoWhile(checkedBody, checkedCond.0, lbl)
                 case .For(let forInit, let condition, let post, let body, let lbl):
-                    var copiedNameMap = copyNameMap(nameMap)
                     let checkedInit : Parser.AST.ForInit
                     switch forInit {
                         case .InitDecl(let decl):
@@ -732,34 +721,33 @@ class SemanticAnalyzer {
                                     print("Unreachable totally guano-on-toast insanse situation where a function \(name) was declared in the initializer of a for loop")
                                     exit(ExitCode.internalError.rawValue)
                                 case .VariableDeclaration(_, _ , _, _):
-                                    checkedInit = .InitDecl(typeCheck(decl, false, &copiedNameMap))
+                                    checkedInit = .InitDecl(typeCheck(decl, false, &nameMap))
                             }
                         case .InitExp(let exp):
                             if let e = exp {
-                                checkedInit = .InitExp(typeCheck(e, copiedNameMap).0)
+                                checkedInit = .InitExp(typeCheck(e, nameMap).0)
                             } else {
                                 checkedInit = .InitExp(nil)
                             }
                     }
                     let checkedCondition : Parser.AST.Expression?
                     if let c = condition {
-                        checkedCondition = typeCheck(c, copiedNameMap).0
+                        checkedCondition = typeCheck(c, nameMap).0
                     } else {
                         checkedCondition = nil
                     }
                     let checkedPost : Parser.AST.Expression?
                     if let p = post {
-                        checkedPost = typeCheck(p, copiedNameMap).0
+                        checkedPost = typeCheck(p, nameMap).0
                     } else {
                         checkedPost = nil
                     }
-                    let checkedBody = typeCheck(body, &copiedNameMap, enclosingFuncReturnType)
+                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
                     return .For(checkedInit, checkedCondition, checkedPost, checkedBody, lbl)
                 case .Switch(let toggle, let body, let lbl):
                     // TODO: cast this to bool-like
                     let checkedToggle = typeCheck(toggle, nameMap)
-                    var copiedNameMap = copyNameMap(nameMap)
-                    let checkedBody = typeCheck(body, &copiedNameMap, enclosingFuncReturnType)
+                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
                     return .Switch(checkedToggle.0, checkedBody, lbl)
                 case .Labeled(let ls):
                     let checkedLine : Parser.AST.LabeledStatement
@@ -780,7 +768,6 @@ class SemanticAnalyzer {
         func typeCheck(_ block: Parser.AST.Block, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)], _ enclosingFuncReturnType : Parser.AST.CType) -> Parser.AST.Block {
             switch block {
                 case .Block(let blockItems):
-                    var copiedNameItems = copyNameMap(nameMap)
                     var typeCheckedItems : [Parser.AST.BlockItem] = []
                     for item in blockItems {
                         switch item {
@@ -792,10 +779,10 @@ class SemanticAnalyzer {
                                             exit(ExitCode.semanticError.rawValue)
                                         }
                                     case .VariableDeclaration(_, _, _, _):
-                                        typeCheckedItems.append(.D(typeCheck(decl, false, &copiedNameItems)))
+                                        typeCheckedItems.append(.D(typeCheck(decl, false, &nameMap)))
                                 }
                             case .S(let stmt):
-                                typeCheckedItems.append(.S(typeCheck(stmt, &copiedNameItems, enclosingFuncReturnType)))
+                                typeCheckedItems.append(.S(typeCheck(stmt, &nameMap, enclosingFuncReturnType)))
                         }
                     }
                     return .Block(typeCheckedItems)
@@ -843,16 +830,15 @@ class SemanticAnalyzer {
                         }
                     }
                     nameMap[name] = (constructedType, .FunAttr(isDefined, isGlobal))
-                    var copy = copyNameMap(nameMap)
                     for p in params {
                         switch p {
                             case .NamedParameter(let tp, let name):
-                                copy[name] = (converCTypeToCheckerType(tp), .LocalAttr)
+                                nameMap[name] = (converCTypeToCheckerType(tp), .LocalAttr)
                         }
                     }
                     let typeCheckedBody : Parser.AST.Block?
                     if let b = body {
-                        typeCheckedBody = typeCheck(b, &copy, returnType)
+                        typeCheckedBody = typeCheck(b, &nameMap, returnType)
                     } else {
                         typeCheckedBody = nil
                     }
@@ -873,9 +859,9 @@ class SemanticAnalyzer {
                         var initVal : InitialValue
                         if let ie = initExp {
                             switch ie {
-                                case .ConstInt(let i, let tp):
+                                case .ConstInt(let i, _):
                                     initVal = .Initial(.IntInit(Int32(i)))
-                                case .ConstLong(let i, let tp):
+                                case .ConstLong(let i, _):
                                     initVal = .Initial(.LongInit(Int64(i)))
                                 default:
                                     // NOTE: we could allow things that evaluate constantly, but we don't yet
@@ -954,9 +940,9 @@ class SemanticAnalyzer {
                             let initValue : InitialValue
                             if let e = initExp {
                                 switch e {
-                                    case .ConstInt(let i, let tp):
+                                    case .ConstInt(let i, _):
                                         initValue = .Initial(.IntInit(Int32(i)))
-                                    case .ConstLong(let i, let tp):
+                                    case .ConstLong(let i, _):
                                         initValue = .Initial(.LongInit(Int64(i)))
                                     default:
                                         print("Non-constant initializer on local static variable \(name)")
@@ -997,8 +983,8 @@ class SemanticAnalyzer {
             TypeChecker.IdentifierAttributes    // storage and other attributes
         )] = [:]
 
-        let _ = TypeChecker().typeCheck(casedProgram, &overallNameMap)
-        return (casedProgram, overallNameMap)
+        let typeCheckedProgram = TypeChecker().typeCheck(casedProgram, &overallNameMap)
+        return (typeCheckedProgram, overallNameMap)
     }
 }
 
