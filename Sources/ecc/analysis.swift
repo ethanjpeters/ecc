@@ -680,7 +680,8 @@ class SemanticAnalyzer {
                             exit(ExitCode.semanticError.rawValue)
                     }
                 case .Cast(let targetType, let child, _):
-                    return (.Cast(targetType, typeCheck(child, nameMap).0, targetType), convert(targetType))
+                    let tmp = typeCheck(child, nameMap)
+                    return (.Cast(targetType, tmp.0, deConvert(tmp.1)), convert(targetType))
             }
         }
 

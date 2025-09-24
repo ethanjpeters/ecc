@@ -33,8 +33,13 @@ class Tacky {
             case BitwiseShiftLeft
         }
 
+        enum ConstVal {
+            case ConstInt(Int32)
+            case ConstLong(Int64)
+        }
+
         enum Value {
-            case Constant(Int)
+            case Constant(ConstVal)
             case Var(String)
         }
 
@@ -48,11 +53,13 @@ class Tacky {
             case JumpIfNotZero(Value /* condition */, String /* identifier target */)
             case Label(String /* identifier */)
             case Call(String /* function name */, [Value] /* parameters */, Value /* result */)
+            case SignExtend(Value /* src */, Value /* dst */)
+            case Truncate(Value /* src */, Value /* dst */)
         }
 
         enum Declaration {
             case Function(String /* name */, Bool /* is global */, [String] /* params */, [Instruction] /* body */)
-            case StaticVariable(String /* name */, Bool /* is global */, Int /* init */)
+            case StaticVariable(String /* name */, Bool /* is global */, Parser.AST.CType, SemanticAnalyzer.TypeChecker.StaticInit /* initial value */)
         }
 
         enum Program {
@@ -138,36 +145,37 @@ class Tacky {
         }
 
         switch exp {
-            case .ConstInt(let val, let tp):
-                return .Constant(Int(val))
-            case .ConstLong(let val, let tp):
-                return .Constant(Int(val))
+            case .ConstInt(let val, _):
+                return .Constant(.ConstInt(val))
+            case .ConstLong(let val, _):
+                return .Constant(.ConstLong(val))
             case .Unary(let op, let exp, let tp):
                 if isIncOrDec(op) {
                     let src = generateTACKYExpression(exp, out: &out)
                     let dstName = makeTemp()
                     let dst : Tacky.IR.Value = .Var(dstName)
+                    let one : Tacky.IR.Value = .Constant(tp == .Int ? .ConstInt(1) : .ConstLong(1))
                     switch op {
                         case .PreIncrement:
-                            out.append(.Binary(.Add, .Constant(1), src, dst))
+                            out.append(.Binary(.Add, one, src, dst))
                             out.append(.Copy(dst, src))
                             return src
                         case .PreDecrement:
-                            out.append(.Binary(.Subtract, src, .Constant(1), dst))
+                            out.append(.Binary(.Subtract, src, one, dst))
                             out.append(.Copy(dst, src))
                             return src
                         case .PostIncrement:
                             let tmpName = makeTemp()
                             let tmp : Tacky.IR.Value = .Var(tmpName)
                             out.append(.Copy(src, tmp))
-                            out.append(.Binary(.Add, .Constant(1), src, dst))
+                            out.append(.Binary(.Add, one, src, dst))
                             out.append(.Copy(dst, src))
                             return tmp
                         case .PostDecrement:
                             let tmpName = makeTemp()
                             let tmp : Tacky.IR.Value = .Var(tmpName)
                             out.append(.Copy(src, tmp))
-                            out.append(.Binary(.Subtract, src, .Constant(1), dst))
+                            out.append(.Binary(.Subtract, src, one, dst))
                             out.append(.Copy(dst, src))
                             return tmp
                         default:
@@ -183,6 +191,8 @@ class Tacky {
                     return dst
                 }
             case .Binary(let op, let left, let right, let tp):
+                let one : Tacky.IR.Value = .Constant(tp == .Int ? .ConstInt(1) : .ConstLong(1))
+                let zero : Tacky.IR.Value = .Constant(tp == .Int ? .ConstInt(0) : .ConstLong(0))
                 if op == .And {
                     let v1 = generateTACKYExpression(left, out: &out)
                     let falseLabel = makeLabel("and_false")
@@ -192,12 +202,12 @@ class Tacky {
                     let resultName = makeTemp()
                     let result : Tacky.IR.Value = .Var(resultName)
                     // result = 1
-                    out.append(.Copy(.Constant(1), result))
+                    out.append(.Copy(one, result))
                     let endLabel = makeLabel()
                     out.append(.Jump(endLabel))
                     out.append(.Label(falseLabel))
                     // result = 0
-                    out.append(.Copy(.Constant(0), result))
+                    out.append(.Copy(zero, result))
                     out.append(.Label(endLabel))
                     return result
                 } else if op == .Or {
@@ -209,12 +219,12 @@ class Tacky {
                     let resultName = makeTemp()
                     let result : Tacky.IR.Value = .Var(resultName)
                     // result = 0
-                    out.append(.Copy(.Constant(0), result))
+                    out.append(.Copy(zero, result))
                     let endLabel = makeLabel()
                     out.append(.Jump(endLabel))
                     out.append(.Label(trueLabel))
                     // result = 1
-                    out.append(.Copy(.Constant(1), result))
+                    out.append(.Copy(one, result))
                     out.append(.Label(endLabel))
                     return result
                 } else {
@@ -226,12 +236,12 @@ class Tacky {
                     out.append(.Binary(tackyOp, v1, v2, dst))
                     return dst
                 }
-            case .Var(let name, let tp):
+            case .Var(let name, _):
                 return .Var(name)
-            case .Assignment(let lVal, let rVal, let tp):
+            case .Assignment(let lVal, let rVal, _):
                 let result = generateTACKYExpression(rVal, out: &out)
                 switch lVal {
-                    case .Var(let name, let tp):
+                    case .Var(let name, _):
                         out.append(.Copy(result, .Var(name)))
                         return .Var(name)
                     default:
@@ -241,7 +251,7 @@ class Tacky {
             case .CompoundAssignment(_,_,_,_):
                 print("Unreachable compound assignment")
                 exit(ExitCode.internalError.rawValue)
-            case .Conditional(let cond, let left, let right, let tp):
+            case .Conditional(let cond, let left, let right, _):
                 let condValue = generateTACKYExpression(cond, out: &out)
                 let dstName = makeTemp()
                 let dst : Tacky.IR.Value = .Var(dstName)
@@ -256,11 +266,11 @@ class Tacky {
                 out.append(.Copy(e2Value, dst))
                 out.append(.Label(endLabel))
                 return dst
-            case .FunctionCall(let fun, let params, let tp):
+            case .FunctionCall(let fun, let params, _):
                 // fun has already been constrained to an lValue, currently just a name
                 let funName : String
                 switch fun {
-                    case .Var(let fnNm, let tp):
+                    case .Var(let fnNm, _):
                         funName = fnNm
                     default:
                         print("Unreachable non-lValue function \(fun)")
@@ -275,8 +285,17 @@ class Tacky {
                 out.append(.Call(funName, paramValues, dst))
                 return dst
             case .Cast(let targetType, let child, let tp):
-                print("As-yet-unhandled cast expression found during TACKY generation")
-                exit(ExitCode.internalError.rawValue)
+                let unCastedValue = generateTACKYExpression(child, out: &out)
+                let dstName = makeTemp()
+                let dst : Tacky.IR.Value = .Var(dstName)
+                if targetType != tp {
+                    if targetType == .Long {
+                        out.append(.SignExtend(unCastedValue, dst))
+                    } else {
+                        out.append(.Truncate(unCastedValue, dst))
+                    }
+                }
+                return dst
         }
     }
 
