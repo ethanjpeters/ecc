@@ -123,9 +123,7 @@ class Assembly {
                     case .Function(_, _):
                         print("Unreachable case where a variable was a function but was supposed to be a variable")
                         exit(ExitCode.internalError.rawValue)
-                    case .Void:
-                        print("Unreachable case where a variable was void")
-                        exit(ExitCode.internalError.rawValue)
+                    case .Void: return .Longword    // functions can return "void" but really they return int
                     case .Int: return .Longword
                     case .Long: return .Quadword
                 }
@@ -384,8 +382,7 @@ class Assembly {
                     }
                     asmSymTab[name] = .ObjEntry(asmType, isStatic)
                 case .Void:
-                    print("Totally meaningless void-typed variable")
-                    exit(ExitCode.internalError.rawValue)
+                    asmSymTab[name] = .ObjEntry(.Longword, false)   // function return types can be void
                 case .Function(_, _):
                     switch attrs {
                         case .FunAttr(let isDefined, _):
@@ -419,9 +416,7 @@ class Assembly {
                     case .Function(_, _):
                         print("No comprendo; can't have a pseudo of function type (\(name))")
                         exit(ExitCode.internalError.rawValue)
-                    case .Void:
-                        print("PSEUDO \(name) CANNOT BE VOID")
-                        exit(ExitCode.internalError.rawValue)
+                    case .Void: width = 4   // function return types can be void but they're really int
                     case .Int: width = 4
                     case .Long: width = 8
                 }
