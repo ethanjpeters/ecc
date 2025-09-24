@@ -531,15 +531,17 @@ class SemanticAnalyzer {
             return out
         }
 
+        func getCommonType(_ left : CheckerType, _ right: CheckerType) -> CheckerType {
+            if left == right { return left }
+            return .Long
+        }
+
+        func typeConvert(_ exp: Parser.AST.Expression, ofType: CheckerType, toType: CheckerType) -> Parser.AST.Expression {
+            if ofType == toType { return exp }
+            return .Cast(deConvert(toType), exp, deConvert(toType))
+        }
+
         func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Expression, CheckerType) {
-            func getCommonType(_ left : CheckerType, _ right: CheckerType) -> CheckerType {
-                if left == right { return left }
-                return .Long
-            }
-            func typeConvert(_ exp: Parser.AST.Expression, ofType: CheckerType, toType: CheckerType) -> Parser.AST.Expression {
-                if ofType == toType { return exp }
-                return .Cast(deConvert(toType), exp, deConvert(toType))
-            }
             switch expression {
                 case .ConstInt(let val, _): return (.ConstInt(val, .Int), .Int)
                 case .ConstLong(let val, _): return (.ConstLong(val, .Long), .Long)
@@ -647,21 +649,25 @@ class SemanticAnalyzer {
                             print("Unreachable non lValue in function call \(lValue)")
                             exit(ExitCode.internalError.rawValue)
                     }
-                    var paramsType : [TypeChecker.CheckerType] = []
-                    var checkedParams : [Parser.AST.Expression] = []
+                    var checkedParams : [(Parser.AST.Expression, TypeChecker.CheckerType)] = []
                     for p in params {
                         let q = typeCheck(p, nameMap)
-                        checkedParams.append(q.0)
-                        paramsType.append(q.1)
+                        checkedParams.append(q)
                     }
                     let (fType, _) = nameMap[name]!
                     switch fType {
                         case .Function(let rType, let pType):
-                            if pType != paramsType {
-                                print("Function call \(expression) of type \(paramsType), does not match \(pType)")
+                            if checkedParams.count != pType.count {
+                                print("Function call \(name) does not have the right number of arguments")
                                 exit(ExitCode.semanticError.rawValue)
                             }
-                            return (.FunctionCall(lValue, checkedParams, deConvert(rType)), rType)
+                            var upCastExp : [Parser.AST.Expression] = []
+                            for (incomingParam, expectedParam) in zip(checkedParams, pType) {
+                                let commonType = getCommonType(incomingParam.1, expectedParam)
+                                let ipExp = typeConvert(incomingParam.0, ofType: incomingParam.1, toType: commonType)
+                                upCastExp.append(ipExp)
+                            }
+                            return (.FunctionCall(lValue, upCastExp, deConvert(rType)), rType)
                         case .Int: fallthrough
                         case .Long: fallthrough
                         case .Void:
@@ -842,18 +848,16 @@ class SemanticAnalyzer {
                     }
                     return .FunctionDeclaration(returnType, name, params, typeCheckedBody, storageClass)
                 case .VariableDeclaration(let tp, let name, let initExp, let storageClass):
-                    let typeCheckedInit : Parser.AST.Expression?
+                    var typeCheckedInit : Parser.AST.Expression?
                     let initType : CheckerType
                     let conTp = convert(tp)
                     if let e = initExp {
                         (typeCheckedInit, initType) = typeCheck(e, nameMap)
+                        let commonType = getCommonType(initType, conTp)
+                        typeCheckedInit = typeConvert(typeCheckedInit!, ofType: initType, toType: commonType)
                     } else {
                         initType = conTp
                         typeCheckedInit = nil
-                    }
-                    if initType != conTp {
-                        print("Declaration \(declaration) is ill-typed (left: \(conTp), right: \(initType))")
-                        exit(ExitCode.semanticError.rawValue)
                     }
                     if fileLevel {
                         var initVal : InitialValue
