@@ -400,20 +400,39 @@ class Assembly {
         return (out, asmSymTab)
     }
 
-    func replacePseudoRegisters(_ op: Tree.Operand, _ stackSlotCounter: inout Int, _ nameStackMapping: inout [String: Int]) -> Tree.Operand {
+    func replacePseudoRegisters(_ op: Tree.Operand, _ stackSlotCounter: inout Int, _ nameStackMapping: inout [String: Int], _ symbolTable : SymbolTable) -> Tree.Operand {
         switch op {
             case .Immediate(_):
                 return op
             case .Register(_):
                 return op
             case .Pseudo(let name):
-                if let slot = nameStackMapping[name] {
-                    return .Stack((slot+1) * -4)
+                guard let (tp, _) = symbolTable[name] else {
+                    print("Impossiblie situation where psuedo \(name) is not in the symbol table")
+                    exit(ExitCode.internalError.rawValue)
                 }
-                let tmp = stackSlotCounter
-                stackSlotCounter = stackSlotCounter + 1
-                nameStackMapping[name] = tmp
-                return .Stack((tmp+1) * -4)
+                let width : Int
+                switch tp {
+                    case .Function(_, _):
+                        print("No comprendo; can't have a pseudo of function type (\(name))")
+                        exit(ExitCode.internalError.rawValue)
+                    case .Void:
+                        print("PSEUDO \(name) CANNOT BE VOID")
+                        exit(ExitCode.internalError.rawValue)
+                    case .Int: width = 4
+                    case .Long: width = 8
+                }
+                if let slot = nameStackMapping[name] {
+                    return .Stack(-slot)
+                }
+                var tmp = stackSlotCounter + width
+                if tmp % width != 0 {
+                    // must be aligned
+                    tmp = tmp + (tmp % width)
+                }
+                stackSlotCounter = tmp
+                nameStackMapping[name] = stackSlotCounter
+                return .Stack(-stackSlotCounter)
             case .Stack(_):
                 return op
             case .Data(_):
@@ -421,7 +440,7 @@ class Assembly {
         }
     }
 
-    func replacePseudoRegisters(_ instructions: [Tree.Instruction]) -> [Tree.Instruction] {
+    func replacePseudoRegisters(_ instructions: [Tree.Instruction], _ symbolTable : SymbolTable) -> [Tree.Instruction] {
         var out : [Tree.Instruction] = []
 
         var stackSlotCounter : Int = 0
@@ -431,29 +450,34 @@ class Assembly {
             switch instr {
                 case .AllocateStack(_):
                     out.append(instr)
-                case .Mov(let op1, let op2):
-                    out.append(.Mov(replacePseudoRegisters(op1, &stackSlotCounter, &nameStackMapping),
-                                    replacePseudoRegisters(op2, &stackSlotCounter, &nameStackMapping)))
+                case .Mov(let tp, let op1, let op2):
+                    out.append(.Mov(tp, replacePseudoRegisters(op1, &stackSlotCounter, &nameStackMapping, symbolTable),
+                                    replacePseudoRegisters(op2, &stackSlotCounter, &nameStackMapping, symbolTable)))
                 case .Ret:
                     out.append(instr)
-                case .Unary(let unOp, let op):
-                    out.append(.Unary(unOp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
-                case .Binary(let binOp, let left, let right):
-                    out.append(.Binary(binOp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping), replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping)))
-                case .Cdq: out.append(.Cdq)
-                case .Idiv(let op): out.append(.Idiv(replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
-                case .Cmp(let left, let right):
-                    out.append(.Cmp(replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping),
-                                    replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping)))
+                case .Unary(let unOp, let tp, let op):
+                    out.append(.Unary(unOp, tp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                case .Binary(let binOp, let tp, let left, let right):
+                    out.append(.Binary(binOp, tp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping, symbolTable), replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                case .Cdq(let tp): out.append(.Cdq(tp))
+                case .Idiv(let tp, let op): out.append(.Idiv(tp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                case .Cmp(let tp, let left, let right):
+                    out.append(.Cmp(tp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping, symbolTable),
+                                    replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping, symbolTable)))
                 case .Jmp(_): out.append(instr)
                 case .JmpCC(_, _): out.append(instr)
                 case .SetCC(let cc, let op):
-                    out.append(.SetCC(cc, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
+                    out.append(.SetCC(cc, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
                 case .Label(_): out.append(instr)
                 case .Call(_): out.append(instr)
                 case .DeallocateStack(_): out.append(instr)
                 case .Push(let op):
-                    out.append(.Push(replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping)))
+                    out.append(.Push(replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                case .Movsx(let src, let dst):
+                    out.append(.Movsx(
+                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
+                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
+                    ))
             }
         }
 
@@ -462,19 +486,19 @@ class Assembly {
         return out
     }
 
-    func replacePseudoRegisters(_ pls: Tree.Declaration) -> Tree.Declaration {
+    func replacePseudoRegisters(_ pls: Tree.Declaration, _ symbolTable : SymbolTable) -> Tree.Declaration {
         switch pls {
             case .Function(let name, let isGlobal, let instrs):
-                return .Function(name, isGlobal, replacePseudoRegisters(instrs))
-            case .StaticVariable(let name, let isGlobal, let initVal):
-                return .StaticVariable(name, isGlobal, initVal)
+                return .Function(name, isGlobal, replacePseudoRegisters(instrs, symbolTable))
+            case .StaticVariable(let name, let isGlobal, let alignment, let initVal):
+                return .StaticVariable(name, isGlobal, alignment, initVal)
         }
     }
 
-    func replacePseudoRegisters(program: Tree.Program) -> Tree.Program {
+    func replacePseudoRegisters(program: Tree.Program, _ symbolTable : SymbolTable) -> Tree.Program {
         switch program {
             case .Statement(let declarations):
-                return .Statement(declarations.map{ replacePseudoRegisters($0) })
+                return .Statement(declarations.map{ replacePseudoRegisters($0, symbolTable) })
         }
     }
 
@@ -483,15 +507,15 @@ class Assembly {
         for instr in instrs {
             switch instr {
                 case .AllocateStack(_): out.append(instr)
-                case .Mov(let opSrc, let opDst):
+                case .Mov(let tp, let opSrc, let opDst):
                     switch opSrc {
                         case .Stack(_): fallthrough
                         case .Data(_):
                             switch opDst {
                                 case .Stack(_): fallthrough
                                 case .Data(_):
-                                    out.append(.Mov(opSrc, .Register(.R10)))
-                                    out.append(.Mov(.Register(.R10), opDst))
+                                    out.append(.Mov(tp, opSrc, .Register(.R10)))
+                                    out.append(.Mov(tp, .Register(.R10), opDst))
                                 default:
                                     out.append(instr)
                             }
@@ -499,8 +523,8 @@ class Assembly {
                             out.append(instr)
                     }
                 case .Ret: out.append(instr)
-                case .Unary(_, _): out.append(instr)
-                case .Binary(let op, let src, let dst):
+                case .Unary(_, _, _): out.append(instr)
+                case .Binary(let op, let tp, let src, let dst):
                     switch op {
                         case .Add: fallthrough
                         case .Sub: fallthrough
@@ -511,8 +535,8 @@ class Assembly {
                                 switch dst {
                                     case .Data(_): fallthrough
                                     case .Stack(_):
-                                        out.append(.Mov(src, .Register(.R10)))
-                                        out.append(.Binary(op, .Register(.R10), dst))
+                                        out.append(.Mov(tp, src, .Register(.R10)))
+                                        out.append(.Binary(op, tp, .Register(.R10), dst))
                                     default: out.append(instr)
                                 }
                                 default: out.append(instr)
@@ -523,9 +547,9 @@ class Assembly {
                             switch dst {
                                 case .Data(_): fallthrough
                                 case .Stack(_):
-                                    out.append(.Mov(dst, .Register(.R11)))
-                                    out.append(.Binary(op, src, .Register(.R11)))
-                                    out.append(.Mov(.Register(.R11), dst))
+                                    out.append(.Mov(tp, dst, .Register(.R11)))
+                                    out.append(.Binary(op, tp, src, .Register(.R11)))
+                                    out.append(.Mov(tp, .Register(.R11), dst))
                                 default:
                                     out.append(instr)
                             }
@@ -536,40 +560,40 @@ class Assembly {
                                 case .Stack(_):
                                     // move the value off of the stack and into CL, which is currently never used otherwise
                                     // and is in no danger of being overwritten
-                                    out.append(.Mov(src, .Register(.CX)))
-                                    out.append(.Binary(op, .Register(.CL), dst))
+                                    out.append(.Mov(tp, src, .Register(.CX)))
+                                    out.append(.Binary(op, tp, .Register(.CL), dst))
                                 default:
                                     out.append(instr)
                             }
                     }
                 case .Cdq: out.append(instr)
-                case .Idiv(let op):
+                case .Idiv(let tp, let op):
                     switch op {
                         case .Immediate(let val):
-                            out.append(.Mov(.Immediate(val), .Register(.R10)))
-                            out.append(.Idiv(.Register(.R10)))
+                            out.append(.Mov(tp, .Immediate(val), .Register(.R10)))
+                            out.append(.Idiv(tp, .Register(.R10)))
                         default: out.append(instr)
                     }
-                case .Cmp(let left, let right):
+                case .Cmp(let tp, let left, let right):
                     switch left {
                         case .Data(_): fallthrough
                         case .Stack(_):
                             switch right {
                                 case .Data(_): fallthrough
                                 case .Stack(_):
-                                    out.append(.Mov(left, .Register(.R10)))
-                                    out.append(.Cmp(.Register(.R10), right))
+                                    out.append(.Mov(tp, left, .Register(.R10)))
+                                    out.append(.Cmp(tp, .Register(.R10), right))
                                 case .Immediate(_):
-                                    out.append(.Mov(right, .Register(.R11)))
-                                    out.append(.Cmp(left, .Register(.R11)))
+                                    out.append(.Mov(tp, right, .Register(.R11)))
+                                    out.append(.Cmp(tp, left, .Register(.R11)))
                                 default:
                                     out.append(instr)
                             }
                         default:
                             switch right {
                                 case .Immediate(_):
-                                    out.append(.Mov(right, .Register(.R11)))
-                                    out.append(.Cmp(left, .Register(.R11)))
+                                    out.append(.Mov(tp, right, .Register(.R11)))
+                                    out.append(.Cmp(tp, left, .Register(.R11)))
                                 default:
                                     out.append(instr)
                             }
@@ -581,6 +605,28 @@ class Assembly {
                 case .Call(_): out.append(instr)
                 case .DeallocateStack(_): out.append(instr)
                 case .Push(_): out.append(instr)
+                case .Movsx(let src, let dst):
+                    let realSrc : Tree.Operand
+                    switch src {
+                        case .Immediate(_):
+                            realSrc = .Register(.R10)
+                            out.append(.Mov(.Longword, src, realSrc))
+                        default:
+                            realSrc = src
+                    }
+                    let realDst : Tree.Operand
+                    let postfix : Tree.Instruction?
+                    switch dst {
+                        case .Data(_): fallthrough
+                        case .Stack(_):
+                            realDst = .Register(.R11)
+                            postfix = .Mov(.Quadword, realDst, dst)
+                        default:
+                            postfix = nil
+                            realDst = dst
+                    }
+                    out.append(.Movsx(realSrc, realDst))
+                    if let p = postfix { out.append(p) }
             }
         }
         return out
@@ -590,7 +636,7 @@ class Assembly {
         switch pls {
             case .Function(let name, let isGlobal, let instrs):
                 return .Function(name, isGlobal, fixUpMoves(instrs))
-            case .StaticVariable(_, _, _):
+            case .StaticVariable(_, _, _, _):
                 return pls
         }
     }

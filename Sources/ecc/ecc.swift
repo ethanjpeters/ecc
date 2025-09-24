@@ -129,7 +129,7 @@ struct ECC : ParsableCommand {
         let assembler = Assembly()
 
         var (assembly, backendSymbolTable) = assembler.generate(program: TAC, symbolTable: tackyDefs, typedSymbolTable: symbolTable)
-        assembly = assembler.replacePseudoRegisters(program: assembly)
+        assembly = assembler.replacePseudoRegisters(program: assembly, symbolTable)
         assembly = assembler.fixUpMoves(program: assembly)
 
         if codegen {
