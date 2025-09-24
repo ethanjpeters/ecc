@@ -48,13 +48,19 @@ class Assembly {
             case Shl
         }
 
+        enum AssemblyType {
+            case Longword
+            case Quadword
+        }
+
         enum Instruction {
-            case Mov(Operand /* src */, Operand /* dst */)
-            case Unary(UnaryOperator, Operand)
-            case Binary(BinaryOperator, Operand, Operand)
-            case Cmp(Operand, Operand)
-            case Idiv(Operand)
-            case Cdq
+            case Mov(AssemblyType, Operand /* src */, Operand /* dst */)
+            case Movsx(Operand /* src */, Operand /* dst */)
+            case Unary(UnaryOperator, AssemblyType, Operand)
+            case Binary(BinaryOperator, AssemblyType, Operand, Operand)
+            case Cmp(AssemblyType, Operand, Operand)
+            case Idiv(AssemblyType, Operand)
+            case Cdq(AssemblyType)
             case Jmp(String /* identifier */)
             case JmpCC(ConditionCode, String /* identifier */)
             case SetCC(ConditionCode, Operand)
@@ -68,7 +74,7 @@ class Assembly {
 
         enum Declaration {
             case Function(String, Bool /* is global */, [Instruction])
-            case StaticVariable(String /* name */, Bool /* is global */, Int /* initial value */)
+            case StaticVariable(String /* name */, Bool /* is global */, Int /* alignment */, SemanticAnalyzer.TypeChecker.StaticInit /* initial value */)
         }
 
         enum Program {
@@ -79,14 +85,43 @@ class Assembly {
     func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration]) -> Tree.Operand {
         switch val {
             case .Constant(let c):
-                print("We screwed constants up temporarily and have not yet fixed them, please stand by")
-                exit(ExitCode.internalError.rawValue)
-                // return .Immediate(c)
+                // NOTE: there is actually a limit on the magnitude of an immediate in x86 assembly that
+                // we should become aware of and use here
+                switch c {
+                    case .ConstInt(let i): return .Immediate(Int(i))
+                    case .ConstLong(let i): return .Immediate(Int(i))
+                }
             case .Var(let name):
                 if let _ = symbolTable[name] {
                     return .Data(name)
                 }
                 return .Pseudo(name)
+        }
+    }
+
+    func deduceType(_ val: Tacky.IR.Value, _ symbolTable: SymbolTable) -> Tree.AssemblyType {
+        switch val {
+            case .Constant(let c):
+                switch c {
+                    case .ConstInt(_) : return .Longword
+                    case .ConstLong(_) : return .Quadword
+                }
+            case .Var(let name):
+                guard let entry = symbolTable[name] else {
+                    print("Unreachable case where a variable was not in the symbol table during assembly generation: \(name)")
+                    exit(ExitCode.internalError.rawValue)
+                }
+                let (checkerType, _) = entry
+                switch checkerType {
+                    case .Function(_, _):
+                        print("Unreachable case where a variable was a function but was supposed to be a variable")
+                        exit(ExitCode.internalError.rawValue)
+                    case .Void:
+                        print("Unreachable case where a variable was void")
+                        exit(ExitCode.internalError.rawValue)
+                    case .Int: return .Longword
+                    case .Long: return .Quadword
+                }
         }
     }
 
@@ -102,97 +137,97 @@ class Assembly {
         }
     }
 
-    func generate(_ instructions: [Tacky.IR.Instruction], _ symbolTable: [String : Assembly.Tree.Declaration], _ out: inout [Tree.Instruction]) {
+    func generate(_ instructions: [Tacky.IR.Instruction], _ symbolTable: [String : Assembly.Tree.Declaration], _ out: inout [Tree.Instruction], _ typedSymbolTable: SymbolTable) {
         for instr in instructions {
             switch instr {
                 case .Return(let val):
-                    print("We screwed constants up temporarily and have not yet fixed them, please stand by")
-                    exit(ExitCode.internalError.rawValue)
-                    // let v : Tacky.IR.Value = (val == nil ? .Constant(0) : val!)
-                    // out.append(.Mov(convert(v, symbolTable), .Register(.AX)))
+                    let v : Tacky.IR.Value = (val == nil ? .Constant(.ConstInt(0)) : val!)
+                    out.append(.Mov(deduceType(v, typedSymbolTable), convert(v, symbolTable), .Register(.AX)))
                     out.append(.Ret)
                 case .Unary(let op, let src, let dst):
+                    let srcType = deduceType(src, typedSymbolTable)
                     if op == .Not {
-                        out.append(.Cmp(.Immediate(0), convert(src, symbolTable)))
-                        out.append(.Mov(.Immediate(0), convert(dst, symbolTable)))
+                        out.append(.Cmp(srcType, .Immediate(0), convert(src, symbolTable)))
+                        out.append(.Mov(srcType, .Immediate(0), convert(dst, symbolTable)))
                         out.append(.SetCC(.E, convert(dst, symbolTable)))
                     } else {
-                        out.append(.Mov(convert(src, symbolTable), convert(dst, symbolTable)))
-                        out.append(.Unary(convert(op), convert(dst, symbolTable)))
+                        out.append(.Mov(srcType, convert(src, symbolTable), convert(dst, symbolTable)))
+                        out.append(.Unary(convert(op), srcType, convert(dst, symbolTable)))
                     }
                 case .Binary(let op, let src1, let src2, let dst):
                     let src1Conv = convert(src1, symbolTable)
                     let src2Conv = convert(src2, symbolTable)
                     let dstConv = convert(dst, symbolTable)
+                    let srcType = deduceType(src1, typedSymbolTable)
                     switch op {
                         case .Add:
-                            out.append(.Mov(src1Conv, dstConv))
-                            out.append(.Binary(.Add, src2Conv, dstConv))
+                            out.append(.Mov(srcType, src1Conv, dstConv))
+                            out.append(.Binary(.Add, srcType, src2Conv, dstConv))
                         case .Subtract:
-                            out.append(.Mov(src1Conv, dstConv))
-                            out.append(.Binary(.Sub, src2Conv, dstConv))
+                            out.append(.Mov(srcType, src1Conv, dstConv))
+                            out.append(.Binary(.Sub, srcType, src2Conv, dstConv))
                         case .Multiply:
-                            out.append(.Mov(src1Conv, dstConv))
-                            out.append(.Binary(.Mult, src2Conv, dstConv))
+                            out.append(.Mov(srcType, src1Conv, dstConv))
+                            out.append(.Binary(.Mult, srcType, src2Conv, dstConv))
                         case .Divide:
-                            out.append(.Mov(src1Conv, .Register(.AX)))
-                            out.append(.Cdq)
-                            out.append(.Idiv(src2Conv))
-                            out.append(.Mov(.Register(.AX), dstConv))
+                            out.append(.Mov(srcType, src1Conv, .Register(.AX)))
+                            out.append(.Cdq(srcType))
+                            out.append(.Idiv(srcType, src2Conv))
+                            out.append(.Mov(srcType, .Register(.AX), dstConv))
                         case .Remainder:
-                            out.append(.Mov(src1Conv, .Register(.AX)))
-                            out.append(.Cdq)
-                            out.append(.Idiv(src2Conv))
-                            out.append(.Mov(.Register(.DX), dstConv))
+                            out.append(.Mov(srcType, src1Conv, .Register(.AX)))
+                            out.append(.Cdq(srcType))
+                            out.append(.Idiv(srcType, src2Conv))
+                            out.append(.Mov(srcType, .Register(.DX), dstConv))
                         case .Equal:
-                            out.append(.Cmp(src2Conv, src1Conv))
-                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.Cmp(srcType, src2Conv, src1Conv))
+                            out.append(.Mov(srcType, .Immediate(0), dstConv))
                             out.append(.SetCC(.E, dstConv))
                         case .NotEqual:
-                            out.append(.Cmp(src2Conv, src1Conv))
-                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.Cmp(srcType, src2Conv, src1Conv))
+                            out.append(.Mov(srcType, .Immediate(0), dstConv))
                             out.append(.SetCC(.NE, dstConv))
                         case .LessThan:
-                            out.append(.Cmp(src2Conv, src1Conv))
-                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.Cmp(srcType, src2Conv, src1Conv))
+                            out.append(.Mov(srcType, .Immediate(0), dstConv))
                             out.append(.SetCC(.L, dstConv))
                         case .LessOrEqual:
-                            out.append(.Cmp(src2Conv, src1Conv))
-                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.Cmp(srcType, src2Conv, src1Conv))
+                            out.append(.Mov(srcType, .Immediate(0), dstConv))
                             out.append(.SetCC(.LE, dstConv))
                         case .GreaterThan: 
-                            out.append(.Cmp(src2Conv, src1Conv))
-                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.Cmp(srcType, src2Conv, src1Conv))
+                            out.append(.Mov(srcType, .Immediate(0), dstConv))
                             out.append(.SetCC(.G, dstConv))
                         case .GreaterOrEqual:
-                            out.append(.Cmp(src2Conv, src1Conv))
-                            out.append(.Mov(.Immediate(0), dstConv))
+                            out.append(.Cmp(srcType, src2Conv, src1Conv))
+                            out.append(.Mov(srcType, .Immediate(0), dstConv))
                             out.append(.SetCC(.GE, dstConv))
                         case .BitwiseAnd:
-                            out.append(.Mov(src1Conv, dstConv))
-                            out.append(.Binary(.And, src2Conv, dstConv))
+                            out.append(.Mov(srcType, src1Conv, dstConv))
+                            out.append(.Binary(.And, srcType, src2Conv, dstConv))
                         case .BitwiseOr:
-                            out.append(.Mov(src1Conv, dstConv))
-                            out.append(.Binary(.Or, src2Conv, dstConv))
+                            out.append(.Mov(srcType, src1Conv, dstConv))
+                            out.append(.Binary(.Or, srcType, src2Conv, dstConv))
                         case .BitwiseXor:
-                            out.append(.Mov(src1Conv, dstConv))
-                            out.append(.Binary(.Xor, src2Conv, dstConv))
+                            out.append(.Mov(srcType, src1Conv, dstConv))
+                            out.append(.Binary(.Xor, srcType, src2Conv, dstConv))
                         case .BitwiseShiftRight:
-                            out.append(.Mov(src1Conv, dstConv))
-                            out.append(.Binary(.Sar, src2Conv, dstConv))
+                            out.append(.Mov(srcType, src1Conv, dstConv))
+                            out.append(.Binary(.Sar, srcType, src2Conv, dstConv))
                         case .BitwiseShiftLeft:
-                            out.append(.Mov(src1Conv, dstConv))
-                            out.append(.Binary(.Shl, src2Conv, dstConv))
+                            out.append(.Mov(srcType, src1Conv, dstConv))
+                            out.append(.Binary(.Shl, srcType, src2Conv, dstConv))
                     }
                 case .Copy(let src, let dst):
-                    out.append(.Mov(convert(src, symbolTable), convert(dst, symbolTable)))
+                    out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
                 case .Jump(let label):
                     out.append(.Jmp(label))
                 case .JumpIfZero(let val, let label):
-                    out.append(.Cmp(.Immediate(0), convert(val, symbolTable)))
+                    out.append(.Cmp(deduceType(val, typedSymbolTable), .Immediate(0), convert(val, symbolTable)))
                     out.append(.JmpCC(.E, label))
                 case .JumpIfNotZero(let val, let label):
-                    out.append(.Cmp(.Immediate(0), convert(val, symbolTable)))
+                    out.append(.Cmp(deduceType(val, typedSymbolTable), .Immediate(0), convert(val, symbolTable)))
                     out.append(.JmpCC(.NE, label))
                 case .Label(let name):
                     out.append(.Label(name))
@@ -202,23 +237,23 @@ class Assembly {
                     var copiedParams = params
                     if !copiedParams.isEmpty {
                         let p = copiedParams.removeFirst()
-                        out.append(.Mov(convert(p, symbolTable), .Register(.DI)))
+                        out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(.DI)))
                     }
                     if !copiedParams.isEmpty {
                         let p = copiedParams.removeFirst()
-                        out.append(.Mov(convert(p, symbolTable), .Register(.SI)))
+                        out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(.SI)))
                     }
                     if !copiedParams.isEmpty {
                         let p = copiedParams.removeFirst()
-                        out.append(.Mov(convert(p, symbolTable), .Register(.CX)))
+                        out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(.CX)))
                     }
                     if !copiedParams.isEmpty {
                         let p = copiedParams.removeFirst()
-                        out.append(.Mov(convert(p, symbolTable), .Register(.R8)))
+                        out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(.R8)))
                     }
                     if !copiedParams.isEmpty {
                         let p = copiedParams.removeFirst()
-                        out.append(.Mov(convert(p, symbolTable), .Register(.R9)))
+                        out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(.R9)))
                     }
 
                     // the System V ABI requires the stack to be 16-byte aligned
@@ -231,13 +266,18 @@ class Assembly {
                     copiedParams.reverse()
                     for p in copiedParams {
                         let src = convert(p, symbolTable)
+                        var shouldPushStraight : Bool = deduceType(p, typedSymbolTable) == .Quadword
                         switch src {
                             case .Register(_): fallthrough
                             case .Immediate(_):
-                                out.append(.Push(src))
-                            default:
-                                out.append(.Mov(src, .Register(.AX)))
-                                out.append(.Push(.Register(.AX)))
+                                shouldPushStraight = true
+                            default: ()
+                        }
+                        if shouldPushStraight {
+                            out.append(.Push(src))
+                        } else {
+                            out.append(.Mov(.Longword, src, .Register(.AX)))
+                            out.append(.Push(.Register(.AX)))
                         }
                     }
                     // call the function
@@ -249,47 +289,47 @@ class Assembly {
                     }
 
                     // move the result
-                    out.append(.Mov(.Register(.AX), convert(result, symbolTable)))
-                case .SignExtend(_, _): fallthrough
-                case .Truncate(_, _):
-                    print("As-yet-unhandled instruction \(instr) found while generating assembly")
-                    exit(ExitCode.internalError.rawValue)
+                    out.append(.Mov(deduceType(result, typedSymbolTable), .Register(.AX), convert(result, symbolTable)))
+                case .SignExtend(let src, let dst):
+                    out.append(.Movsx(convert(src, symbolTable), convert(dst, symbolTable)))
+                case .Truncate(let src, let dst):
+                    out.append(.Mov(.Longword, convert(src, symbolTable), convert(dst, symbolTable)))
             }
         }
     }
 
-    func generate(_ pls: Tacky.IR.Declaration, _ symbolTable: [String : Assembly.Tree.Declaration]) -> Tree.Declaration {
+    func generate(_ pls: Tacky.IR.Declaration, _ symbolTable: [String : Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable) -> Tree.Declaration {
         switch pls {
             case .Function(let name, let isGlobal, let params, let instrs):
                 var out : [Tree.Instruction] = []
                 var copiedParams = params
                 if !copiedParams.isEmpty {
-                    let p = copiedParams.removeFirst()
-                    out.append(.Mov(.Register(.DI), .Pseudo(p)))
+                    let p: String = copiedParams.removeFirst()
+                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Register(.DI), .Pseudo(p)))
                 }
                 if !copiedParams.isEmpty {
                     let p = copiedParams.removeFirst()
-                    out.append(.Mov(.Register(.SI), .Pseudo(p)))
+                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Register(.SI), .Pseudo(p)))
                 }
                 if !copiedParams.isEmpty {
                     let p = copiedParams.removeFirst()
-                    out.append(.Mov(.Register(.CX), .Pseudo(p)))
+                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Register(.CX), .Pseudo(p)))
                 }
                 if !copiedParams.isEmpty {
                     let p = copiedParams.removeFirst()
-                    out.append(.Mov(.Register(.R8), .Pseudo(p)))
+                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Register(.R8), .Pseudo(p)))
                 }
                 if !copiedParams.isEmpty {
                     let p = copiedParams.removeFirst()
-                    out.append(.Mov(.Register(.R9), .Pseudo(p)))
+                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Register(.R9), .Pseudo(p)))
                 }
                 copiedParams.reverse()
                 var counter = 0
                 for p in copiedParams {
-                    out.append(.Mov(.Stack(16 + counter), .Pseudo(p)))
+                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Stack(16 + counter), .Pseudo(p)))
                     counter = counter + 8
                 }
-                generate(instrs, symbolTable, &out)
+                generate(instrs, symbolTable, &out, typedSymbolTable)
                 return .Function(name, isGlobal, out)
             case .StaticVariable(_, _, _, _):
                 print("As yet unhandled global variable caught while generating assembly")
@@ -297,13 +337,13 @@ class Assembly {
         }
     }
 
-    func generate(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration]) -> Tree.Program {
+    func generate(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration], typedSymbolTable: SymbolTable) -> Tree.Program {
         var assemblyDecls : [Assembly.Tree.Declaration] = []
         var internalSymbolTable : [String : Assembly.Tree.Declaration] = [:]
         for tackyDef in symbolTable {
             switch tackyDef {
                 case .StaticVariable(let name, let isGlobal, let tp, let initValue):
-                    let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, 0) //initValue)
+                    let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, tp == .Int ? 4 : 8, initValue)
                     assemblyDecls.append(assemblyEntry)
                     internalSymbolTable[name] = assemblyEntry
                 default: ()
@@ -312,7 +352,7 @@ class Assembly {
         switch program {
             case .Statement(let declarations):
                 for d in declarations {
-                    assemblyDecls.append(generate(d, internalSymbolTable))
+                    assemblyDecls.append(generate(d, internalSymbolTable, typedSymbolTable))
                 }
                 return .Statement(assemblyDecls)
         }

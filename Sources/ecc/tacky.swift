@@ -443,7 +443,7 @@ class Tacky {
     func generateTACKYDeclaration(decl: Parser.AST.Declaration, out : inout [Tacky.IR.Instruction], symbolTable: inout SymbolTable) -> Tacky.IR.Declaration? {
         switch decl {
             // TODO: use type information to determine size of parameters
-            case .VariableDeclaration(_, let name, let exp, let storageClass):
+            case .VariableDeclaration(_, let name, let exp, _):
                 if exp != nil {
                     let child = generateTACKYExpression(exp!, out: &out, symbolTable: &symbolTable)
                     out.append(.Copy(child, .Var(name)))

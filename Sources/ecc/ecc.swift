@@ -128,7 +128,7 @@ struct ECC : ParsableCommand {
 
         let assembler = Assembly()
 
-        var assembly = assembler.generate(program: TAC, symbolTable: tackyDefs)
+        var assembly = assembler.generate(program: TAC, symbolTable: tackyDefs, typedSymbolTable: symbolTable)
         assembly = assembler.replacePseudoRegisters(program: assembly)
         assembly = assembler.fixUpMoves(program: assembly)
 
