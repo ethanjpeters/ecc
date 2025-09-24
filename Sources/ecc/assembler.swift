@@ -648,10 +648,122 @@ class Assembly {
         }
     }
 
+    func fixUpImmediates(program: Tree.Program) -> Tree.Program {
+        switch program {
+            case .Statement(let decls):
+                var fixedDecls : [Tree.Declaration] = []
+                for dec in decls {
+                    switch dec {
+                        case .Function(let name, let isGlobal, let body):
+                            var fixedBody : [Tree.Instruction] = []
+                            for instr in body {
+                                switch instr {
+                                    case .Mov(let tp, let src, let dst):
+                                        switch src {
+                                            case .Immediate(let val):
+                                                switch dst {
+                                                    case .Register(_):
+                                                        fixedBody.append(instr)
+                                                    default:
+                                                        if val > Int32.max {
+                                                            fixedBody.append(.Mov(
+                                                                tp,
+                                                                src,
+                                                                .Register(.R10)
+                                                            ))
+                                                            fixedBody.append(.Mov(
+                                                                tp,
+                                                                .Register(.R10),
+                                                                dst
+                                                            ))
+                                                        } else {
+                                                            fixedBody.append(instr)
+                                                        }
+                                                }
+                                            default: fixedBody.append(instr)
+                                        }
+                                    case .Movsx(_, _): fixedBody.append(instr)
+                                    case .Unary(_, _, _): fixedBody.append(instr)
+                                    case .Binary(let op, let tp, let src, let dst):
+                                        if tp == .Quadword {
+                                            switch op {
+                                                case .Add: fallthrough
+                                                case .Mult: fallthrough
+                                                case .Sub:
+                                                    switch src {
+                                                        case .Immediate(let val):
+                                                            if val > Int32.max {
+                                                                fixedBody.append(.Mov(
+                                                                    tp,
+                                                                    src,
+                                                                    .Register(.R10)
+                                                                ))
+                                                                fixedBody.append(.Binary(
+                                                                    op,
+                                                                    tp,
+                                                                    .Register(.R10),
+                                                                    dst
+                                                                ))
+                                                            } else {
+                                                                fixedBody.append(instr)
+                                                            }
+                                                        default: fixedBody.append(instr)
+                                                    }
+                                                default: fixedBody.append(instr)
+                                            }
+                                        } else {
+                                            fixedBody.append(instr)
+                                        }
+                                    case .Cmp(let tp, let src, let dst):
+                                        if tp == .Quadword {
+                                            switch src {
+                                                case .Immediate(let val):
+                                                    if val > Int32.max {
+                                                        fixedBody.append(.Mov(
+                                                            tp,
+                                                            src,
+                                                            .Register(.R10)
+                                                        ))
+                                                        fixedBody.append(.Cmp(
+                                                            tp,
+                                                            .Register(.R10),
+                                                            dst
+                                                        ))
+                                                    } else {
+                                                        fixedBody.append(instr)
+                                                    }
+                                                default: fixedBody.append(instr)
+                                            }
+                                        } else {
+                                            fixedBody.append(instr)
+                                        }
+                                    case .Idiv(_, _): fallthrough
+                                    case .Cdq(_): fallthrough
+                                    case .Jmp(_): fallthrough
+                                    case .JmpCC(_, _): fallthrough
+                                    case .SetCC(_, _): fallthrough
+                                    case .Label(_): fallthrough
+                                    case .AllocateStack(_): fallthrough
+                                    case .DeallocateStack(_): fallthrough
+                                    case .Push(_): fallthrough
+                                    case .Call(_): fallthrough
+                                    case .Ret: fixedBody.append(instr)
+                                }
+                            }
+                            fixedDecls.append(.Function(name, isGlobal, fixedBody))
+                        case .StaticVariable(_, _, _, _):
+                            fixedDecls.append(dec)
+                    }
+                }
+                return .Statement(fixedDecls)
+        }
+    }
+
     func assemble(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration], typedSymbolTable: SymbolTable) -> (Tree.Program, BackendSymbolTable) {
         let (assembly, backendSymbolTable) = generate(program: program, symbolTable: symbolTable, typedSymbolTable: typedSymbolTable)
         let dePseudoed = replacePseudoRegisters(program: assembly, typedSymbolTable)
         let fixedUp = fixUpMoves(program: dePseudoed)
-        return (fixedUp, backendSymbolTable)
+        let noBigImms = fixUpImmediates(program: fixedUp)
+        return (noBigImms, backendSymbolTable)
     }
 }
