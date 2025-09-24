@@ -509,15 +509,7 @@ class SemanticAnalyzer {
             case LocalAttr
         }
 
-        func convert(_ pType : Parser.AST.CType) -> CheckerType {
-            switch pType {
-                case .Int: return .Int
-                case .Void: return .Void
-                case .Long: return .Long
-            }
-        }
-
-        func deConvert(_ cType : CheckerType) -> Parser.AST.CType {
+        static func deConvert(_ cType : CheckerType) -> Parser.AST.CType {
             switch cType {
                 case .Int: return .Int
                 case .Void: return .Void
@@ -543,7 +535,7 @@ class SemanticAnalyzer {
 
         func typeConvert(_ exp: Parser.AST.Expression, ofType: CheckerType, toType: CheckerType) -> Parser.AST.Expression {
             if ofType == toType { return exp }
-            return .Cast(deConvert(toType), exp, deConvert(toType))
+            return .Cast(Self.deConvert(toType), exp, Self.deConvert(toType))
         }
 
         func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Expression, CheckerType) {
@@ -561,9 +553,9 @@ class SemanticAnalyzer {
                         case .Not:
                             outType = .Int
                         default:
-                            outType = deConvert(eType)
+                            outType = Self.deConvert(eType)
                     }
-                    return (.Unary(unOp, checkedE, outType), convert(outType))
+                    return (.Unary(unOp, checkedE, outType), converCTypeToCheckerType(outType))
                 case .Binary(let binOp, let left, let right, _):
                     // TODO: not all binary operations on all pairs of types make sense
                     let (checkedLeft, leftType) = typeCheck(left, nameMap)
@@ -594,7 +586,7 @@ class SemanticAnalyzer {
                         binOp,
                         typeConvert(checkedLeft, ofType: leftType, toType: outType),
                         typeConvert(checkedRight, ofType: rightType, toType: outType),
-                        deConvert(outType)
+                        Self.deConvert(outType)
                     )
                     switch binOp {
                         case .Add: fallthrough
@@ -612,7 +604,7 @@ class SemanticAnalyzer {
                 case .Var(let name, _):
                     // name is enforced to exist
                     let (tp, _) = nameMap[name]!
-                    return (.Var(name, deConvert(tp)), tp)
+                    return (.Var(name, Self.deConvert(tp)), tp)
                 case .Assignment(let lValue, let exp, _):
                     // lValue is already enforced to be a valid lValue
                     let name: String
@@ -626,9 +618,9 @@ class SemanticAnalyzer {
                     let (tp, _) = nameMap[name]!
                     let (checkedExp, expType) = typeCheck(exp, nameMap)
                     return (.Assignment(
-                        .Var(name, deConvert(tp)),
+                        .Var(name, Self.deConvert(tp)),
                         typeConvert(checkedExp, ofType: expType, toType: tp),
-                        deConvert(tp)
+                        Self.deConvert(tp)
                     ), tp)
                 case .CompoundAssignment(_, _, _, _):
                     print("Unreachable compound assignment found during type checking")
@@ -642,7 +634,7 @@ class SemanticAnalyzer {
                         typeConvert(checkedCond, ofType: condType, toType: .Int),
                         typeConvert(checkedLeft, ofType: leftType, toType: outType),
                         typeConvert(checkedRight, ofType: rightType, toType: outType),
-                        deConvert(outType)
+                        Self.deConvert(outType)
                     ), outType)
                 case .FunctionCall(let lValue, let params, _):
                     // lValue is already enforced to be a valid lValue
@@ -672,7 +664,7 @@ class SemanticAnalyzer {
                                 let ipExp = typeConvert(incomingParam.0, ofType: incomingParam.1, toType: commonType)
                                 upCastExp.append(ipExp)
                             }
-                            return (.FunctionCall(lValue, upCastExp, deConvert(rType)), rType)
+                            return (.FunctionCall(lValue, upCastExp, Self.deConvert(rType)), rType)
                         case .Int: fallthrough
                         case .Long: fallthrough
                         case .Void:
@@ -681,7 +673,7 @@ class SemanticAnalyzer {
                     }
                 case .Cast(let targetType, let child, _):
                     let tmp = typeCheck(child, nameMap)
-                    return (.Cast(targetType, tmp.0, deConvert(tmp.1)), convert(targetType))
+                    return (.Cast(targetType, tmp.0, Self.deConvert(tmp.1)), converCTypeToCheckerType(targetType))
             }
         }
 
@@ -694,7 +686,7 @@ class SemanticAnalyzer {
                             exit(ExitCode.semanticError.rawValue)
                         }
                         let (outExp, outTp) = typeCheck(e, nameMap)
-                        let castExp = typeConvert(outExp, ofType: outTp, toType: convert(enclosingFuncReturnType))
+                        let castExp = typeConvert(outExp, ofType: outTp, toType: converCTypeToCheckerType(enclosingFuncReturnType))
                         return .Return(castExp)
                     } else {
                         if enclosingFuncReturnType != .Void {
@@ -823,10 +815,10 @@ class SemanticAnalyzer {
                     for p in params {
                         switch p {
                             case .NamedParameter(let tp, _):
-                                paramTypes.append(convert(tp))
+                                paramTypes.append(converCTypeToCheckerType(tp))
                         }
                     }
-                    let constructedType : CheckerType = .Function(convert(returnType), paramTypes)
+                    let constructedType : CheckerType = .Function(converCTypeToCheckerType(returnType), paramTypes)
                     let isDefined : Bool = body != nil
                     let isGlobal : Bool = sc != .Static
                     if let preExistingFunction = nameMap[name] {
@@ -855,7 +847,7 @@ class SemanticAnalyzer {
                     for p in params {
                         switch p {
                             case .NamedParameter(let tp, let name):
-                                copy[name] = (convert(tp), .LocalAttr)
+                                copy[name] = (converCTypeToCheckerType(tp), .LocalAttr)
                         }
                     }
                     let typeCheckedBody : Parser.AST.Block?
@@ -868,7 +860,7 @@ class SemanticAnalyzer {
                 case .VariableDeclaration(let tp, let name, let initExp, let storageClass):
                     var typeCheckedInit : Parser.AST.Expression?
                     let initType : CheckerType
-                    let conTp = convert(tp)
+                    let conTp = converCTypeToCheckerType(tp)
                     if let e = initExp {
                         (typeCheckedInit, initType) = typeCheck(e, nameMap)
                         let commonType = getCommonType(initType, conTp)
@@ -1007,5 +999,13 @@ class SemanticAnalyzer {
 
         let _ = TypeChecker().typeCheck(casedProgram, &overallNameMap)
         return (casedProgram, overallNameMap)
+    }
+}
+
+func converCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.TypeChecker.CheckerType {
+    switch pType {
+        case .Int: return .Int
+        case .Void: return .Void
+        case .Long: return .Long
     }
 }
