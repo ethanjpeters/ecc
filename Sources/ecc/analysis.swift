@@ -27,7 +27,7 @@ class SemanticAnalyzer {
 
         func isValidLValue(_ exp: Parser.AST.Expression) -> Bool {
             switch exp {
-                case .Var(_): return true
+                case .Var(_, _): return true
                 default: return false
             }
         }
@@ -492,9 +492,14 @@ class SemanticAnalyzer {
             case Function(CheckerType /* return */, [CheckerType] /* params */)
         }
 
+        enum StaticInit {
+            case IntInit(Int32)
+            case LongInit(Int64)
+        }
+
         enum InitialValue {
             case Tentative
-            case Initial(Int)   // NOTE: other types will affect this
+            case Initial(StaticInit)   // NOTE: other types will affect this
             case NoInitializer
         }
 
@@ -558,7 +563,7 @@ class SemanticAnalyzer {
                         default:
                             outType = deConvert(eType)
                     }
-                    return (.Unary(unOp, checkedE, deConvert(eType)), eType)
+                    return (.Unary(unOp, checkedE, outType), convert(outType))
                 case .Binary(let binOp, let left, let right, _):
                     // TODO: not all binary operations on all pairs of types make sense
                     let (checkedLeft, leftType) = typeCheck(left, nameMap)
@@ -679,37 +684,49 @@ class SemanticAnalyzer {
             }
         }
 
-        func typeCheck(_ statement: Parser.AST.Statement, _ nameMap: inout [String: (CheckerType, IdentifierAttributes)]) -> Parser.AST.Statement {
+        func typeCheck(_ statement: Parser.AST.Statement, _ nameMap: inout [String: (CheckerType, IdentifierAttributes)], _ enclosingFuncReturnType : Parser.AST.CType) -> Parser.AST.Statement {
             switch statement {
                 case .Return(let exp):
                     if let e = exp {
-                        return .Return(typeCheck(e, nameMap).0)
-                    } else { return .Return(nil) }
+                        if enclosingFuncReturnType == .Void {
+                            print("Attempted to return non-void value \(e) from void function")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
+                        let (outExp, outTp) = typeCheck(e, nameMap)
+                        let castExp = typeConvert(outExp, ofType: outTp, toType: convert(enclosingFuncReturnType))
+                        return .Return(castExp)
+                    } else {
+                        if enclosingFuncReturnType != .Void {
+                            print("Returning void from non-void function (of type \(enclosingFuncReturnType))")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
+                        return .Return(nil)
+                    }
                 case .Expression(let exp):
                     return .Expression(typeCheck(exp, nameMap).0)
                 case .If(let condition, let thenClause, let elseClause):
                     let checkedCond = typeCheck(condition, nameMap).0   // TODO: do we need to cast this guy?
-                    let checkedThen = typeCheck(thenClause, &nameMap)
+                    let checkedThen = typeCheck(thenClause, &nameMap, enclosingFuncReturnType)
                     let checkedElse: Parser.AST.Statement?
                     if let els = elseClause {
-                        checkedElse = typeCheck(els, &nameMap)
+                        checkedElse = typeCheck(els, &nameMap, enclosingFuncReturnType)
                     } else {
                         checkedElse = nil
                     }
                     return .If(checkedCond, checkedThen, checkedElse)
                 case .Compound(let block):
-                    return .Compound(typeCheck(block, &nameMap))
+                    return .Compound(typeCheck(block, &nameMap, enclosingFuncReturnType))
                 case .Null: return .Null
                 case .Break(_): return statement
                 case .Continue(_): return statement
                 case .While(let condition, let body, let lbl):
                     let checkedCond = typeCheck(condition, nameMap)
                     var copiedNameMap = copyNameMap(nameMap)
-                    let checkedBody = typeCheck(body, &copiedNameMap)
+                    let checkedBody = typeCheck(body, &copiedNameMap, enclosingFuncReturnType)
                     return .While(checkedCond.0, checkedBody, lbl)
                 case .DoWhile(let body, let condition, let lbl):
                     var copiedNameMap = copyNameMap(nameMap)
-                    let checkedBody = typeCheck(body, &copiedNameMap)
+                    let checkedBody = typeCheck(body, &copiedNameMap, enclosingFuncReturnType)
                     let checkedCond = typeCheck(condition, nameMap)
                     return .DoWhile(checkedBody, checkedCond.0, lbl)
                 case .For(let forInit, let condition, let post, let body, let lbl):
@@ -743,31 +760,31 @@ class SemanticAnalyzer {
                     } else {
                         checkedPost = nil
                     }
-                    let checkedBody = typeCheck(body, &copiedNameMap)
+                    let checkedBody = typeCheck(body, &copiedNameMap, enclosingFuncReturnType)
                     return .For(checkedInit, checkedCondition, checkedPost, checkedBody, lbl)
                 case .Switch(let toggle, let body, let lbl):
                     // TODO: cast this to bool-like
                     let checkedToggle = typeCheck(toggle, nameMap)
                     var copiedNameMap = copyNameMap(nameMap)
-                    let checkedBody = typeCheck(body, &copiedNameMap)
+                    let checkedBody = typeCheck(body, &copiedNameMap, enclosingFuncReturnType)
                     return .Switch(checkedToggle.0, checkedBody, lbl)
                 case .Labeled(let ls):
                     let checkedLine : Parser.AST.LabeledStatement
                     switch ls {
                         // TODO: some type checking that should be happening isn't happening inside of switch statements
                         case .CaseStatement(let lbl, let line):    // don't bother type checking a constant
-                            checkedLine = .CaseStatement(lbl, typeCheck(line, &nameMap))
+                            checkedLine = .CaseStatement(lbl, typeCheck(line, &nameMap, enclosingFuncReturnType))
                         case .DefaultStatement(let line):
-                            checkedLine = .DefaultStatement(typeCheck(line, &nameMap))
+                            checkedLine = .DefaultStatement(typeCheck(line, &nameMap, enclosingFuncReturnType))
                         case .IdentifiedLine(let lbl, let line):
-                            checkedLine = .IdentifiedLine(lbl, typeCheck(line, &nameMap))
+                            checkedLine = .IdentifiedLine(lbl, typeCheck(line, &nameMap, enclosingFuncReturnType))
                     }
                     return .Labeled(checkedLine)
             }
         }
 
         // NOTE: this does not match return statements with function return types
-        func typeCheck(_ block: Parser.AST.Block, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)]) -> Parser.AST.Block {
+        func typeCheck(_ block: Parser.AST.Block, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)], _ enclosingFuncReturnType : Parser.AST.CType) -> Parser.AST.Block {
             switch block {
                 case .Block(let blockItems):
                     var copiedNameItems = copyNameMap(nameMap)
@@ -785,7 +802,7 @@ class SemanticAnalyzer {
                                         typeCheckedItems.append(.D(typeCheck(decl, false, &copiedNameItems)))
                                 }
                             case .S(let stmt):
-                                typeCheckedItems.append(.S(typeCheck(stmt, &copiedNameItems)))
+                                typeCheckedItems.append(.S(typeCheck(stmt, &copiedNameItems, enclosingFuncReturnType)))
                         }
                     }
                     return .Block(typeCheckedItems)
@@ -842,7 +859,7 @@ class SemanticAnalyzer {
                     }
                     let typeCheckedBody : Parser.AST.Block?
                     if let b = body {
-                        typeCheckedBody = typeCheck(b, &copy)
+                        typeCheckedBody = typeCheck(b, &copy, returnType)
                     } else {
                         typeCheckedBody = nil
                     }
@@ -864,9 +881,9 @@ class SemanticAnalyzer {
                         if let ie = initExp {
                             switch ie {
                                 case .ConstInt(let i, let tp):
-                                    initVal = .Initial(Int(i))
+                                    initVal = .Initial(.IntInit(Int32(i)))
                                 case .ConstLong(let i, let tp):
-                                    initVal = .Initial(Int(i))
+                                    initVal = .Initial(.LongInit(Int64(i)))
                                 default:
                                     // NOTE: we could allow things that evaluate constantly, but we don't yet
                                     print("Non constant expression \(ie) used to initialize global \(name)")
@@ -945,17 +962,17 @@ class SemanticAnalyzer {
                             if let e = initExp {
                                 switch e {
                                     case .ConstInt(let i, let tp):
-                                        initValue = .Initial(Int(i))
+                                        initValue = .Initial(.IntInit(Int32(i)))
                                     case .ConstLong(let i, let tp):
-                                        initValue = .Initial(Int(i))
+                                        initValue = .Initial(.LongInit(Int64(i)))
                                     default:
                                         print("Non-constant initializer on local static variable \(name)")
                                         exit(ExitCode.semanticError.rawValue)
                                 }
                             } else {
-                                initValue = .Initial(0)
+                                initValue = .Initial(.IntInit(0))
                             }
-                            nameMap[name] = (convert(tp), .StaticAttr(initValue, false))
+                            nameMap[name] = (conTp, .StaticAttr(initValue, false))
                         } else {
                             nameMap[name] = (initType, .LocalAttr)
                         }
