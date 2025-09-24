@@ -1,5 +1,7 @@
 import Foundation
 
+typealias BackendSymbolTable = [String : Assembly.Tree.AssemblySymbolTableEntry]
+
 class Assembly {
     struct Tree {
         enum ConditionCode {
@@ -79,6 +81,11 @@ class Assembly {
 
         enum Program {
             case Statement([Declaration])
+        }
+
+        enum AssemblySymbolTableEntry {
+            case ObjEntry(AssemblyType, Bool /* is static */)
+            case FunEntry(Bool /* is defined */)
         }
     }
 
@@ -337,7 +344,7 @@ class Assembly {
         }
     }
 
-    func generate(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration], typedSymbolTable: SymbolTable) -> Tree.Program {
+    func generate(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration], typedSymbolTable: SymbolTable) -> (Tree.Program, BackendSymbolTable) {
         var assemblyDecls : [Assembly.Tree.Declaration] = []
         var internalSymbolTable : [String : Assembly.Tree.Declaration] = [:]
         for tackyDef in symbolTable {
@@ -349,13 +356,48 @@ class Assembly {
                 default: ()
             }
         }
+        let out: Tree.Program
         switch program {
             case .Statement(let declarations):
                 for d in declarations {
                     assemblyDecls.append(generate(d, internalSymbolTable, typedSymbolTable))
                 }
-                return .Statement(assemblyDecls)
+                out = .Statement(assemblyDecls)
         }
+
+        var asmSymTab : BackendSymbolTable = .init()
+        for (name, entry) in typedSymbolTable {
+            let (checkerType, attrs) = entry
+            switch checkerType {
+                case .Int: fallthrough
+                case .Long:
+                    let asmType : Tree.AssemblyType = (checkerType == .Int ? .Longword : .Quadword)
+                    let isStatic: Bool
+                    switch attrs {
+                        case .StaticAttr(_, _):
+                            isStatic = true
+                        case .LocalAttr:
+                            isStatic = false
+                        case .FunAttr(_, _):
+                            print("Totally meaningless function typed int/long \(name)")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                    asmSymTab[name] = .ObjEntry(asmType, isStatic)
+                case .Void:
+                    print("Totally meaningless void-typed variable")
+                    exit(ExitCode.internalError.rawValue)
+                case .Function(_, _):
+                    switch attrs {
+                        case .FunAttr(let isDefined, _):
+                            asmSymTab[name] = .FunEntry(isDefined)
+                        default:
+                            print("Meaningless non-function attributes attached to function \(name)")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+            }
+        }
+
+        return (out, asmSymTab)
     }
 
     func replacePseudoRegisters(_ op: Tree.Operand, _ stackSlotCounter: inout Int, _ nameStackMapping: inout [String: Int]) -> Tree.Operand {
