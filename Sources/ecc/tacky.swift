@@ -286,7 +286,7 @@ class Tacky {
             case .Cast(let targetType, let child, let tp):
 
                 // DEBUG
-                print("CONSIDERING CASTING \(child) OF TYPE \(tp) TO TYPE \(targetType)")
+                // print("CONSIDERING CASTING \(child) OF TYPE \(tp) TO TYPE \(targetType)")
                 // END DEBUG
 
                 let unCastedValue = generateTACKYExpression(child, out: &out, symbolTable: &symbolTable)

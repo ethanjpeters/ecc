@@ -1,5 +1,15 @@
 #!/bin/bash
 
+swift run ecc TestSources/euler3-short.c
+./euler3-short
+if [[ $? -ne 29 ]]; then
+    echo "euler3-short: Expected exit code 29 but got $?"
+    exit 1
+else
+    echo "euler3-short: success"
+fi
+rm euler3-short
+
 swift run ecc TestSources/storage.c
 ./storage
 if [[ $? -ne 13 ]]; then

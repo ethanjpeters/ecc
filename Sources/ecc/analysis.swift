@@ -666,7 +666,7 @@ class SemanticAnalyzer {
                 case .Cast(let targetType, let child, _):
                     let tmp = typeCheck(child, nameMap)
                     // DEBUG
-                    print("TYPE CHECKING CAST OF \(child) TO \(targetType): \(tmp)")
+                    // print("TYPE CHECKING CAST OF \(child) TO \(targetType): \(tmp)")
                     // END DEBUG
                     return (.Cast(targetType, tmp.0, Self.deConvert(tmp.1)), tmp.1)
             }
