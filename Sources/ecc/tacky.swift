@@ -285,15 +285,17 @@ class Tacky {
                 return dst
             case .Cast(let targetType, let child, let tp):
                 let unCastedValue = generateTACKYExpression(child, out: &out, symbolTable: &symbolTable)
-                let dst = makeTempVariable(tp!, &symbolTable)
                 if targetType != tp {
+                    let dst = makeTempVariable(tp!, &symbolTable)
                     if targetType == .Long {
                         out.append(.SignExtend(unCastedValue, dst))
                     } else {
                         out.append(.Truncate(unCastedValue, dst))
                     }
+                    return dst
+                } else {
+                    return unCastedValue
                 }
-                return dst
         }
     }
 

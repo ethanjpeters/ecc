@@ -407,7 +407,7 @@ class Assembly {
                 guard let (tp, _) = symbolTable[name] else {
                     print("Impossible situation where pseudo \(name) is not in the symbol table")
                     // DEBUG
-                    print("SYMBOL TABLE = \(symbolTable)")
+                    // print("SYMBOL TABLE = \(symbolTable)")
                     // END DEBUG
                     exit(ExitCode.internalError.rawValue)
                 }
