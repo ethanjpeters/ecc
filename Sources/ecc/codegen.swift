@@ -168,8 +168,12 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\t\(convert(unOp, tp))\t\(convert(op, typeToWidth(tp)))")
             case .Binary(let binOp, let tp, let leftOperand, let rightOperand):
                 out.append("\t\(convert(binOp, tp))\t\(convert(leftOperand, typeToWidth(tp))), \(convert(rightOperand, typeToWidth(tp)))")
-            case .Cdq:
-                out.append("\tcdq")
+            case .Cdq(let tp):
+                if tp == .Longword {
+                    out.append("\tcdq")
+                } else {
+                    out.append("\tcqo")
+                }
             case .Idiv(let tp, let op):
                 out.append("\tidiv\(typeToSuffix(tp))\t\(convert(op, typeToWidth(tp)))")
             case .Cmp(let tp, let left, let right):

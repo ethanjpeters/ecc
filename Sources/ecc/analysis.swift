@@ -956,7 +956,7 @@ class SemanticAnalyzer {
                             }
                             nameMap[name] = (conTp, .StaticAttr(initValue, false))
                         } else {
-                            nameMap[name] = (initType, .LocalAttr)
+                            nameMap[name] = (conTp, .LocalAttr)
                         }
                     }
                     return .VariableDeclaration(tp, name, typeCheckedInit, storageClass)

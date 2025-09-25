@@ -430,6 +430,12 @@ class Assembly {
                 }
                 stackSlotCounter = tmp
                 nameStackMapping[name] = stackSlotCounter
+
+                // DEBUG
+                print("MAPPING PSEUDO \(name) TO STACK SLOT -\(stackSlotCounter) WIDTH = \(width)")
+                // END DEBUG
+
+
                 return .Stack(-stackSlotCounter)
             case .Stack(_):
                 return op
@@ -479,7 +485,7 @@ class Assembly {
             }
         }
 
-        out.insert(.AllocateStack(stackSlotCounter * 4), at: 0)
+        out.insert(.AllocateStack(stackSlotCounter), at: 0)
 
         return out
     }

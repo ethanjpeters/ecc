@@ -291,7 +291,7 @@ class Tacky {
 
                 let unCastedValue = generateTACKYExpression(child, out: &out, symbolTable: &symbolTable)
                 if targetType != tp {
-                    let dst = makeTempVariable(tp!, &symbolTable)
+                    let dst = makeTempVariable(targetType, &symbolTable)
                     if targetType == .Long {
                         out.append(.SignExtend(unCastedValue, dst))
                     } else {
