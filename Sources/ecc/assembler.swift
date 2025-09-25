@@ -432,7 +432,7 @@ class Assembly {
                 nameStackMapping[name] = stackSlotCounter
 
                 // DEBUG
-                print("MAPPING PSEUDO \(name) TO STACK SLOT -\(stackSlotCounter) WIDTH = \(width)")
+                // print("MAPPING PSEUDO \(name) TO STACK SLOT -\(stackSlotCounter) WIDTH = \(width)")
                 // END DEBUG
 
 
