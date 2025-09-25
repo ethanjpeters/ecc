@@ -527,7 +527,7 @@ class SemanticAnalyzer {
 
         func typeConvert(_ exp: Parser.AST.Expression, ofType: CheckerType, toType: CheckerType) -> Parser.AST.Expression {
             if ofType == toType { return exp }
-            return .Cast(Self.deConvert(toType), exp, Self.deConvert(toType))
+            return .Cast(Self.deConvert(toType), exp, Self.deConvert(ofType))
         }
 
         func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Expression, CheckerType) {
@@ -665,7 +665,10 @@ class SemanticAnalyzer {
                     }
                 case .Cast(let targetType, let child, _):
                     let tmp = typeCheck(child, nameMap)
-                    return (.Cast(targetType, tmp.0, Self.deConvert(tmp.1)), converCTypeToCheckerType(targetType))
+                    // DEBUG
+                    print("TYPE CHECKING CAST OF \(child) TO \(targetType): \(tmp)")
+                    // END DEBUG
+                    return (.Cast(targetType, tmp.0, Self.deConvert(tmp.1)), tmp.1)
             }
         }
 

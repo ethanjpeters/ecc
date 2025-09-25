@@ -284,6 +284,11 @@ class Tacky {
                 out.append(.Call(funName, paramValues, dst))
                 return dst
             case .Cast(let targetType, let child, let tp):
+
+                // DEBUG
+                print("CONSIDERING CASTING \(child) OF TYPE \(tp) TO TYPE \(targetType)")
+                // END DEBUG
+
                 let unCastedValue = generateTACKYExpression(child, out: &out, symbolTable: &symbolTable)
                 if targetType != tp {
                     let dst = makeTempVariable(tp!, &symbolTable)
