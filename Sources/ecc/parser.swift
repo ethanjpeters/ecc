@@ -811,8 +811,7 @@ class Parser {
     
     func parseForInit(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.ForInit {
         // NOTE: will need to modify this when we introduce more types
-        let next = peek(tokenStream)
-        if next == .keywordInt || next == .keywordLong || next == .keywordUnsigned || next == .keywordSigned  {
+        if isType(tokenStream) || isTypeSpecifier(tokenStream)  {
             let childDecl = parseDeclaration(tokenStream: &tokenStream)
             // weird edge case
             switch childDecl {
