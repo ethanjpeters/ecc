@@ -35,9 +35,15 @@ class Parser {
             case BitwiseShiftLeft
         }
         
+        enum Constant {
+            case ConstInt(Int32)
+            case ConstUnsignedInt(UInt32)
+            case ConstLong(Int64)
+            case ConstUnsignedLong(UInt64)
+        }
+
         indirect enum Expression {
-            case ConstInt(Int32, CType?)
-            case ConstLong(Int64, CType?)
+            case Constant(Constant, CType?)
             case Unary(UnaryOperator, Expression, CType?)
             case Binary(BinaryOperator, Expression, Expression, CType?)
             case Var(String /* identifier */, CType?)
@@ -85,7 +91,9 @@ class Parser {
         
         enum CType {
             case Int
+            case UnsignedInt
             case Long
+            case UnsignedLong
             case Void
         }
 
@@ -409,13 +417,13 @@ class Parser {
                 shouldBeLong = shouldBeLong || longVal > Int32.max
 
                 if shouldBeLong {
-                    return .ConstLong(longVal, nil)
+                    return .Constant(.ConstLong(longVal), nil)
                 }
                 guard let int32Val = Int32(trimmedVal) else {
                     print("Integer constant \(trimmedVal) was not a valid integer")
                     exit(ExitCode.parserError.rawValue)
                 }
-                return .ConstInt(int32Val, nil)
+                return .Constant(.ConstInt(int32Val), nil)
             default:
                 print("Unreachable non-constant constant")
                 exit(ExitCode.internalError.rawValue)
