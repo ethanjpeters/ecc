@@ -305,6 +305,9 @@ class Assembly {
                     out.append(.Movsx(convert(src, symbolTable), convert(dst, symbolTable)))
                 case .Truncate(let src, let dst):
                     out.append(.Mov(.Longword, convert(src, symbolTable), convert(dst, symbolTable)))
+                case .ZeroExtend(_, _):
+                    print("As-yet-unhandled zero extension instruction found when generating assembly")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
     }
