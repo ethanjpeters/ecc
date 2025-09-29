@@ -706,88 +706,62 @@ class Parser {
         return .Block(body)
     }
 
+    func parseType(_ tokenStream: inout [(Lexer.Token, LexerPosition)]) -> (Parser.AST.CType, Parser.AST.StorageClass?) {
+        let _ = peek(tokenStream)
+        let startPosition = tokenStream[0].1
+        // start by eating all of the specifiers
+        var specifierList : [Lexer.Token] = []
+        while isType(tokenStream) || isTypeSpecifier(tokenStream) {
+            specifierList.append(tokenStream.removeFirst().0)
+        }
+
+        // check for empty
+        if specifierList.isEmpty {
+            print("Type specifier list is empty at line \(startPosition.0), column \(startPosition.1)")
+            exit(ExitCode.parserError.rawValue)
+        }
+
+        // check for dupes
+        if Set(specifierList).count != specifierList.count {
+            print("Duplicates found in type/specifier list starting at line \(startPosition.0), column \(startPosition.1)")
+            exit(ExitCode.parserError.rawValue)
+        }
+
+        // look for conflicting signed-ness
+        if specifierList.contains(.keywordSigned) && specifierList.contains(.keywordUnsigned) {
+            print("Specifier list at line \(startPosition.0), column \(startPosition.1) specifies both signed and unsigned")
+        }
+
+        // pull out storage class specifier
+        var storageClass : Parser.AST.StorageClass? = nil
+        if specifierList.contains(.keywordStatic) && specifierList.contains(.keywordExtern) {
+            print("Conflicting storage types 'static' and 'extern' found in specifier list at line \(startPosition.0), column \(startPosition.1)")
+            exit(ExitCode.parserError.rawValue)
+        }
+
+        if specifierList.contains(.keywordStatic) { storageClass = .Static }
+        else if specifierList.contains(.keywordExtern) { storageClass = .Extern }
+
+        if specifierList.contains(.keywordUnsigned) && specifierList.contains(.keywordLong) {
+            return (.UnsignedLong, storageClass)
+        }
+
+        if specifierList.contains(.keywordUnsigned) {
+            return (.UnsignedInt, storageClass)
+        }
+
+        if specifierList.contains(.keywordLong) {
+            return (.UnsignedLong, storageClass)
+        }
+
+        return (.Int, storageClass)
+    }
+
     func parseDeclaration(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Declaration {
         // parse a "specifier"
 
-        var declaredType : Parser.AST.CType? = nil
-        var storageClass : Parser.AST.StorageClass? = nil
-        var parsedSignWord : Lexer.Token? = nil
-
-        var parsedOneSpecifier = false
-        var doneParsingSpecs = false
-        while !doneParsingSpecs {
-            switch peek(tokenStream) {
-                case .keywordVoid: fallthrough
-                case .keywordInt: fallthrough
-                case .keywordLong:
-                    if let dt = declaredType {
-                        if (dt == .Int && peek(tokenStream) == .keywordLong) || (dt == .Long && peek(tokenStream) == .keywordInt) {
-                            // allow `long int` and `int long`
-                            declaredType = .Long
-                        } else {
-                            let (next, position) = tokenStream[0]
-                            let (line, col) = position
-                            print("Duplicate type specifier \(next) found at line \(line), column \(col)")
-                            exit(ExitCode.parserError.rawValue)
-                        }
-                    } else {
-                        declaredType = convertType(expectType(&tokenStream))
-                    }
-                case .keywordSigned: fallthrough
-                case .keywordUnsigned:
-                    if parsedSignWord == nil {
-                        parsedSignWord = tokenStream.removeFirst().0
-                    } else {
-                        print("Duplicated sign-ness token found at line \(tokenStream[0].0), column \(tokenStream[0].1): \(tokenStream[0])")
-                        exit(ExitCode.parserError.rawValue)
-                    }
-                case .keywordStatic: fallthrough
-                case .keywordExtern:
-                    if let _ = storageClass {
-                        let (next, position) = tokenStream[0]
-                        let (line, col) = position
-                        print("Duplicate storage class specifier \(next) found at line \(line), column \(col)")
-                        exit(ExitCode.parserError.rawValue)
-                    }
-                    storageClass = convertStorageClass(expectStorageClass(&tokenStream))
-                default:
-                    if parsedOneSpecifier {
-                        doneParsingSpecs = true
-                        break
-                    } else {
-                        let (next, position) = tokenStream[0]
-                        let (line, col) = position
-                        print("Found unexpected token \(next) at line \(line), column \(col) when looking for specifier")
-                        exit(ExitCode.parserError.rawValue)
-                    }
-            }
-            parsedOneSpecifier = true
-        }
-
-        if let psw = parsedSignWord {
-            if declaredType == nil {
-                // e.g. signed x = 10; is equivalent to signed int x = 10;
-                declaredType = psw == .keywordSigned ? .Int : .UnsignedInt
-            } else if psw == .keywordUnsigned {
-                switch declaredType! {
-                    case .Int:
-                        declaredType = .UnsignedInt
-                    case .Long:
-                        declaredType = .UnsignedLong
-                    default:
-                        print("Impossible scenario found where unsigned-ness was declared without use of 'unsigned'")
-                        exit(ExitCode.parserError.rawValue)
-                }
-            }
-        }
-
+        let (declaredType, storageClass) = parseType(&tokenStream)
         let varName = expectIdentifier(&tokenStream)
-
-        guard let declType = declaredType else {
-            // NOTE: "unsigned" changes the meaning of this block
-            print("No type specified for function/variable \(varName)")
-            exit(ExitCode.parserError.rawValue)
-        }
         
         if peek(tokenStream) == .openParen {
             // we're looking at a function declaration
@@ -803,13 +777,13 @@ class Parser {
 
             if peek(tokenStream) == .semicolon {
                 let _ = expect(.semicolon, &tokenStream)
-                return .FunctionDeclaration(declType, varName, params, nil, storageClass)
+                return .FunctionDeclaration(declaredType, varName, params, nil, storageClass)
             }
 
-            return .FunctionDeclaration(declType, varName, params, parseBlock(tokenStream: &tokenStream), storageClass)
+            return .FunctionDeclaration(declaredType, varName, params, parseBlock(tokenStream: &tokenStream), storageClass)
         } else {
             // // does this check belong here?
-            if declType == .Void {
+            if declaredType == .Void {
                 print("Variable declaration \(varName) cannot be void")
                 exit(ExitCode.semanticError.rawValue)
             }
@@ -823,7 +797,7 @@ class Parser {
             
             let _ = expect(.semicolon, &tokenStream)
             
-            return .VariableDeclaration(declType, varName, exp, storageClass)
+            return .VariableDeclaration(declaredType, varName, exp, storageClass)
         }
     }
     

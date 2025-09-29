@@ -3,7 +3,7 @@ import Foundation
 typealias LexerPosition = (Int /* line */, Int /* column */)
 
 class Lexer {
-    enum Token : Equatable {
+    enum Token : Equatable, Hashable {
         // types
         case keywordInt
         case keywordLong
