@@ -404,26 +404,52 @@ class Parser {
             case .constant(let val):
                 var trimmedVal : String = val
                 var shouldBeLong = false
-                if trimmedVal.last == "l" || trimmedVal.last == "L" {
-                    trimmedVal.removeLast()
-                    shouldBeLong = true
+                var shouldBeUnsigned = false
+
+                while trimmedVal.last!.isLetter {
+                    if trimmedVal.last == "l" || trimmedVal.last == "L" {
+                        trimmedVal.removeLast()
+                        shouldBeLong = true
+                    } else if trimmedVal.last == "u" || trimmedVal.last == "U" {
+                        trimmedVal.removeLast()
+                        shouldBeUnsigned = true
+                    }
                 }
 
-                guard let longVal = Int64(trimmedVal) else {
-                    print("Integer constant \(trimmedVal) was not a valid integer")
-                    exit(ExitCode.parserError.rawValue)
-                }
+                if shouldBeUnsigned {
+                    guard let longVal = UInt64(trimmedVal) else {
+                        print("Integer constant \(trimmedVal) was not a valid integer")
+                        exit(ExitCode.parserError.rawValue)
+                    }
 
-                shouldBeLong = shouldBeLong || longVal > Int32.max
+                    shouldBeLong = shouldBeLong || longVal > UInt32.max
 
-                if shouldBeLong {
-                    return .Constant(.ConstLong(longVal), nil)
+                    if shouldBeLong {
+                        return .Constant(.ConstUnsignedLong(longVal), nil)
+                    }
+
+                    guard let int32Val = UInt32(trimmedVal) else {
+                        print("Integer constant \(trimmedVal) was not a valid integer")
+                        exit(ExitCode.parserError.rawValue)
+                    }
+                    return .Constant(.ConstUnsignedInt(int32Val), nil)
+                } else {
+                    guard let longVal = Int64(trimmedVal) else {
+                        print("Integer constant \(trimmedVal) was not a valid integer")
+                        exit(ExitCode.parserError.rawValue)
+                    }
+
+                    shouldBeLong = shouldBeLong || longVal > Int32.max
+
+                    if shouldBeLong {
+                        return .Constant(.ConstLong(longVal), nil)
+                    }
+                    guard let int32Val = Int32(trimmedVal) else {
+                        print("Integer constant \(trimmedVal) was not a valid integer")
+                        exit(ExitCode.parserError.rawValue)
+                    }
+                    return .Constant(.ConstInt(int32Val), nil)
                 }
-                guard let int32Val = Int32(trimmedVal) else {
-                    print("Integer constant \(trimmedVal) was not a valid integer")
-                    exit(ExitCode.parserError.rawValue)
-                }
-                return .Constant(.ConstInt(int32Val), nil)
             default:
                 print("Unreachable non-constant constant")
                 exit(ExitCode.internalError.rawValue)
