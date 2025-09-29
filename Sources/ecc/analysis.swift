@@ -45,9 +45,7 @@ class SemanticAnalyzer {
                     exit(ExitCode.internalError.rawValue)
                 case .Binary(let op, let left, let right, _):
                     return .Binary(op, resolveExpression(left, &nameMap), resolveExpression(right, &nameMap), nil)
-                case .ConstInt(_, _): fallthrough
-                case .ConstLong(_, _):
-                    return exp
+                case .Constant(_, _): return exp
                 case .Unary(let op, let child, _):
                     return .Unary(op, resolveExpression(child, &nameMap), nil)
                 case .Var(let name, _):
@@ -532,8 +530,15 @@ class SemanticAnalyzer {
 
         func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Expression, CheckerType) {
             switch expression {
-                case .ConstInt(let val, _): return (.ConstInt(val, .Int), .Int)
-                case .ConstLong(let val, _): return (.ConstLong(val, .Long), .Long)
+                case .Constant(let c, _):
+                    switch c {
+                        case .ConstInt(let val): return (.Constant(.ConstInt(val), .Int), .Int)
+                        case .ConstLong(let val): return (.Constant(.ConstLong(val), .Long), .Long)
+                        case .ConstUnsignedInt(_): fallthrough
+                        case .ConstUnsignedLong(_):
+                            print("As-yet-unhandled unsigned constant expression found during type checking")
+                            exit(ExitCode.internalError.rawValue)
+                    }
                 case .Unary(let unOp, let e, _):
                     let (checkedE, eType) = typeCheck(e, nameMap) // TODO: not all operators make sense on every type
                     if eType == .Void {
@@ -862,10 +867,17 @@ class SemanticAnalyzer {
                         var initVal : InitialValue
                         if let ie = initExp {
                             switch ie {
-                                case .ConstInt(let i, _):
-                                    initVal = .Initial(.IntInit(Int32(i)))
-                                case .ConstLong(let i, _):
-                                    initVal = .Initial(.LongInit(Int64(i)))
+                                case .Constant(let c, _):
+                                    switch c {
+                                        case .ConstInt(let i):
+                                            initVal = .Initial(.IntInit(Int32(i)))
+                                        case .ConstLong(let i):
+                                            initVal = .Initial(.LongInit(Int64(i)))
+                                        case .ConstUnsignedInt(_): fallthrough
+                                        case .ConstUnsignedLong(_):
+                                            print("As-yet-unhandled unsigned constant found while initializing file-level variable")
+                                            exit(ExitCode.internalError.rawValue)
+                                    }
                                 default:
                                     // NOTE: we could allow things that evaluate constantly, but we don't yet
                                     print("Non constant expression \(ie) used to initialize global \(name)")
@@ -943,10 +955,17 @@ class SemanticAnalyzer {
                             let initValue : InitialValue
                             if let e = initExp {
                                 switch e {
-                                    case .ConstInt(let i, _):
-                                        initValue = .Initial(.IntInit(Int32(i)))
-                                    case .ConstLong(let i, _):
-                                        initValue = .Initial(.LongInit(Int64(i)))
+                                    case .Constant(let c, _):
+                                        switch c {
+                                            case .ConstInt(let i):
+                                                initValue = .Initial(.IntInit(Int32(i)))
+                                            case .ConstLong(let i):
+                                                initValue = .Initial(.LongInit(Int64(i)))
+                                            case .ConstUnsignedInt(_): fallthrough
+                                            case .ConstUnsignedLong(_):
+                                                print("As-yet-unhandled unsigned constant found while initializing local static variable")
+                                                exit(ExitCode.internalError.rawValue)
+                                        }
                                     default:
                                         print("Non-constant initializer on local static variable \(name)")
                                         exit(ExitCode.semanticError.rawValue)
@@ -996,5 +1015,9 @@ func converCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.Ty
         case .Int: return .Int
         case .Void: return .Void
         case .Long: return .Long
+        case .UnsignedInt: fallthrough
+        case .UnsignedLong:
+            print("As-yet-unhandled unsigned type found while doing type conversion")
+            exit(ExitCode.internalError.rawValue)
     }
 }

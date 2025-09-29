@@ -153,10 +153,17 @@ class Tacky {
         }
 
         switch exp {
-            case .ConstInt(let val, _):
-                return .Constant(.ConstInt(val))
-            case .ConstLong(let val, _):
-                return .Constant(.ConstLong(val))
+            case .Constant(let c, _):
+                switch c {
+                    case .ConstInt(let val):
+                        return .Constant(.ConstInt(val))
+                    case .ConstLong(let val):
+                        return .Constant(.ConstLong(val))
+                    case .ConstUnsignedInt(_): fallthrough
+                    case .ConstUnsignedLong(_):
+                        print("As-yet-unhandled unsigned constant expression found while generating tacky")
+                        exit(ExitCode.internalError.rawValue)
+                }
             case .Unary(let op, let exp, let tp):
                 if isIncOrDec(op) {
                     let src = generateTACKYExpression(exp, out: &out, symbolTable: &symbolTable)
