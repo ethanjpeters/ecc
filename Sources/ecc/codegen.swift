@@ -221,6 +221,8 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
             switch initVal {
                 case .IntInit(let i): out.append("\t.long\t\(i)")
                 case .LongInit(let i): out.append("\t.quad\t\(i)")
+                case .UIntInit(let i): out.append("\t.long\t\(i)")
+                case .ULongInit(let i): out.append("\t.quad\t\(i)")
             }
     }
 }

@@ -124,7 +124,9 @@ class Assembly {
                         print("Unreachable case where a variable was a function but was supposed to be a variable")
                         exit(ExitCode.internalError.rawValue)
                     case .Void: return .Longword    // functions can return "void" but really they return int
+                    case .UnsignedInt: fallthrough
                     case .Int: return .Longword
+                    case .UnsignedLong: fallthrough
                     case .Long: return .Quadword
                 }
         }
@@ -368,7 +370,9 @@ class Assembly {
             let (checkerType, attrs) = entry
             switch checkerType {
                 case .Int: fallthrough
-                case .Long:
+                case .UnsignedInt: fallthrough
+                case .Long: fallthrough
+                case .UnsignedLong:
                     let asmType : Tree.AssemblyType = (checkerType == .Int ? .Longword : .Quadword)
                     let isStatic: Bool
                     switch attrs {
@@ -418,7 +422,9 @@ class Assembly {
                         exit(ExitCode.internalError.rawValue)
                     case .Void: width = 4   // function return types can be void but they're really int
                     case .Int: width = 4
+                    case .UnsignedInt: width = 4
                     case .Long: width = 8
+                    case .UnsignedLong: width = 8
                 }
                 if let slot = nameStackMapping[name] {
                     return .Stack(-slot)
