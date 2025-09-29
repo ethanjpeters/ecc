@@ -58,6 +58,7 @@ class Tacky {
             case Label(String /* identifier */)
             case Call(String /* function name */, [Value] /* parameters */, Value /* result */)
             case SignExtend(Value /* src */, Value /* dst */)
+            case ZeroExtend(Value /* src */, Value /* dst */)
             case Truncate(Value /* src */, Value /* dst */)
         }
 
@@ -301,10 +302,18 @@ class Tacky {
                 let unCastedValue = generateTACKYExpression(child, out: &out, symbolTable: &symbolTable)
                 if targetType != tp {
                     let dst = makeTempVariable(targetType, &symbolTable)
-                    if targetType == .Long {
+
+                    let targetCp = converCTypeToCheckerType(targetType)
+                    let innerCp = converCTypeToCheckerType(tp!)
+
+                    if getTypeSize(targetCp) == getTypeSize(innerCp) {
+                        out.append(.Copy(unCastedValue, dst))
+                    } else if getTypeSize(targetCp) < getTypeSize(innerCp) {
+                        out.append(.Truncate(unCastedValue, dst))
+                    } else if isSigned(innerCp) {
                         out.append(.SignExtend(unCastedValue, dst))
                     } else {
-                        out.append(.Truncate(unCastedValue, dst))
+                        out.append(.ZeroExtend(unCastedValue, dst))
                     }
                     return dst
                 } else {

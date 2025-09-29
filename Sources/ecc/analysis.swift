@@ -524,49 +524,6 @@ class SemanticAnalyzer {
             }
         }
 
-        func getTypeSize(_ tp: CheckerType) -> Int {
-            switch tp {
-                case .Function(_, _):
-                    print("GETTING TYPE SIZE OF FUNCTION MAKES NO SENSE")
-                    exit(ExitCode.internalError.rawValue)
-                case .Int: return 4
-                case .UnsignedInt: return 4
-                case .Long: return 8
-                case .UnsignedLong: return 8
-                case .Void:
-                    print("GETTING TYPE SIZE OF VOID MAKES NO SENSE")
-                    exit(ExitCode.internalError.rawValue)
-            }
-        }
-
-        func isSigned(_ tp: CheckerType) -> Bool {
-            switch tp {
-                case .Int: fallthrough
-                case .Long: return true
-                case .UnsignedInt: fallthrough
-                case .UnsignedLong: return false
-                case .Function(_, _):
-                    print("GETTING SIGNED-NESS OF FUNCTION MAKES NO SENSE")
-                    exit(ExitCode.internalError.rawValue)
-                case .Void:
-                    print("VOID IS NEITHER SIGNED NOR SIGNED DOES NOT COMPUTE BEEP BOOP")
-                    exit(ExitCode.internalError.rawValue)
-            }
-        }
-
-        func getCommonType(_ left : CheckerType, _ right: CheckerType) -> CheckerType {
-            if left == right { return left }
-            if getTypeSize(left) == getTypeSize(right) {
-                if isSigned(left) { return right }
-                else { return left }
-            }
-            if getTypeSize(left) > getTypeSize(right) {
-                return left
-            } else {
-                return right
-            }
-        }
-
         func typeConvert(_ exp: Parser.AST.Expression, ofType: CheckerType, toType: CheckerType) -> Parser.AST.Expression {
             if ofType == toType { return exp }
             return .Cast(Self.deConvert(toType), exp, Self.deConvert(ofType))
@@ -1061,5 +1018,48 @@ func converCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.Ty
         case .Long: return .Long
         case .UnsignedInt: return .UnsignedInt
         case .UnsignedLong: return .UnsignedLong
+    }
+}
+
+func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Int {
+    switch tp {
+        case .Function(_, _):
+            print("GETTING TYPE SIZE OF FUNCTION MAKES NO SENSE")
+            exit(ExitCode.internalError.rawValue)
+        case .Int: return 4
+        case .UnsignedInt: return 4
+        case .Long: return 8
+        case .UnsignedLong: return 8
+        case .Void:
+            print("GETTING TYPE SIZE OF VOID MAKES NO SENSE")
+            exit(ExitCode.internalError.rawValue)
+    }
+}
+
+func isSigned(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    switch tp {
+        case .Int: fallthrough
+        case .Long: return true
+        case .UnsignedInt: fallthrough
+        case .UnsignedLong: return false
+        case .Function(_, _):
+            print("GETTING SIGNED-NESS OF FUNCTION MAKES NO SENSE")
+            exit(ExitCode.internalError.rawValue)
+        case .Void:
+            print("VOID IS NEITHER SIGNED NOR SIGNED DOES NOT COMPUTE BEEP BOOP")
+            exit(ExitCode.internalError.rawValue)
+    }
+}
+
+func getCommonType(_ left : SemanticAnalyzer.TypeChecker.CheckerType, _ right: SemanticAnalyzer.TypeChecker.CheckerType) -> SemanticAnalyzer.TypeChecker.CheckerType {
+    if left == right { return left }
+    if getTypeSize(left) == getTypeSize(right) {
+        if isSigned(left) { return right }
+        else { return left }
+    }
+    if getTypeSize(left) > getTypeSize(right) {
+        return left
+    } else {
+        return right
     }
 }
