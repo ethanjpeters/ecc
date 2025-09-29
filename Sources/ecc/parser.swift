@@ -483,12 +483,14 @@ class Parser {
             lhs = .Var(name, nil)
             // expression wrapped in parentheses, or cast
         case .openParen:
-            if isType(tokenStream) {
+            if isType(tokenStream) || isTypeSpecifier(tokenStream) {
                 // "(" <type> ")" <exp>
-                // NOTE: we simplify here because I hate the constructs "long int" and "int long"
-                let tp = convertType(expectType(&tokenStream))
+                let (tp, storage) = parseType(&tokenStream)
                 let _ = expect(.closeParen, &tokenStream)
                 let child = parseFactor(tokenStream: &tokenStream)
+                if storage != nil {
+                    print("Cannot specify storage class when casting type of \(child) to \(tp)")
+                }
                 lhs = .Cast(tp, child, nil)
             } else {
                 // "(" <exp> ")"
@@ -751,10 +753,15 @@ class Parser {
         }
 
         if specifierList.contains(.keywordLong) {
-            return (.UnsignedLong, storageClass)
+            return (.Long, storageClass)
         }
 
-        return (.Int, storageClass)
+        if specifierList.contains(.keywordInt) {
+            return (.Int, storageClass)
+        }
+
+        // no longs, no ints, must be void
+        return (.Void, storageClass)
     }
 
     func parseDeclaration(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Declaration {
