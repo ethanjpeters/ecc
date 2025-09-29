@@ -485,14 +485,18 @@ class SemanticAnalyzer {
     class TypeChecker {
         indirect enum CheckerType : Equatable {
             case Int
+            case UnsignedInt
             case Long
+            case UnsignedLong
             case Void
             case Function(CheckerType /* return */, [CheckerType] /* params */)
         }
 
         enum StaticInit {
             case IntInit(Int32)
+            case UIntInit(UInt32)
             case LongInit(Int64)
+            case ULongInit(UInt64)
         }
 
         enum InitialValue {
@@ -510,17 +514,57 @@ class SemanticAnalyzer {
         static func deConvert(_ cType : CheckerType) -> Parser.AST.CType {
             switch cType {
                 case .Int: return .Int
+                case .UnsignedInt: return .UnsignedInt
                 case .Void: return .Void
                 case .Long: return .Long
+                case .UnsignedLong: return .UnsignedLong
                 case .Function(_, _):
                     print("UNREACHABLE FUNC")
                     exit(ExitCode.internalError.rawValue)
             }
         }
 
+        func getTypeSize(_ tp: CheckerType) -> Int {
+            switch tp {
+                case .Function(_, _):
+                    print("GETTING TYPE SIZE OF FUNCTION MAKES NO SENSE")
+                    exit(ExitCode.internalError.rawValue)
+                case .Int: return 4
+                case .UnsignedInt: return 4
+                case .Long: return 8
+                case .UnsignedLong: return 8
+                case .Void:
+                    print("GETTING TYPE SIZE OF VOID MAKES NO SENSE")
+                    exit(ExitCode.internalError.rawValue)
+            }
+        }
+
+        func isSigned(_ tp: CheckerType) -> Bool {
+            switch tp {
+                case .Int: fallthrough
+                case .Long: return true
+                case .UnsignedInt: fallthrough
+                case .UnsignedLong: return false
+                case .Function(_, _):
+                    print("GETTING SIGNED-NESS OF FUNCTION MAKES NO SENSE")
+                    exit(ExitCode.internalError.rawValue)
+                case .Void:
+                    print("VOID IS NEITHER SIGNED NOR SIGNED DOES NOT COMPUTE BEEP BOOP")
+                    exit(ExitCode.internalError.rawValue)
+            }
+        }
+
         func getCommonType(_ left : CheckerType, _ right: CheckerType) -> CheckerType {
             if left == right { return left }
-            return .Long
+            if getTypeSize(left) == getTypeSize(right) {
+                if isSigned(left) { return right }
+                else { return left }
+            }
+            if getTypeSize(left) > getTypeSize(right) {
+                return left
+            } else {
+                return right
+            }
         }
 
         func typeConvert(_ exp: Parser.AST.Expression, ofType: CheckerType, toType: CheckerType) -> Parser.AST.Expression {
@@ -534,10 +578,8 @@ class SemanticAnalyzer {
                     switch c {
                         case .ConstInt(let val): return (.Constant(.ConstInt(val), .Int), .Int)
                         case .ConstLong(let val): return (.Constant(.ConstLong(val), .Long), .Long)
-                        case .ConstUnsignedInt(_): fallthrough
-                        case .ConstUnsignedLong(_):
-                            print("As-yet-unhandled unsigned constant expression found during type checking")
-                            exit(ExitCode.internalError.rawValue)
+                        case .ConstUnsignedInt(let val): return (.Constant(.ConstUnsignedInt(val), .UnsignedInt), .UnsignedInt)
+                        case .ConstUnsignedLong(let val): return (.Constant(.ConstUnsignedLong(val), .UnsignedLong), .UnsignedLong)
                     }
                 case .Unary(let unOp, let e, _):
                     let (checkedE, eType) = typeCheck(e, nameMap) // TODO: not all operators make sense on every type
@@ -663,7 +705,9 @@ class SemanticAnalyzer {
                             }
                             return (.FunctionCall(lValue, upCastExp, Self.deConvert(rType)), rType)
                         case .Int: fallthrough
+                        case .UnsignedInt: fallthrough
                         case .Long: fallthrough
+                        case .UnsignedLong: fallthrough
                         case .Void:
                             print("Can not call value \(lValue) of type \(fType)")
                             exit(ExitCode.semanticError.rawValue)
@@ -873,10 +917,10 @@ class SemanticAnalyzer {
                                             initVal = .Initial(.IntInit(Int32(i)))
                                         case .ConstLong(let i):
                                             initVal = .Initial(.LongInit(Int64(i)))
-                                        case .ConstUnsignedInt(_): fallthrough
-                                        case .ConstUnsignedLong(_):
-                                            print("As-yet-unhandled unsigned constant found while initializing file-level variable")
-                                            exit(ExitCode.internalError.rawValue)
+                                        case .ConstUnsignedInt(let i):
+                                            initVal = .Initial(.UIntInit(UInt32(i)))
+                                        case .ConstUnsignedLong(let i):
+                                            initVal = .Initial(.ULongInit(UInt64(i)))
                                     }
                                 default:
                                     // NOTE: we could allow things that evaluate constantly, but we don't yet
@@ -961,10 +1005,10 @@ class SemanticAnalyzer {
                                                 initValue = .Initial(.IntInit(Int32(i)))
                                             case .ConstLong(let i):
                                                 initValue = .Initial(.LongInit(Int64(i)))
-                                            case .ConstUnsignedInt(_): fallthrough
-                                            case .ConstUnsignedLong(_):
-                                                print("As-yet-unhandled unsigned constant found while initializing local static variable")
-                                                exit(ExitCode.internalError.rawValue)
+                                            case .ConstUnsignedInt(let i):
+                                                initValue = .Initial(.UIntInit(UInt32(i)))
+                                            case .ConstUnsignedLong(let i):
+                                                initValue = .Initial(.ULongInit(UInt64(i)))
                                         }
                                     default:
                                         print("Non-constant initializer on local static variable \(name)")
@@ -1015,9 +1059,7 @@ func converCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.Ty
         case .Int: return .Int
         case .Void: return .Void
         case .Long: return .Long
-        case .UnsignedInt: fallthrough
-        case .UnsignedLong:
-            print("As-yet-unhandled unsigned type found while doing type conversion")
-            exit(ExitCode.internalError.rawValue)
+        case .UnsignedInt: return .UnsignedInt
+        case .UnsignedLong: return .UnsignedLong
     }
 }
