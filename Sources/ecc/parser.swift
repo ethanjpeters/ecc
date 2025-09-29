@@ -756,12 +756,13 @@ class Parser {
             return (.Long, storageClass)
         }
 
-        if specifierList.contains(.keywordInt) {
-            return (.Int, storageClass)
+        if specifierList.contains(.keywordVoid) {
+            // probably all kinds of wrong, break elsewhere
+            return (.Void, storageClass)
         }
 
-        // no longs, no ints, must be void
-        return (.Void, storageClass)
+        // nothing specified, must be signed int
+        return (.Int, storageClass)
     }
 
     func parseDeclaration(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Declaration {
