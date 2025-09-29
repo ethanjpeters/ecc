@@ -97,6 +97,8 @@ class Assembly {
                 switch c {
                     case .ConstInt(let i): return .Immediate(Int(i))
                     case .ConstLong(let i): return .Immediate(Int(i))
+                    case .ConstUnsignedInt(let i): return .Immediate(Int(i))
+                    case .ConstUnsignedLong(let i): return .Immediate(Int(i))
                 }
             case .Var(let name):
                 if let _ = symbolTable[name] {
@@ -110,7 +112,9 @@ class Assembly {
         switch val {
             case .Constant(let c):
                 switch c {
+                    case .ConstUnsignedInt: fallthrough
                     case .ConstInt(_) : return .Longword
+                    case .ConstUnsignedLong: fallthrough
                     case .ConstLong(_) : return .Quadword
                 }
             case .Var(let name):

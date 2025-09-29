@@ -37,7 +37,9 @@ class Tacky {
 
         enum ConstVal {
             case ConstInt(Int32)
+            case ConstUnsignedInt(UInt32)
             case ConstLong(Int64)
+            case ConstUnsignedLong(UInt64)
         }
 
         enum Value {
