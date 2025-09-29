@@ -220,6 +220,16 @@ class Parser {
         }
     }
 
+    func isTypeSpecifier(_ tokenStream: [(Lexer.Token, LexerPosition)]) -> Bool {
+        switch peek(tokenStream) {
+            case .keywordStatic: fallthrough
+            case .keywordExtern: fallthrough
+            case .keywordSigned: fallthrough
+            case .keywordUnsigned: return true
+            default: return false
+        }
+    }
+
     func precedence(_ token: Lexer.Token) -> Int {
         switch token {
         case .asterisk: return 50
@@ -677,7 +687,7 @@ class Parser {
         // determine if we're lookoing at a statement or a declaration
         // for now we can cheat: declarations all start with a type name and statements do not
         
-        if isType(tokenStream) {
+        if isType(tokenStream) || isTypeSpecifier(tokenStream) {
             // declaration
             return .D(parseDeclaration(tokenStream: &tokenStream))
         } else {
@@ -701,6 +711,7 @@ class Parser {
 
         var declaredType : Parser.AST.CType? = nil
         var storageClass : Parser.AST.StorageClass? = nil
+        var parsedSignWord : Lexer.Token? = nil
 
         var parsedOneSpecifier = false
         var doneParsingSpecs = false
@@ -721,6 +732,14 @@ class Parser {
                         }
                     } else {
                         declaredType = convertType(expectType(&tokenStream))
+                    }
+                case .keywordSigned: fallthrough
+                case .keywordUnsigned:
+                    if parsedSignWord == nil {
+                        parsedSignWord = tokenStream.removeFirst().0
+                    } else {
+                        print("Duplicated sign-ness token found at line \(tokenStream[0].0), column \(tokenStream[0].1): \(tokenStream[0])")
+                        exit(ExitCode.parserError.rawValue)
                     }
                 case .keywordStatic: fallthrough
                 case .keywordExtern:
@@ -743,6 +762,23 @@ class Parser {
                     }
             }
             parsedOneSpecifier = true
+        }
+
+        if let psw = parsedSignWord {
+            if declaredType == nil {
+                // e.g. signed x = 10; is equivalent to signed int x = 10;
+                declaredType = psw == .keywordSigned ? .Int : .UnsignedInt
+            } else if psw == .keywordUnsigned {
+                switch declaredType! {
+                    case .Int:
+                        declaredType = .UnsignedInt
+                    case .Long:
+                        declaredType = .UnsignedLong
+                    default:
+                        print("Impossible scenario found where unsigned-ness was declared without use of 'unsigned'")
+                        exit(ExitCode.parserError.rawValue)
+                }
+            }
         }
 
         let varName = expectIdentifier(&tokenStream)
@@ -793,7 +829,8 @@ class Parser {
     
     func parseForInit(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.ForInit {
         // NOTE: will need to modify this when we introduce more types
-        if peek(tokenStream) == .keywordInt || peek(tokenStream) == .keywordLong {
+        let next = peek(tokenStream)
+        if next == .keywordInt || next == .keywordLong || next == .keywordUnsigned || next == .keywordSigned  {
             let childDecl = parseDeclaration(tokenStream: &tokenStream)
             // weird edge case
             switch childDecl {
