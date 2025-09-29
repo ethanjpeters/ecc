@@ -8,6 +8,8 @@ class Lexer {
         case keywordInt
         case keywordLong
         case keywordVoid
+        case keywordUnsigned
+        case keywordSigned
         // storage specifiers
         case keywordStatic
         case keywordExtern
@@ -122,6 +124,17 @@ class Lexer {
 
             if c == "l" || c == "L" {
                 matchedString = matchedString + String(c)
+                if j + 1 < sourceFileCharacters.count && (sourceFileCharacters[j+1] == "u" || sourceFileCharacters[j+1] == "U") {
+                    matchedString = matchedString + String(sourceFileCharacters[j+1])
+                }
+                break
+            }
+
+            if c == "u" || c == "U" {
+                matchedString = matchedString + String(c)
+                if j + 1 < sourceFileCharacters.count && (sourceFileCharacters[j+1] == "l" || sourceFileCharacters[j+1] == "L") {
+                    matchedString = matchedString + String(sourceFileCharacters[j+1])
+                }
                 break
             }
 
@@ -311,6 +324,8 @@ class Lexer {
             case "int": return .keywordInt
             case "long": return .keywordLong
             case "void": return .keywordVoid
+            case "unsigned": return .keywordUnsigned
+            case "signed": return .keywordSigned
             case "static": return .keywordStatic
             case "extern": return .keywordExtern
             case "return": return .keywordReturn
