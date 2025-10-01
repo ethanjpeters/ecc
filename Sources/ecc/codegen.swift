@@ -138,6 +138,10 @@ func convert(_ cc: Assembly.Tree.ConditionCode) -> String {
         case .GE: return "ge"
         case .L: return "l"
         case .LE: return "le"
+        case .A: return "a"
+        case .AE: return "ae"
+        case .B: return "b"
+        case .BE: return "be"
     }
 }
 
@@ -176,6 +180,8 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 }
             case .Idiv(let tp, let op):
                 out.append("\tidiv\(typeToSuffix(tp))\t\(convert(op, typeToWidth(tp)))")
+            case .Div(let tp, let op):
+                out.append("\tdiv\(typeToSuffix(tp))\t\(convert(op, typeToWidth(tp)))")
             case .Cmp(let tp, let left, let right):
                 out.append("\tcmp\(typeToSuffix(tp))\t\(convert(left, typeToWidth(tp))), \(convert(right, typeToWidth(tp)))")
             case .Jmp(let label):
@@ -194,6 +200,9 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tcall\t\(makeFunctionName(fName))")
             case .Movsx(let src, let dst):
                 out.append("\tmovslq\t\(convert(src, .fourByte)), \(convert(dst, .eightByte))")
+            case .Movzx(_, _):
+                print("Unreachable movzx survived assembly fixup")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 }

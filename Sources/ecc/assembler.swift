@@ -11,6 +11,10 @@ class Assembly {
             case GE
             case L
             case LE
+            case A
+            case AE
+            case B
+            case BE
         }
 
         enum Register {
@@ -58,10 +62,12 @@ class Assembly {
         enum Instruction {
             case Mov(AssemblyType, Operand /* src */, Operand /* dst */)
             case Movsx(Operand /* src */, Operand /* dst */)
+            case Movzx(Operand /* src */, Operand /* dst */)
             case Unary(UnaryOperator, AssemblyType, Operand)
             case Binary(BinaryOperator, AssemblyType, Operand, Operand)
             case Cmp(AssemblyType, Operand, Operand)
             case Idiv(AssemblyType, Operand)
+            case Div(AssemblyType, Operand)
             case Cdq(AssemblyType)
             case Jmp(String /* identifier */)
             case JmpCC(ConditionCode, String /* identifier */)
@@ -136,6 +142,34 @@ class Assembly {
         }
     }
 
+    func deduceIsSigned(_ val: Tacky.IR.Value, _ symbolTable: SymbolTable) -> Bool {
+        switch val {
+            case .Constant(let c):
+                switch c {
+                    case .ConstUnsignedInt: return false
+                    case .ConstInt(_) : return true
+                    case .ConstUnsignedLong: return false
+                    case .ConstLong(_) : return true
+                }
+            case .Var(let name):
+                guard let entry = symbolTable[name] else {
+                    print("Unreachable case where a variable was not in the symbol table during assembly generation: \(name)")
+                    exit(ExitCode.internalError.rawValue)
+                }
+                let (checkerType, _) = entry
+                switch checkerType {
+                    case .Function(_, _):
+                        print("Unreachable case where a variable was a function but was supposed to be a variable")
+                        exit(ExitCode.internalError.rawValue)
+                    case .Void: return true    // functions can return "void" but really they return int
+                    case .UnsignedInt: return false
+                    case .Int: return true
+                    case .UnsignedLong: return false
+                    case .Long: return true
+                }
+        }
+    }
+
     func convert(_ op: Tacky.IR.UnaryOperator) -> Tree.UnaryOperator {
         switch op {
             case .Complement:
@@ -170,6 +204,7 @@ class Assembly {
                     let src2Conv = convert(src2, symbolTable)
                     let dstConv = convert(dst, symbolTable)
                     let srcType = deduceType(src1, typedSymbolTable)
+                    let signedOp = deduceIsSigned(src1, typedSymbolTable)
                     switch op {
                         case .Add:
                             out.append(.Mov(srcType, src1Conv, dstConv))
@@ -181,15 +216,29 @@ class Assembly {
                             out.append(.Mov(srcType, src1Conv, dstConv))
                             out.append(.Binary(.Mult, srcType, src2Conv, dstConv))
                         case .Divide:
-                            out.append(.Mov(srcType, src1Conv, .Register(.AX)))
-                            out.append(.Cdq(srcType))
-                            out.append(.Idiv(srcType, src2Conv))
-                            out.append(.Mov(srcType, .Register(.AX), dstConv))
+                            if signedOp {
+                                out.append(.Mov(srcType, src1Conv, .Register(.AX)))
+                                out.append(.Cdq(srcType))
+                                out.append(.Idiv(srcType, src2Conv))
+                                out.append(.Mov(srcType, .Register(.AX), dstConv))
+                            } else {
+                                out.append(.Mov(srcType, src1Conv, .Register(.AX)))
+                                out.append(.Mov(srcType, .Immediate(0), .Register(.DX)))
+                                out.append(.Div(srcType, src2Conv))
+                                out.append(.Mov(srcType, .Register(.AX), dstConv))
+                            }
                         case .Remainder:
-                            out.append(.Mov(srcType, src1Conv, .Register(.AX)))
-                            out.append(.Cdq(srcType))
-                            out.append(.Idiv(srcType, src2Conv))
-                            out.append(.Mov(srcType, .Register(.DX), dstConv))
+                            if signedOp {
+                                out.append(.Mov(srcType, src1Conv, .Register(.AX)))
+                                out.append(.Cdq(srcType))
+                                out.append(.Idiv(srcType, src2Conv))
+                                out.append(.Mov(srcType, .Register(.DX), dstConv))
+                            } else {
+                                out.append(.Mov(srcType, src1Conv, .Register(.AX)))
+                                out.append(.Mov(srcType, .Immediate(0), .Register(.DX)))
+                                out.append(.Div(srcType, src2Conv))
+                                out.append(.Mov(srcType, .Register(.DX), dstConv))
+                            }
                         case .Equal:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
                             out.append(.Mov(srcType, .Immediate(0), dstConv))
@@ -201,19 +250,19 @@ class Assembly {
                         case .LessThan:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
                             out.append(.Mov(srcType, .Immediate(0), dstConv))
-                            out.append(.SetCC(.L, dstConv))
+                            out.append(.SetCC(signedOp ? .L : .B, dstConv))
                         case .LessOrEqual:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
                             out.append(.Mov(srcType, .Immediate(0), dstConv))
-                            out.append(.SetCC(.LE, dstConv))
+                            out.append(.SetCC(signedOp ? .LE : .BE, dstConv))
                         case .GreaterThan: 
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
                             out.append(.Mov(srcType, .Immediate(0), dstConv))
-                            out.append(.SetCC(.G, dstConv))
+                            out.append(.SetCC(signedOp ? .G : .A, dstConv))
                         case .GreaterOrEqual:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
                             out.append(.Mov(srcType, .Immediate(0), dstConv))
-                            out.append(.SetCC(.GE, dstConv))
+                            out.append(.SetCC(signedOp ? .GE : .AE, dstConv))
                         case .BitwiseAnd:
                             out.append(.Mov(srcType, src1Conv, dstConv))
                             out.append(.Binary(.And, srcType, src2Conv, dstConv))
@@ -305,9 +354,8 @@ class Assembly {
                     out.append(.Movsx(convert(src, symbolTable), convert(dst, symbolTable)))
                 case .Truncate(let src, let dst):
                     out.append(.Mov(.Longword, convert(src, symbolTable), convert(dst, symbolTable)))
-                case .ZeroExtend(_, _):
-                    print("As-yet-unhandled zero extension instruction found when generating assembly")
-                    exit(ExitCode.internalError.rawValue)
+                case .ZeroExtend(let src, let dst):
+                    out.append(.Movzx(convert(src, symbolTable), convert(dst, symbolTable)))
             }
         }
     }
@@ -478,6 +526,7 @@ class Assembly {
                     out.append(.Binary(binOp, tp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping, symbolTable), replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping, symbolTable)))
                 case .Cdq(let tp): out.append(.Cdq(tp))
                 case .Idiv(let tp, let op): out.append(.Idiv(tp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                case .Div(let tp, let op): out.append(.Div(tp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
                 case .Cmp(let tp, let left, let right):
                     out.append(.Cmp(tp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping, symbolTable),
                                     replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping, symbolTable)))
@@ -492,6 +541,11 @@ class Assembly {
                     out.append(.Push(replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
                 case .Movsx(let src, let dst):
                     out.append(.Movsx(
+                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
+                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
+                    ))
+                case .Movzx(let src, let dst):
+                    out.append(.Movzx(
                         replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
                         replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
                     ))
@@ -591,6 +645,13 @@ class Assembly {
                             out.append(.Idiv(tp, .Register(.R10)))
                         default: out.append(instr)
                     }
+                case .Div(let tp, let op):
+                    switch op {
+                        case .Immediate(let val):
+                            out.append(.Mov(tp, .Immediate(val), .Register(.R10)))
+                            out.append(.Div(tp, .Register(.R10)))
+                        default: out.append(instr)
+                    }
                 case .Cmp(let tp, let left, let right):
                     switch left {
                         case .Data(_): fallthrough
@@ -644,6 +705,21 @@ class Assembly {
                     }
                     out.append(.Movsx(realSrc, realDst))
                     if let p = postfix { out.append(p) }
+                case .Movzx(let src, let dst):
+                    switch dst {
+                        case .Register(_):
+                            out.append(.Mov(.Longword, src, dst))
+                        case .Stack(_): fallthrough
+                        case .Data(_):
+                            out.append(.Mov(.Longword, src, .Register(.R11)))
+                            out.append(.Mov(.Quadword, .Register(.R11), dst))
+                        case .Pseudo(_):
+                            print("Unreachable: psuedo slot survived past pseudo replacement")
+                            exit(ExitCode.internalError.rawValue)
+                        case .Immediate(_):
+                            print("Unreachable: immediate as the destination of a movzx")
+                            exit(ExitCode.internalError.rawValue)
+                    }
             }
         }
         return out
@@ -773,8 +849,10 @@ class Assembly {
                                     case .DeallocateStack(_): fallthrough
                                     case .Push(_): fallthrough
                                     case .Call(_): fallthrough
+                                    case .Movzx(_, _): fallthrough
+                                    case .Div(_, _): fallthrough
                                     case .Ret: fixedBody.append(instr)
-                                }
+}
                             }
                             fixedDecls.append(.Function(name, isGlobal, fixedBody))
                         case .StaticVariable(_, _, _, _):
