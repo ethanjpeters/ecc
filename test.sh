@@ -1,5 +1,15 @@
 #!/bin/bash
 
+swift run ecc TestSources/constants.c
+./constants
+if [[ $? -ne 0 ]]; then
+    echo "constants: Expected exit code 0 but got $?"
+    exit 1
+else
+    echo "constants: success"
+fi
+rm constants
+
 swift run ecc TestSources/euler3-short.c
 ./euler3-short
 if [[ $? -ne 29 ]]; then
