@@ -10,6 +10,7 @@ class Lexer {
         case keywordVoid
         case keywordUnsigned
         case keywordSigned
+        case keywordDouble
         // storage specifiers
         case keywordStatic
         case keywordExtern
@@ -326,6 +327,7 @@ class Lexer {
             case "void": return .keywordVoid
             case "unsigned": return .keywordUnsigned
             case "signed": return .keywordSigned
+            case "double": return .keywordDouble
             case "static": return .keywordStatic
             case "extern": return .keywordExtern
             case "return": return .keywordReturn
