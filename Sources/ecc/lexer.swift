@@ -98,21 +98,39 @@ class Lexer {
         }
     }
 
+    func isInRange(_ c: Character, _ lower: String, _ higher: String) -> Bool {
+        let t = c.asciiValue!
+        return t >= Character(lower).asciiValue! && t <= Character(higher).asciiValue!
+    }
+
+    func isWord(_ c: Character) -> Bool {
+        return isInRange(c, "A", "Z") || isInRange(c, "a", "z") || isInRange(c, "0", "9") || c == "_"
+    }
+
+    func isWordBoundary(_ index: Int) -> Bool {
+        if index >= sourceFileCharacters.count { return true }
+
+        return !isWord(sourceFileCharacters[index])
+    }
+
     func matchIdentifier(startingIndex: Int) -> String? {
         var j = startingIndex
         var matchedString : String = ""
 
+        if j >= sourceFileCharacters.count { return nil }
+        if !(isInRange(sourceFileCharacters[j], "A", "Z") || isInRange(sourceFileCharacters[j], "a", "z") || sourceFileCharacters[j] == "_") {
+            return nil
+        }
+        matchedString = matchedString + String(sourceFileCharacters[j])
+        j = j + 1
         while j < sourceFileCharacters.count {
             let c = sourceFileCharacters[j]
-            let ascii = c.asciiValue!
-            if !((ascii >= Character("A").asciiValue! && ascii <= Character("Z").asciiValue!) || (ascii >= Character("a").asciiValue! && ascii <= Character("z").asciiValue!) || ascii == Character("_").asciiValue!) {
-                break
-            }
+            if !isWord(c) { break }
             matchedString = matchedString + String(c)
             j = j + 1
         }
 
-        return matchedString.count > 0 ? matchedString : nil
+        return matchedString
     }
 
     func matchConstant(startingIndex: Int) -> String? {
@@ -121,25 +139,28 @@ class Lexer {
 
         while j < sourceFileCharacters.count {
             let c = sourceFileCharacters[j]
-            let ascii = c.asciiValue!
 
             if c == "l" || c == "L" {
                 matchedString = matchedString + String(c)
-                if j + 1 < sourceFileCharacters.count && (sourceFileCharacters[j+1] == "u" || sourceFileCharacters[j+1] == "U") {
-                    matchedString = matchedString + String(sourceFileCharacters[j+1])
+                j = j + 1
+                if j < sourceFileCharacters.count && (sourceFileCharacters[j] == "u" || sourceFileCharacters[j] == "U") {
+                    matchedString = matchedString + String(sourceFileCharacters[j])
+                    j = j + 1
                 }
                 break
             }
 
             if c == "u" || c == "U" {
                 matchedString = matchedString + String(c)
-                if j + 1 < sourceFileCharacters.count && (sourceFileCharacters[j+1] == "l" || sourceFileCharacters[j+1] == "L") {
-                    matchedString = matchedString + String(sourceFileCharacters[j+1])
+                j = j + 1
+                if j < sourceFileCharacters.count && (sourceFileCharacters[j] == "l" || sourceFileCharacters[j] == "L") {
+                    matchedString = matchedString + String(sourceFileCharacters[j])
+                    j = j + 1
                 }
                 break
             }
 
-            if !(ascii >= Character("0").asciiValue! && ascii <= Character("9").asciiValue!) {
+            if !isInRange(c, "0", "9") {
                 break
             }
 
@@ -147,7 +168,7 @@ class Lexer {
             j = j + 1
         }
 
-        return matchedString.count > 0 ? matchedString : nil
+        return isWordBoundary(j) ? (matchedString.count > 0 ? matchedString : nil) : nil
     }
 
     func matchThreeCharacterOperator(startingIndex: Int) -> Token? {

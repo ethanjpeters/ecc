@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# set -exu
+
 swift run ecc TestSources/constants.c
 ./constants
 if [[ $? -ne 0 ]]; then
