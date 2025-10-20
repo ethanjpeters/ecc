@@ -178,6 +178,7 @@ class Lexer {
         var hasWholePart = false
         var hasFractionalPart = false
         var hasExponentPart = false
+        var hasDecimalPoint = false
 
         // match the part before decimal point
         while j < sourceFileCharacters.count {
@@ -198,6 +199,7 @@ class Lexer {
         if sourceFileCharacters[j] == "." {
             matchedString = matchedString + "."
             j = j + 1
+            hasDecimalPoint = true
             // match the fractional part
             while j < sourceFileCharacters.count {
                 let c = sourceFileCharacters[j]
@@ -217,7 +219,7 @@ class Lexer {
             matchedString = matchedString + "E"
             j = j + 1
             if j >= sourceFileCharacters.count { return nil }
-            if sourceFileCharacters[j] == "+" || sourceFileCharacters[j] == "-" { 
+            if sourceFileCharacters[j] == "+" || sourceFileCharacters[j] == "-" {
                 matchedString = matchedString + String(sourceFileCharacters[j])
                 j = j + 1
                 if j >= sourceFileCharacters.count { return nil }
@@ -233,7 +235,7 @@ class Lexer {
             }
             hasExponentPart = true
         }
-        if !(hasFractionalPart || hasExponentPart) { return nil }
+        if !(hasFractionalPart || hasExponentPart || hasDecimalPoint) { return nil }
 
         return isWordBoundary(j) ? (matchedString.count > 0 ? matchedString : nil) : nil
     }
