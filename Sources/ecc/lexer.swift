@@ -75,6 +75,7 @@ class Lexer {
         // tokens bearing data
         case identifier(String)
         case constant(String)
+        case floatingPointConstant(String)
     }
 
     private let sourceFileCharacters : [String.Element]
@@ -166,6 +167,69 @@ class Lexer {
 
             matchedString = matchedString + String(c)
             j = j + 1
+        }
+
+        return isWordBoundary(j) ? (matchedString.count > 0 ? matchedString : nil) : nil
+    }
+
+    func matchFloatingPointConstant(startingIndex: Int) -> String? {
+        var j = startingIndex
+        var matchedString = ""
+        var hasWholePart = false
+        var hasFractionalPart = false
+
+        // match the part before decimal point
+        while j < sourceFileCharacters.count {
+            let c = sourceFileCharacters[j]
+
+            if !isInRange(c, "0", "9") {
+                break
+            }
+
+            hasWholePart = true
+
+            matchedString = matchedString + String(c)
+
+            j = j + 1
+        }
+        if j >= sourceFileCharacters.count { return nil }
+        // match the decimal point
+        if sourceFileCharacters[j] == "." {
+            matchedString = matchedString + "."
+            j = j + 1
+            // match the fractional part
+            while j < sourceFileCharacters.count {
+                let c = sourceFileCharacters[j]
+
+                if !isInRange(c, "0", "9") { break }
+
+                hasFractionalPart = true
+
+                matchedString = matchedString + String(c)
+
+                j = j + 1
+            }
+        }
+        if !(hasFractionalPart || hasWholePart) { return nil }
+        // match the exponent
+        if sourceFileCharacters[j] == "e" || sourceFileCharacters[j] == "E" {
+            matchedString = matchedString + "E"
+            j = j + 1
+            if j >= sourceFileCharacters.count { return nil }
+            if sourceFileCharacters[j] == "+" || sourceFileCharacters[j] == "-" { 
+                matchedString = matchedString + String(sourceFileCharacters[j])
+                j = j + 1
+                if j >= sourceFileCharacters.count { return nil }
+            }
+            if !isInRange(sourceFileCharacters[j], "0", "9") { return nil }
+            while j < sourceFileCharacters.count {
+                let c = sourceFileCharacters[j]
+                if !isInRange(c, "0", "9") {
+                    break
+                }
+                matchedString = matchedString + String(c)
+                j = j + 1
+            }
         }
 
         return isWordBoundary(j) ? (matchedString.count > 0 ? matchedString : nil) : nil
