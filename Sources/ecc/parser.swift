@@ -40,6 +40,7 @@ class Parser {
             case ConstUnsignedInt(UInt32)
             case ConstLong(Int64)
             case ConstUnsignedLong(UInt64)
+            case ConstDouble(Double)
         }
 
         indirect enum Expression {
@@ -460,6 +461,12 @@ class Parser {
                     }
                     return .Constant(.ConstInt(int32Val), nil)
                 }
+            case .floatingPointConstant(let val):
+                guard let parsedVal = Double(val) else {
+                    print("Failed to parse floating point constant \(val)")
+                    exit(ExitCode.parserError.rawValue)
+                }
+                return .Constant(.ConstDouble(parsedVal), nil)
             default:
                 print("Unreachable non-constant constant")
                 exit(ExitCode.internalError.rawValue)
@@ -476,7 +483,8 @@ class Parser {
         var lhs : Parser.AST.Expression
         switch next {
             // parse an integer constant
-        case .constant(_):
+        case .constant(_): fallthrough
+        case .floatingPointConstant(_):
             lhs = parseConstant(token: next)
             // variable
         case .identifier(let name):
