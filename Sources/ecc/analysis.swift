@@ -863,8 +863,12 @@ class SemanticAnalyzer {
                     let conTp = converCTypeToCheckerType(tp)
                     if let e = initExp {
                         (typeCheckedInit, initType) = typeCheck(e, nameMap)
-                        let commonType = getCommonType(initType, conTp)
-                        typeCheckedInit = typeConvert(typeCheckedInit!, ofType: initType, toType: commonType)
+                        // previously we converted to the "greater" or "common" type here, but that was incorrect; we should always
+                        // attempt to convert to the declared type
+                        // let commonType = getCommonType(initType, conTp)
+                        // typeCheckedInit = typeConvert(typeCheckedInit!, ofType: initType, toType: commonType)
+                        let targetType = conTp
+                        typeCheckedInit = typeConvert(typeCheckedInit!, ofType: initType, toType: targetType)
                     } else {
                         initType = conTp
                         typeCheckedInit = nil
@@ -1063,8 +1067,27 @@ func isSigned(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
     }
 }
 
+func isFloatingPoint(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    switch tp {
+        case .Int: fallthrough
+        case .Long: fallthrough
+        case .UnsignedInt: fallthrough
+        case .UnsignedLong: return false
+        case .Function(_, _):
+            print("GETTING FP-NESS OF FUNCTION MAKES NO SENSE")
+            exit(ExitCode.internalError.rawValue)
+        case .Void:
+            print("VOID IS NEITHER FP NOR NOT FP DOES NOT COMPUTE BEEP BOOP")
+            exit(ExitCode.internalError.rawValue)
+        case .Double: return true
+    }
+}
+
 func getCommonType(_ left : SemanticAnalyzer.TypeChecker.CheckerType, _ right: SemanticAnalyzer.TypeChecker.CheckerType) -> SemanticAnalyzer.TypeChecker.CheckerType {
     if left == right { return left }
+    // upcast to floating point where necessary
+    if isFloatingPoint(left) { return left }
+    if isFloatingPoint(right) { return right }
     if getTypeSize(left) == getTypeSize(right) {
         if isSigned(left) { return right }
         else { return left }
