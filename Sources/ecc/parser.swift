@@ -219,6 +219,7 @@ class Parser {
         switch peek(tokenStream) {
             case .keywordInt: fallthrough
             case .keywordLong: fallthrough
+            case .keywordDouble: fallthrough
             case .keywordVoid: return true
             default: return false
         }
