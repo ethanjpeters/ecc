@@ -548,6 +548,14 @@ class SemanticAnalyzer {
                         print("Tried to perform unary operation \(unOp) on void expression \(e)")
                         exit(ExitCode.semanticError.rawValue)
                     }
+
+                    if isFloatingPoint(eType) {
+                        if unOp == .Complement {
+                            print("Complement operator does not apply to floating point value")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
+                    }
+
                     let outType : Parser.AST.CType
                     switch unOp {
                         case .Not:
@@ -573,6 +581,14 @@ class SemanticAnalyzer {
                             print("Right hand side (\(right)) of binary operation \(binOp) is \(rightType)")
                             exit(ExitCode.semanticError.rawValue)
                         default: ()
+                    }
+
+
+                    if isFloatingPoint(leftType) || isFloatingPoint(rightType) {
+                        if binOp == .Remainder {
+                            print("Remainder operator does not apply to floating point types")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
                     }
 
                     switch binOp {
