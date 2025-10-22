@@ -537,6 +537,9 @@ class SemanticAnalyzer {
                         case .ConstLong(let val): return (.Constant(.ConstLong(val), .Long), .Long)
                         case .ConstUnsignedInt(let val): return (.Constant(.ConstUnsignedInt(val), .UnsignedInt), .UnsignedInt)
                         case .ConstUnsignedLong(let val): return (.Constant(.ConstUnsignedLong(val), .UnsignedLong), .UnsignedLong)
+                        case .ConstDouble(let val):
+                            print("As-yet-unhandled floating point constant found while type checking")
+                            exit(ExitCode.internalError.rawValue)
                     }
                 case .Unary(let unOp, let e, _):
                     let (checkedE, eType) = typeCheck(e, nameMap) // TODO: not all operators make sense on every type
@@ -878,6 +881,9 @@ class SemanticAnalyzer {
                                             initVal = .Initial(.UIntInit(UInt32(i)))
                                         case .ConstUnsignedLong(let i):
                                             initVal = .Initial(.ULongInit(UInt64(i)))
+                                        case .ConstDouble(let d):
+                                            print("As-yet-unhandled floating point constant found while type checking")
+                                            exit(ExitCode.internalError.rawValue)
                                     }
                                 default:
                                     // NOTE: we could allow things that evaluate constantly, but we don't yet
@@ -966,6 +972,9 @@ class SemanticAnalyzer {
                                                 initValue = .Initial(.UIntInit(UInt32(i)))
                                             case .ConstUnsignedLong(let i):
                                                 initValue = .Initial(.ULongInit(UInt64(i)))
+                                            case .ConstDouble(let d):
+                                                print("As-yet-unhandled floating point constant found while type checking")
+                                                exit(ExitCode.internalError.rawValue)
                                         }
                                     default:
                                         print("Non-constant initializer on local static variable \(name)")

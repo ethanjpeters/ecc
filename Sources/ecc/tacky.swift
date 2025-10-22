@@ -166,6 +166,9 @@ class Tacky {
                         return .Constant(.ConstUnsignedInt(val))
                     case .ConstUnsignedLong(let val):
                         return .Constant(.ConstUnsignedLong(val))
+                    case .ConstDouble(_):
+                        print("As-yet-unhandled floating point constant found while generating TACKY")
+                        exit(ExitCode.internalError.rawValue)
                 }
             case .Unary(let op, let exp, let tp):
                 if isIncOrDec(op) {
