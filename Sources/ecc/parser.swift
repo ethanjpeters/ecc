@@ -96,6 +96,7 @@ class Parser {
             case Long
             case UnsignedLong
             case Void
+            case Double
         }
 
         enum Parameter {
@@ -144,6 +145,7 @@ class Parser {
         switch nextToken {
             case .keywordInt: fallthrough
             case .keywordLong: fallthrough
+            case .keywordDouble: fallthrough
             case .keywordVoid: return nextToken
             default:
                 print("Found unexpected token \(nextToken) at line \(position.0), column \(position.1) when looking for type")
@@ -187,6 +189,7 @@ class Parser {
             case .keywordInt: return .Int
             case .keywordLong: return .Long
             case .keywordVoid: return .Void
+            case .keywordDouble: return .Double
             default:
                 print("Unreachable not-a-type while converting lexical type to AST")
                 exit(ExitCode.internalError.rawValue)
@@ -751,6 +754,15 @@ class Parser {
 
         if specifierList.contains(.keywordStatic) { storageClass = .Static }
         else if specifierList.contains(.keywordExtern) { storageClass = .Extern }
+
+        if specifierList.contains(.keywordDouble) {
+            // you are allowed no other types alongside double
+            if specifierList.contains(.keywordUnsigned) || specifierList.contains(.keywordSigned) || specifierList.contains(.keywordLong) || specifierList.contains(.keywordInt) || specifierList.contains(.keywordVoid) {
+                print("Nonsense list of specifiers alongside 'double': \(specifierList)")
+                exit(ExitCode.parserError.rawValue)
+            }
+            return (.Double, storageClass)
+        }
 
         if specifierList.contains(.keywordUnsigned) && specifierList.contains(.keywordLong) {
             return (.UnsignedLong, storageClass)

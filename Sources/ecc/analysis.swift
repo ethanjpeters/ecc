@@ -1027,6 +1027,9 @@ func converCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.Ty
         case .Long: return .Long
         case .UnsignedInt: return .UnsignedInt
         case .UnsignedLong: return .UnsignedLong
+        case .Double:
+            print("As-yet-unhandled floating point type found when converting types")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
