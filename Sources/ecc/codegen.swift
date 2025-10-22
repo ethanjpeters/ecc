@@ -232,6 +232,9 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                 case .LongInit(let i): out.append("\t.quad\t\(i)")
                 case .UIntInit(let i): out.append("\t.long\t\(i)")
                 case .ULongInit(let i): out.append("\t.quad\t\(i)")
+                case .DoubleInit(let f):
+                    print("As-yet-unhandled floating point initializer found while emitting program level statement")
+                    exit(ExitCode.internalError.rawValue)
             }
     }
 }

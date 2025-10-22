@@ -488,6 +488,7 @@ class SemanticAnalyzer {
             case UnsignedInt
             case Long
             case UnsignedLong
+            case Double
             case Void
             case Function(CheckerType /* return */, [CheckerType] /* params */)
         }
@@ -497,6 +498,7 @@ class SemanticAnalyzer {
             case UIntInit(UInt32)
             case LongInit(Int64)
             case ULongInit(UInt64)
+            case DoubleInit(Double)
         }
 
         enum InitialValue {
@@ -518,6 +520,7 @@ class SemanticAnalyzer {
                 case .Void: return .Void
                 case .Long: return .Long
                 case .UnsignedLong: return .UnsignedLong
+                case .Double: return .Double
                 case .Function(_, _):
                     print("UNREACHABLE FUNC")
                     exit(ExitCode.internalError.rawValue)
@@ -537,9 +540,7 @@ class SemanticAnalyzer {
                         case .ConstLong(let val): return (.Constant(.ConstLong(val), .Long), .Long)
                         case .ConstUnsignedInt(let val): return (.Constant(.ConstUnsignedInt(val), .UnsignedInt), .UnsignedInt)
                         case .ConstUnsignedLong(let val): return (.Constant(.ConstUnsignedLong(val), .UnsignedLong), .UnsignedLong)
-                        case .ConstDouble(let val):
-                            print("As-yet-unhandled floating point constant found while type checking")
-                            exit(ExitCode.internalError.rawValue)
+                        case .ConstDouble(let val): return (.Constant(.ConstDouble(val), .Double), .Double)
                     }
                 case .Unary(let unOp, let e, _):
                     let (checkedE, eType) = typeCheck(e, nameMap) // TODO: not all operators make sense on every type
@@ -668,6 +669,7 @@ class SemanticAnalyzer {
                         case .UnsignedInt: fallthrough
                         case .Long: fallthrough
                         case .UnsignedLong: fallthrough
+                        case .Double: fallthrough
                         case .Void:
                             print("Can not call value \(lValue) of type \(fType)")
                             exit(ExitCode.semanticError.rawValue)
@@ -882,8 +884,7 @@ class SemanticAnalyzer {
                                         case .ConstUnsignedLong(let i):
                                             initVal = .Initial(.ULongInit(UInt64(i)))
                                         case .ConstDouble(let d):
-                                            print("As-yet-unhandled floating point constant found while type checking")
-                                            exit(ExitCode.internalError.rawValue)
+                                            initVal = .Initial(.DoubleInit(Double(d)))
                                     }
                                 default:
                                     // NOTE: we could allow things that evaluate constantly, but we don't yet
@@ -973,8 +974,7 @@ class SemanticAnalyzer {
                                             case .ConstUnsignedLong(let i):
                                                 initValue = .Initial(.ULongInit(UInt64(i)))
                                             case .ConstDouble(let d):
-                                                print("As-yet-unhandled floating point constant found while type checking")
-                                                exit(ExitCode.internalError.rawValue)
+                                                initValue = .Initial(.DoubleInit(Double(d)))
                                         }
                                     default:
                                         print("Non-constant initializer on local static variable \(name)")
@@ -1027,9 +1027,7 @@ func converCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.Ty
         case .Long: return .Long
         case .UnsignedInt: return .UnsignedInt
         case .UnsignedLong: return .UnsignedLong
-        case .Double:
-            print("As-yet-unhandled floating point type found when converting types")
-            exit(ExitCode.internalError.rawValue)
+        case .Double: return .Double
     }
 }
 
@@ -1042,6 +1040,7 @@ func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Int {
         case .UnsignedInt: return 4
         case .Long: return 8
         case .UnsignedLong: return 8
+        case .Double: return 8
         case .Void:
             print("GETTING TYPE SIZE OF VOID MAKES NO SENSE")
             exit(ExitCode.internalError.rawValue)
@@ -1060,6 +1059,7 @@ func isSigned(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
         case .Void:
             print("VOID IS NEITHER SIGNED NOR SIGNED DOES NOT COMPUTE BEEP BOOP")
             exit(ExitCode.internalError.rawValue)
+        case .Double: return true   // feels like a lie by omission
     }
 }
 

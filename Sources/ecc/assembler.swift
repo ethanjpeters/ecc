@@ -138,6 +138,9 @@ class Assembly {
                     case .Int: return .Longword
                     case .UnsignedLong: fallthrough
                     case .Long: return .Quadword
+                    case .Double:
+                        print("As-yet-unhandled floating point value found while deducing type")
+                        exit(ExitCode.internalError.rawValue)
                 }
         }
     }
@@ -166,6 +169,9 @@ class Assembly {
                     case .Int: return true
                     case .UnsignedLong: return false
                     case .Long: return true
+                    case .Double:
+                        print("As-yet-unhandled floating point value found while deducing signed-ness")
+                        exit(ExitCode.internalError.rawValue)
                 }
         }
     }
@@ -450,6 +456,9 @@ class Assembly {
                             print("Meaningless non-function attributes attached to function \(name)")
                             exit(ExitCode.internalError.rawValue)
                     }
+                case .Double:
+                    print("As-yet-unhandled floating point value found while generating assembly")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -480,6 +489,7 @@ class Assembly {
                     case .UnsignedInt: width = 4
                     case .Long: width = 8
                     case .UnsignedLong: width = 8
+                    case .Double: width = 8 // technically correct, the best kind of correct
                 }
                 if let slot = nameStackMapping[name] {
                     return .Stack(-slot)
