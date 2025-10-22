@@ -40,6 +40,7 @@ class Tacky {
             case ConstUnsignedInt(UInt32)
             case ConstLong(Int64)
             case ConstUnsignedLong(UInt64)
+            case ConstDouble(Double)
         }
 
         enum Value {
@@ -60,6 +61,10 @@ class Tacky {
             case SignExtend(Value /* src */, Value /* dst */)
             case ZeroExtend(Value /* src */, Value /* dst */)
             case Truncate(Value /* src */, Value /* dst */)
+            case DoubleToInt(Value /* src */, Value /* dst */)
+            case DoubleToUInt(Value /* src */, Value /* dst */)
+            case IntToDouble(Value /* src */, Value /* dst */)
+            case UIntToDouble(Value /* src */, Value /* dst */)
         }
 
         enum Declaration {
@@ -166,9 +171,8 @@ class Tacky {
                         return .Constant(.ConstUnsignedInt(val))
                     case .ConstUnsignedLong(let val):
                         return .Constant(.ConstUnsignedLong(val))
-                    case .ConstDouble(_):
-                        print("As-yet-unhandled floating point constant found while generating TACKY")
-                        exit(ExitCode.internalError.rawValue)
+                    case .ConstDouble(let val):
+                        return .Constant(.ConstDouble(val))
                 }
             case .Unary(let op, let exp, let tp):
                 if isIncOrDec(op) {
@@ -301,7 +305,7 @@ class Tacky {
                 // DEBUG
                 // print("CONSIDERING CASTING \(child) OF TYPE \(tp) TO TYPE \(targetType)")
                 // END DEBUG
-
+ 
                 let unCastedValue = generateTACKYExpression(child, out: &out, symbolTable: &symbolTable)
                 if targetType != tp {
                     let dst = makeTempVariable(targetType, &symbolTable)
@@ -309,14 +313,28 @@ class Tacky {
                     let targetCp = converCTypeToCheckerType(targetType)
                     let innerCp = converCTypeToCheckerType(tp!)
 
-                    if getTypeSize(targetCp) == getTypeSize(innerCp) {
-                        out.append(.Copy(unCastedValue, dst))
-                    } else if getTypeSize(targetCp) < getTypeSize(innerCp) {
-                        out.append(.Truncate(unCastedValue, dst))
-                    } else if isSigned(innerCp) {
-                        out.append(.SignExtend(unCastedValue, dst))
+                    if isFloatingPoint(targetCp) && !isFloatingPoint(innerCp) {
+                        if isSigned(innerCp) {
+                            out.append(.IntToDouble(unCastedValue, dst))
+                        } else {
+                            out.append(.UIntToDouble(unCastedValue, dst))
+                        }
+                    } else if isFloatingPoint(innerCp) && !isFloatingPoint(targetCp) {
+                        if isSigned(targetCp) {
+                            out.append(.DoubleToInt(unCastedValue, dst))
+                        } else {
+                            out.append(.DoubleToUInt(unCastedValue, dst))
+                        }
                     } else {
-                        out.append(.ZeroExtend(unCastedValue, dst))
+                        if getTypeSize(targetCp) == getTypeSize(innerCp) {
+                            out.append(.Copy(unCastedValue, dst))
+                        } else if getTypeSize(targetCp) < getTypeSize(innerCp) {
+                            out.append(.Truncate(unCastedValue, dst))
+                        } else if isSigned(innerCp) {
+                            out.append(.SignExtend(unCastedValue, dst))
+                        } else {
+                            out.append(.ZeroExtend(unCastedValue, dst))
+                        }
                     }
                     return dst
                 } else {

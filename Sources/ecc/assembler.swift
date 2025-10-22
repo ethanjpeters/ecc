@@ -105,6 +105,9 @@ class Assembly {
                     case .ConstLong(let i): return .Immediate(Int(i))
                     case .ConstUnsignedInt(let i): return .Immediate(Int(i))
                     case .ConstUnsignedLong(let i): return .Immediate(Int(i))
+                    case .ConstDouble(let f):
+                        print("As-yet-unhandled floating point constant found while converting tacky value to Tree.Operand")
+                        exit(ExitCode.internalError.rawValue)
                 }
             case .Var(let name):
                 if let _ = symbolTable[name] {
@@ -122,6 +125,9 @@ class Assembly {
                     case .ConstInt(_) : return .Longword
                     case .ConstUnsignedLong: fallthrough
                     case .ConstLong(_) : return .Quadword
+                    case .ConstDouble(let f):
+                        print("As-yet-unhandled floating point constant found while converting tacky value to Tree.Operand")
+                        exit(ExitCode.internalError.rawValue)
                 }
             case .Var(let name):
                 guard let entry = symbolTable[name] else {
@@ -153,6 +159,9 @@ class Assembly {
                     case .ConstInt(_) : return true
                     case .ConstUnsignedLong: return false
                     case .ConstLong(_) : return true
+                    case .ConstDouble(let f):
+                        print("As-yet-unhandled floating point constant found while converting tacky value to Tree.Operand")
+                        exit(ExitCode.internalError.rawValue)
                 }
             case .Var(let name):
                 guard let entry = symbolTable[name] else {
@@ -362,7 +371,13 @@ class Assembly {
                     out.append(.Mov(.Longword, convert(src, symbolTable), convert(dst, symbolTable)))
                 case .ZeroExtend(let src, let dst):
                     out.append(.Movzx(convert(src, symbolTable), convert(dst, symbolTable)))
-            }
+                case .DoubleToInt(_, _): fallthrough
+                case .DoubleToUInt(_, _): fallthrough
+                case .IntToDouble(_, _): fallthrough
+                case .UIntToDouble(_, _):
+                    print("As-yet-unhandled conversion instruction \(instr) found while generating assembly")
+                    exit(ExitCode.internalError.rawValue)
+}
         }
     }
 
