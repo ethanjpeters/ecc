@@ -28,6 +28,17 @@ class Assembly {
             case R9
             case R10
             case R11
+            case XMM0
+            case XMM1
+            case XMM2
+            case XMM3
+            case XMM4
+            case XMM5
+            case XMM6
+            case XMM7
+            case XMM8
+            case XMM14
+            case XMM15
         }
 
         enum Operand {
@@ -52,17 +63,21 @@ class Assembly {
             case Xor
             case Sar
             case Shl
+            case DivDouble
         }
 
         enum AssemblyType {
             case Longword
             case Quadword
+            case Double
         }
 
         enum Instruction {
             case Mov(AssemblyType, Operand /* src */, Operand /* dst */)
             case Movsx(Operand /* src */, Operand /* dst */)
             case Movzx(Operand /* src */, Operand /* dst */)
+            case Cvttsd2dsi(AssemblyType, Operand /* src */, Operand /* dst */)
+            case Cvtsi2sd(AssemblyType, Operand /* src */, Operand /* dst */ )
             case Unary(UnaryOperator, AssemblyType, Operand)
             case Binary(BinaryOperator, AssemblyType, Operand, Operand)
             case Cmp(AssemblyType, Operand, Operand)
@@ -83,6 +98,7 @@ class Assembly {
         enum Declaration {
             case Function(String, Bool /* is global */, [Instruction])
             case StaticVariable(String /* name */, Bool /* is global */, Int /* alignment */, SemanticAnalyzer.TypeChecker.StaticInit /* initial value */)
+            case StaticConstant(String /* name */, Int /* alignment */, SemanticAnalyzer.TypeChecker.StaticInit /* init */)
         }
 
         enum Program {
@@ -574,6 +590,10 @@ class Assembly {
                         replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
                         replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
                     ))
+                case .Cvttsd2dsi(_, _, _): fallthrough
+                case .Cvtsi2sd(_, _, _):
+                    print("As-yet-unhandled conversion instruction found while generating assembly")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -588,6 +608,10 @@ class Assembly {
                 return .Function(name, isGlobal, replacePseudoRegisters(instrs, symbolTable))
             case .StaticVariable(let name, let isGlobal, let alignment, let initVal):
                 return .StaticVariable(name, isGlobal, alignment, initVal)
+            case .StaticConstant(let name, let alignment, let initVal):
+                // TODO:
+                print("As-yet-unhandled static constant found while replacing pseudo-registers")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 
@@ -661,6 +685,9 @@ class Assembly {
                                 default:
                                     out.append(instr)
                             }
+                        case .DivDouble:
+                            print("As-yet-unhandled floating point division found while fixing up moves")
+                            exit(ExitCode.internalError.rawValue)
                     }
                 case .Cdq: out.append(instr)
                 case .Idiv(let tp, let op):
@@ -745,6 +772,10 @@ class Assembly {
                             print("Unreachable: immediate as the destination of a movzx")
                             exit(ExitCode.internalError.rawValue)
                     }
+                case .Cvttsd2dsi(_, _, _): fallthrough
+                case .Cvtsi2sd(_, _, _):
+                    print("As-yet-unhandled floating point conversion found while fixing up moves")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
         return out
@@ -756,6 +787,9 @@ class Assembly {
                 return .Function(name, isGlobal, fixUpMoves(instrs))
             case .StaticVariable(_, _, _, _):
                 return pls
+            case .StaticConstant(_, _, _):
+                print("As-yet-unhandled static constant found file fixing up moves")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 
@@ -877,11 +911,18 @@ class Assembly {
                                     case .Movzx(_, _): fallthrough
                                     case .Div(_, _): fallthrough
                                     case .Ret: fixedBody.append(instr)
-}
+                                    case .Cvttsd2dsi(_, _, _): fallthrough
+                                    case .Cvtsi2sd(_, _, _):
+                                        print("As-yet-unhandled floating point conversion found while fixing up immediates")
+                                        exit(ExitCode.internalError.rawValue)
+                                }
                             }
                             fixedDecls.append(.Function(name, isGlobal, fixedBody))
                         case .StaticVariable(_, _, _, _):
                             fixedDecls.append(dec)
+                        case .StaticConstant(_, _, _):
+                            print("As-yet-unhandled static constant found while fixing up immediates")
+                            exit(ExitCode.internalError.rawValue)
                     }
                 }
                 return .Statement(fixedDecls)

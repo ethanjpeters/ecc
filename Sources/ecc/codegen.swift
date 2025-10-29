@@ -11,6 +11,7 @@ func typeToWidth(_ tp: Assembly.Tree.AssemblyType) -> RegisterWidth {
     switch tp {
         case .Longword: return .fourByte
         case .Quadword: return .eightByte
+        case .Double: return .eightByte
     }
 }
 
@@ -92,6 +93,19 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
                         case .fourByte: return "%esi"
                         case .eightByte: return "%rsi"
                     }
+                case .XMM0: fallthrough
+                case .XMM1: fallthrough
+                case .XMM2: fallthrough
+                case .XMM3: fallthrough
+                case .XMM4: fallthrough
+                case .XMM5: fallthrough
+                case .XMM6: fallthrough
+                case .XMM7: fallthrough
+                case .XMM8: fallthrough
+                case .XMM14: fallthrough
+                case .XMM15:
+                    print("As-yet-unhandled floating point register encountered while generating code")
+                    exit(ExitCode.internalError.rawValue)
             }
         case .Stack(let slot):
             return "\(slot)(%rbp)"
@@ -127,6 +141,9 @@ func convert(_ op: Assembly.Tree.BinaryOperator, _ tp: Assembly.Tree.AssemblyTyp
             return "sar\(typeToSuffix(tp))"
         case .Shl:
             return "shl\(typeToSuffix(tp))"
+        case .DivDouble:
+            print("As-yet-unhandled floating point division found while generating code")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
@@ -154,6 +171,7 @@ func typeToSuffix(_ tp : Assembly.Tree.AssemblyType) -> String {
     switch tp {
         case .Longword: return "l"
         case .Quadword: return "q"
+        case .Double: return "sd"
     }
 }
 
@@ -203,6 +221,10 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
             case .Movzx(_, _):
                 print("Unreachable movzx survived assembly fixup")
                 exit(ExitCode.internalError.rawValue)
+            case .Cvttsd2dsi(_, _, _): fallthrough
+            case .Cvtsi2sd(_, _, _):
+                print("As-yet-unhandled floating point conversion found while emitting instructions")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 }
@@ -236,6 +258,9 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                     print("As-yet-unhandled floating point initializer found while emitting program level statement")
                     exit(ExitCode.internalError.rawValue)
             }
+        case .StaticConstant(_, _, _):
+            print("As-yet=unhandled static constant found while emitting program level statement")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
