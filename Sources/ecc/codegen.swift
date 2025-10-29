@@ -101,7 +101,6 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
                 case .XMM5: fallthrough
                 case .XMM6: fallthrough
                 case .XMM7: fallthrough
-                case .XMM8: fallthrough
                 case .XMM14: fallthrough
                 case .XMM15:
                     print("As-yet-unhandled floating point register encountered while generating code")

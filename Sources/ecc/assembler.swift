@@ -36,7 +36,6 @@ class Assembly {
             case XMM5
             case XMM6
             case XMM7
-            case XMM8
             case XMM14
             case XMM15
         }
