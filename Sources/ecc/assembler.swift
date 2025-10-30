@@ -110,6 +110,86 @@ class Assembly {
         }
     }
 
+    class DoubleConstantExtractor {
+        private var counter : Int = 1
+
+        func makeLabel() -> String {
+            let out = "_double.constant.\(counter)"
+            counter = counter + 1
+            return out
+        }
+
+        func extract(_ value: Tacky.IR.Value, _ mapping: inout [Double: Tree.Declaration]) {
+            switch value {
+                case .Constant(let constVal):
+                    switch constVal {
+                        case .ConstDouble(let d):
+                            if mapping[d] == nil {
+                                mapping[d] = .StaticConstant(makeLabel(), 16, .DoubleInit(d))
+                            }
+                        default: ()
+                    }
+                case .Var(_): ()
+            }
+        }
+
+        func extract(_ program: Tacky.IR.Program) -> [Double: Tree.Declaration] {
+            var out : [Double: Tree.Declaration] = [:]
+            switch program {
+                case .Statement(let decls):
+                    for d in decls {
+                        switch d {
+                            case .Function(_, _, _, let body):
+                                for instr in body {
+                                    switch instr {
+                                        case .Return(let val):
+                                            if let v = val {
+                                                extract(v, &out)
+                                            }
+                                        case .Unary(_, let src, _):
+                                            extract(src, &out)
+                                        case .Binary(_, let src1, let src2, _):
+                                            extract(src1, &out)
+                                            extract(src2, &out)
+                                        case .Copy(let src, _):
+                                            extract(src, &out)
+                                        case .Jump(_): ()
+                                        case .JumpIfZero(let val, _):
+                                            extract(val, &out)
+                                        case .JumpIfNotZero(let val, _):
+                                            extract(val, &out)
+                                        case .Label(_): ()
+                                        case .Call(_, let params, _):
+                                            for p in params {
+                                                extract(p, &out)
+                                            }
+                                        case .SignExtend(let src, _):
+                                            extract(src, &out)
+                                        case .ZeroExtend(let src, _):
+                                            extract(src, &out)
+                                        case .Truncate(let src, _):
+                                            extract(src, &out)
+                                        case .DoubleToInt(let src, _):
+                                            extract(src, &out)
+                                        case .DoubleToUInt(let src, _):
+                                            extract(src, &out)
+                                        case .IntToDouble(let src, _):
+                                            extract(src, &out)
+                                        case .UIntToDouble(let src, _):
+                                            extract(src, &out)
+                                    }
+                                }
+                            case .StaticVariable(_, _, _, _): ()
+                        }
+                    }
+            }
+
+            return out
+        }
+    }
+
+    private var extractedDoubles : [Double : Tree.Declaration] = [:]
+
     func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration]) -> Tree.Operand {
         switch val {
             case .Constant(let c):
@@ -446,6 +526,10 @@ class Assembly {
                     internalSymbolTable[name] = assemblyEntry
                 default: ()
             }
+        }
+        self.extractedDoubles = DoubleConstantExtractor().extract(program)
+        for (_, decl) in self.extractedDoubles {
+            assemblyDecls.append(decl)
         }
         let out: Tree.Program
         switch program {
