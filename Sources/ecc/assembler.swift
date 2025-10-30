@@ -259,9 +259,7 @@ class Assembly {
                     case .ConstInt(_) : return true
                     case .ConstUnsignedLong: return false
                     case .ConstLong(_) : return true
-                    case .ConstDouble(let f):
-                        print("As-yet-unhandled floating point constant found while converting tacky value to Tree.Operand")
-                        exit(ExitCode.internalError.rawValue)
+                    case .ConstDouble(_): return true
                 }
             case .Var(let name):
                 guard let entry = symbolTable[name] else {
@@ -278,9 +276,7 @@ class Assembly {
                     case .Int: return true
                     case .UnsignedLong: return false
                     case .Long: return true
-                    case .Double:
-                        print("As-yet-unhandled floating point value found while deducing signed-ness")
-                        exit(ExitCode.internalError.rawValue)
+                    case .Double: return true
                 }
         }
     }
@@ -593,9 +589,6 @@ class Assembly {
             case .Pseudo(let name):
                 guard let (tp, _) = symbolTable[name] else {
                     print("Impossible situation where pseudo \(name) is not in the symbol table")
-                    // DEBUG
-                    // print("SYMBOL TABLE = \(symbolTable)")
-                    // END DEBUG
                     exit(ExitCode.internalError.rawValue)
                 }
                 let width : Int
@@ -608,7 +601,7 @@ class Assembly {
                     case .UnsignedInt: width = 4
                     case .Long: width = 8
                     case .UnsignedLong: width = 8
-                    case .Double: width = 8 // technically correct, the best kind of correct
+                    case .Double: width = 8
                 }
                 if let slot = nameStackMapping[name] {
                     return .Stack(-slot)
@@ -620,12 +613,6 @@ class Assembly {
                 }
                 stackSlotCounter = tmp
                 nameStackMapping[name] = stackSlotCounter
-
-                // DEBUG
-                // print("MAPPING PSEUDO \(name) TO STACK SLOT -\(stackSlotCounter) WIDTH = \(width)")
-                // END DEBUG
-
-
                 return .Stack(-stackSlotCounter)
             case .Stack(_):
                 return op
@@ -697,9 +684,7 @@ class Assembly {
             case .StaticVariable(let name, let isGlobal, let alignment, let initVal):
                 return .StaticVariable(name, isGlobal, alignment, initVal)
             case .StaticConstant(let name, let alignment, let initVal):
-                // TODO:
-                print("As-yet-unhandled static constant found while replacing pseudo-registers")
-                exit(ExitCode.internalError.rawValue)
+                return .StaticConstant(name, alignment, initVal)
         }
     }
 
@@ -876,8 +861,7 @@ class Assembly {
             case .StaticVariable(_, _, _, _):
                 return pls
             case .StaticConstant(_, _, _):
-                print("As-yet-unhandled static constant found file fixing up moves")
-                exit(ExitCode.internalError.rawValue)
+                return pls
         }
     }
 
@@ -1009,8 +993,7 @@ class Assembly {
                         case .StaticVariable(_, _, _, _):
                             fixedDecls.append(dec)
                         case .StaticConstant(_, _, _):
-                            print("As-yet-unhandled static constant found while fixing up immediates")
-                            exit(ExitCode.internalError.rawValue)
+                            fixedDecls.append(dec)
                     }
                 }
                 return .Statement(fixedDecls)
