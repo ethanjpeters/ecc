@@ -201,8 +201,17 @@ class Assembly {
                     case .ConstUnsignedInt(let i): return .Immediate(Int(i))
                     case .ConstUnsignedLong(let i): return .Immediate(Int(i))
                     case .ConstDouble(let f):
-                        print("As-yet-unhandled floating point constant found while converting tacky value to Tree.Operand")
-                        exit(ExitCode.internalError.rawValue)
+                        guard let staticVar = self.extractedDoubles[f] else {
+                            print("Somehow got a constant double that has not been extracted")
+                            exit(ExitCode.internalError.rawValue)
+                        }
+                        switch staticVar {
+                            case .StaticConstant(let name, _, _):
+                                return .Data(name)
+                            default:
+                                print("static declaration of a floating point constant is somehow not a constant?")
+                                exit(ExitCode.internalError.rawValue)
+                        }
                 }
             case .Var(let name):
                 if let _ = symbolTable[name] {
@@ -220,9 +229,7 @@ class Assembly {
                     case .ConstInt(_) : return .Longword
                     case .ConstUnsignedLong: fallthrough
                     case .ConstLong(_) : return .Quadword
-                    case .ConstDouble(let f):
-                        print("As-yet-unhandled floating point constant found while converting tacky value to Tree.Operand")
-                        exit(ExitCode.internalError.rawValue)
+                    case .ConstDouble(_): return .Double
                 }
             case .Var(let name):
                 guard let entry = symbolTable[name] else {
@@ -239,9 +246,7 @@ class Assembly {
                     case .Int: return .Longword
                     case .UnsignedLong: fallthrough
                     case .Long: return .Quadword
-                    case .Double:
-                        print("As-yet-unhandled floating point value found while deducing type")
-                        exit(ExitCode.internalError.rawValue)
+                    case .Double: return .Double
                 }
         }
     }
