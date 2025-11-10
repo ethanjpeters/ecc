@@ -376,28 +376,28 @@ class Assembly {
                             }
                         case .Equal:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(srcType, .Immediate(0), dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
                             out.append(.SetCC(.E, dstConv))
                         case .NotEqual:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(srcType, .Immediate(0), dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
                             out.append(.SetCC(.NE, dstConv))
                         case .LessThan:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(srcType, .Immediate(0), dstConv))
-                            out.append(.SetCC(signedOp ? .L : .B, dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
+                            out.append(.SetCC(isFlop ? .B : (signedOp ? .L : .B), dstConv))
                         case .LessOrEqual:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(srcType, .Immediate(0), dstConv))
-                            out.append(.SetCC(signedOp ? .LE : .BE, dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
+                            out.append(.SetCC(isFlop ? .BE : signedOp ? .LE : .BE, dstConv))
                         case .GreaterThan: 
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(srcType, .Immediate(0), dstConv))
-                            out.append(.SetCC(signedOp ? .G : .A, dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
+                            out.append(.SetCC(isFlop ? .A : signedOp ? .G : .A, dstConv))
                         case .GreaterOrEqual:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(srcType, .Immediate(0), dstConv))
-                            out.append(.SetCC(signedOp ? .GE : .AE, dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
+                            out.append(.SetCC(isFlop ? .AE : signedOp ? .GE : .AE, dstConv))
                         case .BitwiseAnd:
                             out.append(.Mov(srcType, src1Conv, dstConv))
                             out.append(.Binary(.And, srcType, src2Conv, dstConv))
