@@ -2,6 +2,8 @@ import Foundation
 
 typealias BackendSymbolTable = [String : Assembly.Tree.AssemblySymbolTableEntry]
 
+let negativeZeroLabel = "_double.constant.negativezero"
+
 class Assembly {
     struct Tree {
         enum ConditionCode {
@@ -110,6 +112,8 @@ class Assembly {
         }
     }
 
+    let negativeZero : Assembly.Tree.Declaration = .StaticConstant(negativeZeroLabel, 16, .DoubleInit(-0.0))
+
     class DoubleConstantExtractor {
         private var counter : Int = 1
 
@@ -125,7 +129,7 @@ class Assembly {
                     switch constVal {
                         case .ConstDouble(let d):
                             if mapping[d] == nil {
-                                mapping[d] = .StaticConstant(makeLabel(), 16, .DoubleInit(d))
+                                mapping[d] = .StaticConstant(makeLabel(), 8, .DoubleInit(d))
                             }
                         default: ()
                     }
@@ -193,8 +197,6 @@ class Assembly {
     func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration]) -> Tree.Operand {
         switch val {
             case .Constant(let c):
-                // NOTE: there is actually a limit on the magnitude of an immediate in x86 assembly that
-                // we should become aware of and use here
                 switch c {
                     case .ConstInt(let i): return .Immediate(Int(i))
                     case .ConstLong(let i): return .Immediate(Int(i))
@@ -302,13 +304,24 @@ class Assembly {
                     out.append(.Ret)
                 case .Unary(let op, let src, let dst):
                     let srcType = deduceType(src, typedSymbolTable)
+                    let isFlop = (srcType == .Double)
                     if op == .Not {
+                        // safety check
+                        if isFlop {
+                            print("Not operation does not apply to floating point operand")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
                         out.append(.Cmp(srcType, .Immediate(0), convert(src, symbolTable)))
                         out.append(.Mov(srcType, .Immediate(0), convert(dst, symbolTable)))
                         out.append(.SetCC(.E, convert(dst, symbolTable)))
                     } else {
-                        out.append(.Mov(srcType, convert(src, symbolTable), convert(dst, symbolTable)))
-                        out.append(.Unary(convert(op), srcType, convert(dst, symbolTable)))
+                        if isFlop && op == .Negate {
+                            out.append(.Mov(srcType, convert(src, symbolTable), convert(dst, symbolTable)))
+                            out.append(.Binary(.Xor, srcType, .Data(negativeZeroLabel), convert(dst, symbolTable)))
+                        } else {
+                            out.append(.Mov(srcType, convert(src, symbolTable), convert(dst, symbolTable)))
+                            out.append(.Unary(convert(op), srcType, convert(dst, symbolTable)))
+                        }
                     }
                 case .Binary(let op, let src1, let src2, let dst):
                     let src1Conv = convert(src1, symbolTable)
@@ -316,6 +329,7 @@ class Assembly {
                     let dstConv = convert(dst, symbolTable)
                     let srcType = deduceType(src1, typedSymbolTable)
                     let signedOp = deduceIsSigned(src1, typedSymbolTable)
+                    let isFlop = (srcType == .Double)
                     switch op {
                         case .Add:
                             out.append(.Mov(srcType, src1Conv, dstConv))
@@ -327,18 +341,28 @@ class Assembly {
                             out.append(.Mov(srcType, src1Conv, dstConv))
                             out.append(.Binary(.Mult, srcType, src2Conv, dstConv))
                         case .Divide:
-                            if signedOp {
-                                out.append(.Mov(srcType, src1Conv, .Register(.AX)))
-                                out.append(.Cdq(srcType))
-                                out.append(.Idiv(srcType, src2Conv))
-                                out.append(.Mov(srcType, .Register(.AX), dstConv))
+                            if isFlop {
+                                out.append(.Mov(srcType, src1Conv, dstConv))
+                                out.append(.Binary(.DivDouble, srcType, src2Conv, dstConv))
                             } else {
-                                out.append(.Mov(srcType, src1Conv, .Register(.AX)))
-                                out.append(.Mov(srcType, .Immediate(0), .Register(.DX)))
-                                out.append(.Div(srcType, src2Conv))
-                                out.append(.Mov(srcType, .Register(.AX), dstConv))
+                                if signedOp {
+                                    out.append(.Mov(srcType, src1Conv, .Register(.AX)))
+                                    out.append(.Cdq(srcType))
+                                    out.append(.Idiv(srcType, src2Conv))
+                                    out.append(.Mov(srcType, .Register(.AX), dstConv))
+                                } else {
+                                    out.append(.Mov(srcType, src1Conv, .Register(.AX)))
+                                    out.append(.Mov(srcType, .Immediate(0), .Register(.DX)))
+                                    out.append(.Div(srcType, src2Conv))
+                                    out.append(.Mov(srcType, .Register(.AX), dstConv))
+                                }
                             }
                         case .Remainder:
+                            // safety check
+                            if isFlop {
+                                print("Remainder operation can not be applied to floating point operand")
+                                exit(ExitCode.semanticError.rawValue)
+                            }
                             if signedOp {
                                 out.append(.Mov(srcType, src1Conv, .Register(.AX)))
                                 out.append(.Cdq(srcType))
@@ -532,6 +556,8 @@ class Assembly {
         for (_, decl) in self.extractedDoubles {
             assemblyDecls.append(decl)
         }
+        // constant constant
+        assemblyDecls.append(negativeZero)
         let out: Tree.Program
         switch program {
             case .Statement(let declarations):
