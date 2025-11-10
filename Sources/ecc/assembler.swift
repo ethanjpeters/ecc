@@ -306,12 +306,12 @@ class Assembly {
                     let srcType = deduceType(src, typedSymbolTable)
                     let isFlop = (srcType == .Double)
                     if op == .Not {
-                        // safety check
                         if isFlop {
-                            print("Not operation does not apply to floating point operand")
-                            exit(ExitCode.semanticError.rawValue)
+                            out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
+                            out.append(.Cmp(.Double, .Register(.XMM0), convert(src, symbolTable)))
+                        } else {
+                            out.append(.Cmp(srcType, .Immediate(0), convert(src, symbolTable)))
                         }
-                        out.append(.Cmp(srcType, .Immediate(0), convert(src, symbolTable)))
                         out.append(.Mov(srcType, .Immediate(0), convert(dst, symbolTable)))
                         out.append(.SetCC(.E, convert(dst, symbolTable)))
                     } else {
@@ -419,10 +419,24 @@ class Assembly {
                 case .Jump(let label):
                     out.append(.Jmp(label))
                 case .JumpIfZero(let val, let label):
-                    out.append(.Cmp(deduceType(val, typedSymbolTable), .Immediate(0), convert(val, symbolTable)))
+                    let valType = deduceType(val, typedSymbolTable)
+                    let isFlop = (valType == .Double)
+                    if isFlop {
+                        out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
+                        out.append(.Cmp(valType, convert(val, symbolTable), .Register(.XMM0)))
+                    } else {
+                        out.append(.Cmp(valType, .Immediate(0), convert(val, symbolTable)))
+                    }
                     out.append(.JmpCC(.E, label))
                 case .JumpIfNotZero(let val, let label):
-                    out.append(.Cmp(deduceType(val, typedSymbolTable), .Immediate(0), convert(val, symbolTable)))
+                    let valType = deduceType(val, typedSymbolTable)
+                    let isFlop = (valType == .Double)
+                    if isFlop {
+                        out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
+                        out.append(.Cmp(valType, convert(val, symbolTable), .Register(.XMM0)))
+                    } else {
+                        out.append(.Cmp(valType, .Immediate(0), convert(val, symbolTable)))
+                    }
                     out.append(.JmpCC(.NE, label))
                 case .Label(let name):
                     out.append(.Label(name))
