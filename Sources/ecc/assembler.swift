@@ -505,9 +505,14 @@ class Assembly {
                     out.append(.Mov(.Longword, convert(src, symbolTable), convert(dst, symbolTable)))
                 case .ZeroExtend(let src, let dst):
                     out.append(.Movzx(convert(src, symbolTable), convert(dst, symbolTable)))
-                case .DoubleToInt(_, _): fallthrough
-                case .DoubleToUInt(_, _): fallthrough
-                case .IntToDouble(_, _): fallthrough
+                case .DoubleToInt(let src, let dst):
+                    // straightforward case, done by one instruction
+                    out.append(.Cvttsd2dsi(deduceType(src, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
+                case .DoubleToUInt(let src, let dst):
+                    print("As-yet-unhandled conversion instruction \(instr) found while generating assembly")
+                    exit(ExitCode.internalError.rawValue)
+                case .IntToDouble(let src, let dst):
+                    out.append(.Cvtsi2sd(deduceType(src, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
                 case .UIntToDouble(_, _):
                     print("As-yet-unhandled conversion instruction \(instr) found while generating assembly")
                     exit(ExitCode.internalError.rawValue)
