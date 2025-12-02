@@ -56,6 +56,7 @@ class Assembly {
         enum UnaryOperator {
             case Neg
             case Not
+            case Shr
         }
 
         enum BinaryOperator {
@@ -534,8 +535,8 @@ class Assembly {
                         out.append(.JmpCC(.AE, outOfRangeLabel))
                         // if it fits into a signed quadword, convert to a signed quadword
                         out.append(.Cvttsd2dsi(.Quadword, convert(src, symbolTable), convert(dst, symbolTable)))
-                        let inRangeLabel = makeLabel()
-                        out.append(.Jmp(inRangeLabel))
+                        let endLabel = makeLabel()
+                        out.append(.Jmp(endLabel))
                         // if it doesn't fit into a signed quadword
                         out.append(.Label(outOfRangeLabel))
                         // subtract LONG_MAX + 1
@@ -551,14 +552,42 @@ class Assembly {
                         out.append(.Mov(.Quadword, .Immediate(Int(longMaxPlusOne/2)), .Register(.DX)))
                         out.append(.Binary(.Add, .Quadword, .Register(.DX), convert(dst, symbolTable)))
                         out.append(.Binary(.Add, .Quadword, .Register(.DX), convert(dst, symbolTable)))
-                        out.append(.Label(inRangeLabel))
+                        out.append(.Label(endLabel))
                     }
                 case .IntToDouble(let src, let dst):
                     // straightforward case, done by one instruction
                     out.append(.Cvtsi2sd(deduceType(dst, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
-                case .UIntToDouble(_, _):
-                    print("As-yet-unhandled conversion instruction \(instr) found while generating assembly")
-                    exit(ExitCode.internalError.rawValue)
+                case .UIntToDouble(let src, let dst):
+                    // not straightforward
+                    // if we're dealing with a 4-byte integer
+                    if deduceType(src, typedSymbolTable) == .Longword {
+                        // zero extend it to a quadword
+                        out.append(.Movzx(convert(src, symbolTable), .Register(.AX)))
+                        // then convert it
+                        out.append(.Cvtsi2sd(.Quadword, .Register(.AX), convert(dst, symbolTable)))
+                    } else {
+                        // check if the value is positive (fits into an unsigned value)
+                        out.append(.Cmp(.Quadword, .Immediate(0), convert(src, symbolTable)))
+                        let outOfRangeLabel = makeLabel()
+                        out.append(.JmpCC(.L, outOfRangeLabel))
+                        // if the value is positive, go ahead and use the native instruction
+                        out.append(.Cvtsi2sd(.Quadword, convert(src, symbolTable), convert(dst, symbolTable)))
+                        let endLabel = makeLabel()
+                        out.append(.Jmp(endLabel))
+                        // if the value can not be represented as an unsigned integer
+                        out.append(.Label(outOfRangeLabel))
+                        // cut it in half, preserving oddness
+                        out.append(.Mov(.Quadword, convert(src, symbolTable), .Register(.AX)))
+                        out.append(.Mov(.Quadword, .Register(.AX), .Register(.DX)))
+                        out.append(.Unary(.Shr, .Quadword, .Register(.DX)))
+                        out.append(.Binary(.And, .Quadword, .Immediate(1), .Register(.AX)))
+                        out.append(.Binary(.Or, .Quadword, .Register(.AX), .Register(.DX)))
+                        // convert
+                        out.append(.Cvtsi2sd(.Quadword, .Register(.DX), convert(dst, symbolTable)))
+                        // double it
+                        out.append(.Binary(.Add, .Double, convert(dst, symbolTable), convert(dst, symbolTable)))
+                        out.append(.Label(endLabel))
+                    }
 }
         }
     }

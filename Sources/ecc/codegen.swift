@@ -119,6 +119,8 @@ func convert(_ op: Assembly.Tree.UnaryOperator, _ tp: Assembly.Tree.AssemblyType
             return "neg\(typeToSuffix(tp))"
         case .Not:
             return "not\(typeToSuffix(tp))"
+        case .Shr:
+            return "shr\(typeToSuffix(tp))"
     }
 }
 
