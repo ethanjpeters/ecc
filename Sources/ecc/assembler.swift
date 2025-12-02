@@ -3,6 +3,9 @@ import Foundation
 typealias BackendSymbolTable = [String : Assembly.Tree.AssemblySymbolTableEntry]
 
 let negativeZeroLabel = "_double.constant.negativezero"
+let biggestQuadwordLabel = "_double.constant.biggestquadword"
+let longMaxPlusOne : UInt64 = 9223372036854775808
+let biggestQuadwordValue : Double = Double(longMaxPlusOne)
 
 class Assembly {
     struct Tree {
@@ -113,6 +116,7 @@ class Assembly {
     }
 
     let negativeZero : Assembly.Tree.Declaration = .StaticConstant(negativeZeroLabel, 16, .DoubleInit(-0.0))
+    let biggestQuadword : Assembly.Tree.Declaration = .StaticConstant(biggestQuadwordLabel, 8, .DoubleInit(biggestQuadwordValue))
 
     class DoubleConstantExtractor {
         private var counter : Int = 1
@@ -193,6 +197,13 @@ class Assembly {
     }
 
     private var extractedDoubles : [Double : Tree.Declaration] = [:]
+
+    private var labelCounter : UInt = 0
+    func makeLabel() -> String {
+        let out = "_assembly.label.\(labelCounter)"
+        labelCounter = labelCounter + 1
+        return out
+    }
 
     func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration]) -> Tree.Operand {
         switch val {
@@ -507,12 +518,44 @@ class Assembly {
                     out.append(.Movzx(convert(src, symbolTable), convert(dst, symbolTable)))
                 case .DoubleToInt(let src, let dst):
                     // straightforward case, done by one instruction
-                    out.append(.Cvttsd2dsi(deduceType(src, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
+                    out.append(.Cvttsd2dsi(deduceType(dst, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
                 case .DoubleToUInt(let src, let dst):
-                    print("As-yet-unhandled conversion instruction \(instr) found while generating assembly")
-                    exit(ExitCode.internalError.rawValue)
+                    // not straightforward
+                    // if we're dealing with one of those 4-byte integers, then we...
+                    if deduceType(dst, typedSymbolTable) == .Longword {
+                        // convert to a quadword, then truncate
+                        out.append(.Cvttsd2dsi(.Quadword, convert(src, symbolTable), .Register(.AX)))
+                        out.append(.Mov(.Longword, .Register(.AX), convert(dst, symbolTable)))
+                    } else {
+                        // otherwise, oh my god...
+                        // check if our value fits into a quadword
+                        out.append(.Cmp(.Double, .Data(biggestQuadwordLabel), convert(src, symbolTable)))
+                        let outOfRangeLabel = makeLabel()
+                        out.append(.JmpCC(.AE, outOfRangeLabel))
+                        // if it fits into a signed quadword, convert to a signed quadword
+                        out.append(.Cvttsd2dsi(.Quadword, convert(src, symbolTable), convert(dst, symbolTable)))
+                        let inRangeLabel = makeLabel()
+                        out.append(.Jmp(inRangeLabel))
+                        // if it doesn't fit into a signed quadword
+                        out.append(.Label(outOfRangeLabel))
+                        // subtract LONG_MAX + 1
+                        out.append(.Mov(.Double, convert(src, symbolTable), .Register(.XMM1)))
+                        out.append(.Binary(.Sub, .Double, .Data(biggestQuadwordLabel), .Register(.XMM1)))
+                        // then convert to a signed long
+                        out.append(.Cvttsd2dsi(.Quadword, .Register(.XMM1), convert(dst, symbolTable)))
+                        // then add LONG_MAX + 1 back
+                        // ok, we have to do a weird thing here because we *kind of* messed up; we assigned
+                        // an Int value to the .Immediate data type, which technically needs an unsigned
+                        // range of values, but also to be able to be signed, it's sort of a mess. To deal
+                        // with this, we'll cheat by adding half the value we want to add, twice.
+                        out.append(.Mov(.Quadword, .Immediate(Int(longMaxPlusOne/2)), .Register(.DX)))
+                        out.append(.Binary(.Add, .Quadword, .Register(.DX), convert(dst, symbolTable)))
+                        out.append(.Binary(.Add, .Quadword, .Register(.DX), convert(dst, symbolTable)))
+                        out.append(.Label(inRangeLabel))
+                    }
                 case .IntToDouble(let src, let dst):
-                    out.append(.Cvtsi2sd(deduceType(src, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
+                    // straightforward case, done by one instruction
+                    out.append(.Cvtsi2sd(deduceType(dst, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
                 case .UIntToDouble(_, _):
                     print("As-yet-unhandled conversion instruction \(instr) found while generating assembly")
                     exit(ExitCode.internalError.rawValue)
@@ -577,6 +620,7 @@ class Assembly {
         }
         // constant constant
         assemblyDecls.append(negativeZero)
+        assemblyDecls.append(biggestQuadword)
         let out: Tree.Program
         switch program {
             case .Statement(let declarations):
