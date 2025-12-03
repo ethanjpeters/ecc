@@ -312,7 +312,8 @@ class Assembly {
             switch instr {
                 case .Return(let val):
                     let v : Tacky.IR.Value = (val == nil ? .Constant(.ConstInt(0)) : val!)
-                    out.append(.Mov(deduceType(v, typedSymbolTable), convert(v, symbolTable), .Register(.AX)))
+                    let tp = deduceType(v, typedSymbolTable)
+                    out.append(.Mov(tp, convert(v, symbolTable), tp == .Double ? .Register(.XMM0) : .Register(.AX)))
                     out.append(.Ret)
                 case .Unary(let op, let src, let dst):
                     let srcType = deduceType(src, typedSymbolTable)
