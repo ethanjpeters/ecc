@@ -455,37 +455,39 @@ class Assembly {
                 case .Call(let name, let params, let result):
                     // save context (currently not an issue because we only use scratch registers)
                     // move parameters into place
-                    var copiedParams = params
-                    if !copiedParams.isEmpty {
-                        let p = copiedParams.removeFirst()
-                        out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(.DI)))
-                    }
-                    if !copiedParams.isEmpty {
-                        let p = copiedParams.removeFirst()
-                        out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(.SI)))
-                    }
-                    if !copiedParams.isEmpty {
-                        let p = copiedParams.removeFirst()
-                        out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(.CX)))
-                    }
-                    if !copiedParams.isEmpty {
-                        let p = copiedParams.removeFirst()
-                        out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(.R8)))
-                    }
-                    if !copiedParams.isEmpty {
-                        let p = copiedParams.removeFirst()
-                        out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(.R9)))
+
+                    // 1. separate params into floating point and integer
+                    var fpParams : [Tacky.IR.Value] = []
+                    var fpRegisterTargets : [Tree.Register] = [.XMM0, .XMM1, .XMM2, .XMM3, .XMM4, .XMM5, .XMM6, .XMM7]
+                    var intParams : [Tacky.IR.Value] = []
+                    var intRegisterTargets : [Tree.Register] = [.DI, .SI, .DX, .CX, .R8, .R9]
+                    var stackParams : [Tacky.IR.Value] = []
+                    for p in params {
+                        let tp = deduceType(p, typedSymbolTable)
+                        // if we're looking at a floating point value AND we have floating point registers left unallocated
+                        if tp == .Double && !fpRegisterTargets.isEmpty {
+                            let target = fpRegisterTargets.removeFirst()
+                            out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(target)))
+                        // if we're NOT looking at a floating point value AND we have non-floating point registers left unallocated
+                        } else if tp != .Double && !intRegisterTargets.isEmpty {
+                            let target = intRegisterTargets.removeFirst()
+                            out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(target)))
+                        // we ran out of registers for this type of parameter
+                        } else {
+                            // stack time!
+                            stackParams.append(p)
+                        }
                     }
 
                     // the System V ABI requires the stack to be 16-byte aligned
-                    let stackPadding = copiedParams.count % 2 == 0 ? 0 : 8
+                    let stackPadding = stackParams.count % 2 == 0 ? 0 : 8
 
                     if stackPadding != 0 {
                         out.append(.AllocateStack(stackPadding))
                     }
 
-                    copiedParams.reverse()
-                    for p in copiedParams {
+                    stackParams.reverse()
+                    for p in stackParams {
                         let src = convert(p, symbolTable)
                         var shouldPushStraight : Bool = deduceType(p, typedSymbolTable) == .Quadword
                         switch src {
@@ -504,7 +506,7 @@ class Assembly {
                     // call the function
                     out.append(.Call(name))
 
-                    let bytesToRemove = 8 * copiedParams.count + stackPadding
+                    let bytesToRemove = 8 * stackParams.count + stackPadding
                     if bytesToRemove != 0 {
                         out.append(.DeallocateStack(bytesToRemove))
                     }
