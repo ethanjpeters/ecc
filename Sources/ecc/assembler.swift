@@ -457,9 +457,7 @@ class Assembly {
                     // move parameters into place
 
                     // 1. separate params into floating point and integer
-                    var fpParams : [Tacky.IR.Value] = []
                     var fpRegisterTargets : [Tree.Register] = [.XMM0, .XMM1, .XMM2, .XMM3, .XMM4, .XMM5, .XMM6, .XMM7]
-                    var intParams : [Tacky.IR.Value] = []
                     var intRegisterTargets : [Tree.Register] = [.DI, .SI, .DX, .CX, .R8, .R9]
                     var stackParams : [Tacky.IR.Value] = []
                     for p in params {
@@ -467,11 +465,11 @@ class Assembly {
                         // if we're looking at a floating point value AND we have floating point registers left unallocated
                         if tp == .Double && !fpRegisterTargets.isEmpty {
                             let target = fpRegisterTargets.removeFirst()
-                            out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(target)))
+                            out.append(.Mov(tp, convert(p, symbolTable), .Register(target)))
                         // if we're NOT looking at a floating point value AND we have non-floating point registers left unallocated
                         } else if tp != .Double && !intRegisterTargets.isEmpty {
                             let target = intRegisterTargets.removeFirst()
-                            out.append(.Mov(deduceType(p, typedSymbolTable), convert(p, symbolTable), .Register(target)))
+                            out.append(.Mov(tp, convert(p, symbolTable), .Register(target)))
                         // we ran out of registers for this type of parameter
                         } else {
                             // stack time!
@@ -598,30 +596,29 @@ class Assembly {
         switch pls {
             case .Function(let name, let isGlobal, let params, let instrs):
                 var out : [Tree.Instruction] = []
-                var copiedParams = params
-                if !copiedParams.isEmpty {
-                    let p: String = copiedParams.removeFirst()
-                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Register(.DI), .Pseudo(p)))
+
+                var fpRegisterTargets : [Tree.Register] = [.XMM0, .XMM1, .XMM2, .XMM3, .XMM4, .XMM5, .XMM6, .XMM7]
+                var intRegisterTargets : [Tree.Register] = [.DI, .SI, .DX, .CX, .R8, .R9]
+                var stackParams : [String] = []
+                for p in params {
+                    let tp = deduceType(.Var(p), typedSymbolTable)
+                    // if we're looking at a floating point value AND we have floating point registers left unallocated
+                    if tp == .Double && !fpRegisterTargets.isEmpty {
+                        let source = fpRegisterTargets.removeFirst()
+                        out.append(.Mov(tp, .Register(source), .Pseudo(p)))
+                    // if we're NOT looking at a floating point value AND we have non-floating point registers left unallocated
+                    } else if tp != .Double && !intRegisterTargets.isEmpty {
+                        let source = intRegisterTargets.removeFirst()
+                        out.append(.Mov(tp, .Register(source), .Pseudo(p)))
+                    // we ran out of registers for this type of parameter
+                    } else {
+                        // stack time!
+                        stackParams.append(p)
+                    }
                 }
-                if !copiedParams.isEmpty {
-                    let p = copiedParams.removeFirst()
-                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Register(.SI), .Pseudo(p)))
-                }
-                if !copiedParams.isEmpty {
-                    let p = copiedParams.removeFirst()
-                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Register(.CX), .Pseudo(p)))
-                }
-                if !copiedParams.isEmpty {
-                    let p = copiedParams.removeFirst()
-                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Register(.R8), .Pseudo(p)))
-                }
-                if !copiedParams.isEmpty {
-                    let p = copiedParams.removeFirst()
-                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Register(.R9), .Pseudo(p)))
-                }
-                copiedParams.reverse()
+                stackParams.reverse()
                 var counter = 0
-                for p in copiedParams {
+                for p in stackParams {
                     out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Stack(16 + counter), .Pseudo(p)))
                     counter = counter + 8
                 }
