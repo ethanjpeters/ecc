@@ -200,7 +200,7 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tdiv\(typeToSuffix(tp))\t\(convert(op, typeToWidth(tp)))")
             case .Cmp(let tp, let left, let right):
                 if tp == .Double {
-                    out.append("\tcomisd\t\(convert(left, typeToWidth(tp))), \(convert(right, typeToWidth(tp))))")
+                    out.append("\tcomisd\t\(convert(left, typeToWidth(tp))), \(convert(right, typeToWidth(tp)))")
                 } else {
                     out.append("\tcmp\(typeToSuffix(tp))\t\(convert(left, typeToWidth(tp))), \(convert(right, typeToWidth(tp)))")
                 }
@@ -223,10 +223,10 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
             case .Movzx(_, _):
                 print("Unreachable movzx survived assembly fixup")
                 exit(ExitCode.internalError.rawValue)
-            case .Cvttsd2dsi(let tp, let src, let dst):
-                out.append("cvttsd2dsi\(typeToSuffix(tp))\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
+            case .Cvttsd2si(let tp, let src, let dst):
+                out.append("\tcvttsd2si\(typeToSuffix(tp))\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
             case .Cvtsi2sd(let tp, let src, let dst):
-                out.append("cvtsi2sd\(typeToSuffix(tp))\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
+                out.append("\tcvtsi2sd\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
         }
     }
 }

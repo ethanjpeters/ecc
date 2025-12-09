@@ -81,7 +81,7 @@ class Assembly {
             case Mov(AssemblyType, Operand /* src */, Operand /* dst */)
             case Movsx(Operand /* src */, Operand /* dst */)
             case Movzx(Operand /* src */, Operand /* dst */)
-            case Cvttsd2dsi(AssemblyType, Operand /* src */, Operand /* dst */)
+            case Cvttsd2si(AssemblyType, Operand /* src */, Operand /* dst */)
             case Cvtsi2sd(AssemblyType, Operand /* src */, Operand /* dst */ )
             case Unary(UnaryOperator, AssemblyType, Operand)
             case Binary(BinaryOperator, AssemblyType, Operand, Operand)
@@ -520,13 +520,13 @@ class Assembly {
                     out.append(.Movzx(convert(src, symbolTable), convert(dst, symbolTable)))
                 case .DoubleToInt(let src, let dst):
                     // straightforward case, done by one instruction
-                    out.append(.Cvttsd2dsi(deduceType(dst, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
+                    out.append(.Cvttsd2si(deduceType(dst, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
                 case .DoubleToUInt(let src, let dst):
                     // not straightforward
                     // if we're dealing with one of those 4-byte integers, then we...
                     if deduceType(dst, typedSymbolTable) == .Longword {
                         // convert to a quadword, then truncate
-                        out.append(.Cvttsd2dsi(.Quadword, convert(src, symbolTable), .Register(.AX)))
+                        out.append(.Cvttsd2si(.Quadword, convert(src, symbolTable), .Register(.AX)))
                         out.append(.Mov(.Longword, .Register(.AX), convert(dst, symbolTable)))
                     } else {
                         // otherwise, oh my god...
@@ -535,7 +535,7 @@ class Assembly {
                         let outOfRangeLabel = makeLabel()
                         out.append(.JmpCC(.AE, outOfRangeLabel))
                         // if it fits into a signed quadword, convert to a signed quadword
-                        out.append(.Cvttsd2dsi(.Quadword, convert(src, symbolTable), convert(dst, symbolTable)))
+                        out.append(.Cvttsd2si(.Quadword, convert(src, symbolTable), convert(dst, symbolTable)))
                         let endLabel = makeLabel()
                         out.append(.Jmp(endLabel))
                         // if it doesn't fit into a signed quadword
@@ -544,7 +544,7 @@ class Assembly {
                         out.append(.Mov(.Double, convert(src, symbolTable), .Register(.XMM1)))
                         out.append(.Binary(.Sub, .Double, .Data(biggestQuadwordLabel), .Register(.XMM1)))
                         // then convert to a signed long
-                        out.append(.Cvttsd2dsi(.Quadword, .Register(.XMM1), convert(dst, symbolTable)))
+                        out.append(.Cvttsd2si(.Quadword, .Register(.XMM1), convert(dst, symbolTable)))
                         // then add LONG_MAX + 1 back
                         // ok, we have to do a weird thing here because we *kind of* messed up; we assigned
                         // an Int value to the .Immediate data type, which technically needs an unsigned
@@ -781,8 +781,8 @@ class Assembly {
                         replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
                         replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
                     ))
-                case .Cvttsd2dsi(let tp, let src, let dst):
-                    out.append(.Cvttsd2dsi(
+                case .Cvttsd2si(let tp, let src, let dst):
+                    out.append(.Cvttsd2si(
                         tp,
                         replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
                         replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
@@ -1010,18 +1010,18 @@ class Assembly {
                             print("Unreachable: immediate as the destination of a movzx")
                             exit(ExitCode.internalError.rawValue)
                     }
-                case .Cvttsd2dsi(let tp, let src, let dst):
+                case .Cvttsd2si(let tp, let src, let dst):
                     switch dst {
                         case .Register(_): out.append(instr)
                         case .Stack(_): fallthrough
                         case .Data(_):
-                            out.append(.Cvttsd2dsi(tp, src, .Register(.R11)))
+                            out.append(.Cvttsd2si(tp, src, .Register(.R11)))
                             out.append(.Mov(tp, .Register(.R11), dst))
                         case .Pseudo(_):
                             print("Unreachable: psuedo slot survived past pseudo replacement")
                             exit(ExitCode.internalError.rawValue)
                         case .Immediate(_):
-                            print("Unreachable: immediate as the destination of a Cvttsd2dsi")
+                            print("Unreachable: immediate as the destination of a Cvttsd2si")
                             exit(ExitCode.internalError.rawValue)
                     }
                 case .Cvtsi2sd(let tp, let src, let dst):
@@ -1029,7 +1029,7 @@ class Assembly {
                     switch src {
                         case .Immediate(_):
                             realSrc = .Register(.R11)
-                            out.append(.Mov(tp, src, realSrc))
+                            out.append(.Mov(.Quadword, src, realSrc))
                         default:
                             realSrc = src
                     }
@@ -1180,7 +1180,7 @@ class Assembly {
                                     case .Movzx(_, _): fallthrough
                                     case .Div(_, _): fallthrough
                                     case .Ret: fallthrough
-                                    case .Cvttsd2dsi(_, _, _): fallthrough
+                                    case .Cvttsd2si(_, _, _): fallthrough
                                     case .Cvtsi2sd(_, _, _): fixedBody.append(instr)
                                 }
                             }
