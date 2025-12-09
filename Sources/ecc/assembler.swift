@@ -908,7 +908,7 @@ class Assembly {
                                         out.append(instr)
                                 }
                             case .DivDouble:
-                                print("As-yet-unhandled floating point division found while fixing up moves")
+                                print("Unreachable: DivDouble applied to non-floating point values")
                                 exit(ExitCode.internalError.rawValue)
                         }
                     }
