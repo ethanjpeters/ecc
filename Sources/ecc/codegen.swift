@@ -137,7 +137,7 @@ func convert(_ op: Assembly.Tree.BinaryOperator, _ tp: Assembly.Tree.AssemblyTyp
         case .Or:
             return "or\(typeToSuffix(tp))"
         case .Xor:
-            return "xor\(typeToSuffix(tp))"
+            return "xor\(typeToSuffix(tp, isPacked: true))"
         case .Sar:
             return "sar\(typeToSuffix(tp))"
         case .Shl:
@@ -168,11 +168,11 @@ func makeFunctionName(_ name : String) -> String {
     return "_\(name)"
 }
 
-func typeToSuffix(_ tp : Assembly.Tree.AssemblyType) -> String {
+func typeToSuffix(_ tp : Assembly.Tree.AssemblyType, isPacked : Bool = false) -> String {
     switch tp {
         case .Longword: return "l"
         case .Quadword: return "q"
-        case .Double: return "sd"
+        case .Double: return isPacked ? "pd" : "sd"
     }
 }
 

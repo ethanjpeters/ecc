@@ -825,14 +825,15 @@ class Assembly {
             switch instr {
                 case .AllocateStack(_): out.append(instr)
                 case .Mov(let tp, let opSrc, let opDst):
+                    let scratchRegister : Assembly.Tree.Operand = .Register(tp == .Double ? .XMM14 : .R10)
                     switch opSrc {
                         case .Stack(_): fallthrough
                         case .Data(_):
                             switch opDst {
                                 case .Stack(_): fallthrough
                                 case .Data(_):
-                                    out.append(.Mov(tp, opSrc, .Register(.R10)))
-                                    out.append(.Mov(tp, .Register(.R10), opDst))
+                                    out.append(.Mov(tp, opSrc, scratchRegister))
+                                    out.append(.Mov(tp, scratchRegister, opDst))
                                 default:
                                     out.append(instr)
                             }
@@ -842,49 +843,74 @@ class Assembly {
                 case .Ret: out.append(instr)
                 case .Unary(_, _, _): out.append(instr)
                 case .Binary(let op, let tp, let src, let dst):
-                    switch op {
-                        case .Add: fallthrough
-                        case .Sub: fallthrough
-                        case .And:
-                            switch src {
-                                case .Data(_): fallthrough
-                                case .Stack(_):
+                    if tp == .Double {
+                        switch op {
+                            case .Add: fallthrough
+                            case .Sub: fallthrough
+                            case .Mult: fallthrough
+                            case .DivDouble:
                                 switch dst {
                                     case .Data(_): fallthrough
                                     case .Stack(_):
-                                        out.append(.Mov(tp, src, .Register(.R10)))
-                                        out.append(.Binary(op, tp, .Register(.R10), dst))
+                                        out.append(.Binary(op, tp, src, .Register(.XMM15)))
+                                        out.append(.Mov(tp, .Register(.XMM15), dst))
+                                    case .Register(_): out.append(instr)
+                                    case .Pseudo(let name):
+                                        print("Unreachable: pseudo slot \(name) survived pseudo replacement")
+                                        exit(ExitCode.internalError.rawValue)
+                                    case .Immediate(_):
+                                        print("Unreachable: immeditate was destination of floating point binary operation: \(op)")
+                                        exit(ExitCode.internalError.rawValue)
+                                }
+                            // xorpd also has requirements but we generate all xorpd instructions directly so we know
+                            // they're satisfied; other than that, we don't do bitwise operations on floating point values
+                            default: out.append(instr)
+                        }
+                    } else {
+                        switch op {
+                            case .Add: fallthrough
+                            case .Sub: fallthrough
+                            case .And:
+                                switch src {
+                                    case .Data(_): fallthrough
+                                    case .Stack(_):
+                                    switch dst {
+                                        case .Data(_): fallthrough
+                                        case .Stack(_):
+                                            out.append(.Mov(tp, src, .Register(.R10)))
+                                            out.append(.Binary(op, tp, .Register(.R10), dst))
+                                        default: out.append(instr)
+                                    }
                                     default: out.append(instr)
                                 }
-                                default: out.append(instr)
-                            }
-                        case .Mult: fallthrough
-                        case .Or: fallthrough
-                        case .Xor:
-                            switch dst {
-                                case .Data(_): fallthrough
-                                case .Stack(_):
-                                    out.append(.Mov(tp, dst, .Register(.R11)))
-                                    out.append(.Binary(op, tp, src, .Register(.R11)))
-                                    out.append(.Mov(tp, .Register(.R11), dst))
-                                default:
-                                    out.append(instr)
-                            }
-                        case .Sar: fallthrough
-                        case .Shl:
-                            switch src {
-                                case .Data(_): fallthrough
-                                case .Stack(_):
-                                    // move the value off of the stack and into CL, which is currently never used otherwise
-                                    // and is in no danger of being overwritten
-                                    out.append(.Mov(tp, src, .Register(.CX)))
-                                    out.append(.Binary(op, tp, .Register(.CL), dst))
-                                default:
-                                    out.append(instr)
-                            }
-                        case .DivDouble:
-                            print("As-yet-unhandled floating point division found while fixing up moves")
-                            exit(ExitCode.internalError.rawValue)
+                            case .Mult: fallthrough
+                            case .Or: fallthrough
+                            case .Xor:
+                                switch dst {
+                                    case .Data(_): fallthrough
+                                    case .Stack(_):
+                                        out.append(.Mov(tp, dst, .Register(.R11)))
+                                        out.append(.Binary(op, tp, src, .Register(.R11)))
+                                        out.append(.Mov(tp, .Register(.R11), dst))
+                                    default:
+                                        out.append(instr)
+                                }
+                            case .Sar: fallthrough
+                            case .Shl:
+                                switch src {
+                                    case .Data(_): fallthrough
+                                    case .Stack(_):
+                                        // move the value off of the stack and into CL, which is currently never used otherwise
+                                        // and is in no danger of being overwritten
+                                        out.append(.Mov(tp, src, .Register(.CX)))
+                                        out.append(.Binary(op, tp, .Register(.CL), dst))
+                                    default:
+                                        out.append(instr)
+                                }
+                            case .DivDouble:
+                                print("As-yet-unhandled floating point division found while fixing up moves")
+                                exit(ExitCode.internalError.rawValue)
+                        }
                     }
                 case .Cdq: out.append(instr)
                 case .Idiv(let tp, let op):
