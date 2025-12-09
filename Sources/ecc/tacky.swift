@@ -93,21 +93,21 @@ class Tacky {
     }
 
     func makeLabel(_ descriptor: String = "") -> String {
-        let out = ".L\(descriptor)label.\(tempLabelCounter)"
+        let out = "L\(descriptor)label.\(tempLabelCounter)"
         tempLabelCounter = tempLabelCounter + 1
         return out
     }
 
     func makeLoopLabel(_ descriptor: String) -> String {
-        return ".L.loop.\(descriptor)label.inf"
+        return "L.loop.\(descriptor)label.inf"
     }
 
     func makeSwitchLabel(_ descriptor: String) -> String {
-        return ".L.switch.\(descriptor)label.inf"
+        return "L.switch.\(descriptor)label.inf"
     }
 
     func transformUserLabel(_ userLabel: String) -> String {
-        let out = ".L.user.\(userLabel).eps"
+        let out = "L.user.\(userLabel).eps"
         return out
     }
 

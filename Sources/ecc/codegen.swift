@@ -93,18 +93,16 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
                         case .fourByte: return "%esi"
                         case .eightByte: return "%rsi"
                     }
-                case .XMM0: fallthrough
-                case .XMM1: fallthrough
-                case .XMM2: fallthrough
-                case .XMM3: fallthrough
-                case .XMM4: fallthrough
-                case .XMM5: fallthrough
-                case .XMM6: fallthrough
-                case .XMM7: fallthrough
-                case .XMM14: fallthrough
-                case .XMM15:
-                    print("As-yet-unhandled floating point register encountered while generating code")
-                    exit(ExitCode.internalError.rawValue)
+                case .XMM0: return "%xmm0"
+                case .XMM1: return "%xmm1"
+                case .XMM2: return "%xmm2"
+                case .XMM3: return "%xmm3"
+                case .XMM4: return "%xmm4"
+                case .XMM5: return "%xmm5"
+                case .XMM6: return "%xmm6"
+                case .XMM7: return "%xmm7"
+                case .XMM14: return "%xmm14"
+                case .XMM15: return "%xmm15 "
             }
         case .Stack(let slot):
             return "\(slot)(%rbp)"
@@ -143,8 +141,7 @@ func convert(_ op: Assembly.Tree.BinaryOperator, _ tp: Assembly.Tree.AssemblyTyp
         case .Shl:
             return "shl\(typeToSuffix(tp))"
         case .DivDouble:
-            print("As-yet-unhandled floating point division found while generating code")
-            exit(ExitCode.internalError.rawValue)
+            return "div\(typeToSuffix(tp))"
     }
 }
 
@@ -202,7 +199,11 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
             case .Div(let tp, let op):
                 out.append("\tdiv\(typeToSuffix(tp))\t\(convert(op, typeToWidth(tp)))")
             case .Cmp(let tp, let left, let right):
-                out.append("\tcmp\(typeToSuffix(tp))\t\(convert(left, typeToWidth(tp))), \(convert(right, typeToWidth(tp)))")
+                if tp == .Double {
+                    out.append("\tcomisd\t\(convert(left, typeToWidth(tp))), \(convert(right, typeToWidth(tp))))")
+                } else {
+                    out.append("\tcmp\(typeToSuffix(tp))\t\(convert(left, typeToWidth(tp))), \(convert(right, typeToWidth(tp)))")
+                }
             case .Jmp(let label):
                 out.append("\tjmp\t\(label)")
             case .JmpCC(let cc, let label):
@@ -222,10 +223,10 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
             case .Movzx(_, _):
                 print("Unreachable movzx survived assembly fixup")
                 exit(ExitCode.internalError.rawValue)
-            case .Cvttsd2dsi(_, _, _): fallthrough
-            case .Cvtsi2sd(_, _, _):
-                print("As-yet-unhandled floating point conversion found while emitting instructions")
-                exit(ExitCode.internalError.rawValue)
+            case .Cvttsd2dsi(let tp, let src, let dst):
+                out.append("cvttsd2dsi\(typeToSuffix(tp))\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
+            case .Cvtsi2sd(let tp, let src, let dst):
+                out.append("cvtsi2sd\(typeToSuffix(tp))\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
         }
     }
 }
@@ -255,13 +256,27 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                 case .LongInit(let i): out.append("\t.quad\t\(i)")
                 case .UIntInit(let i): out.append("\t.long\t\(i)")
                 case .ULongInit(let i): out.append("\t.quad\t\(i)")
-                case .DoubleInit(let f):
-                    print("As-yet-unhandled floating point initializer found while emitting program level statement")
-                    exit(ExitCode.internalError.rawValue)
+                case .DoubleInit(let f): out.append("\t.double\t\(f)")
             }
-        case .StaticConstant(_, _, _):
-            print("As-yet=unhandled static constant found while emitting program level statement")
-            exit(ExitCode.internalError.rawValue)
+        case .StaticConstant(let name, let alignment, let initVal):
+            if alignment == 8 {
+                out.append(".literal8")
+            } else if alignment == 16 {
+                out.append(".literal16")
+            }
+            out.append("\t.balign\t\(alignment)")
+            out.append("\(name):")
+            switch initVal {
+                case .IntInit(let i): out.append("\t.long\t\(i)")
+                case .LongInit(let i): out.append("\t.quad\t\(i)")
+                case .UIntInit(let i): out.append("\t.long\t\(i)")
+                case .ULongInit(let i): out.append("\t.quad\t\(i)")
+                case .DoubleInit(let f):
+                    out.append("\t.double\t\(f)")
+                    if f == -0.0 {
+                        out.append("\t.quad\t0")
+                    }
+            }
     }
 }
 

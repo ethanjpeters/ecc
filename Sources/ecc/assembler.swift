@@ -2,8 +2,8 @@ import Foundation
 
 typealias BackendSymbolTable = [String : Assembly.Tree.AssemblySymbolTableEntry]
 
-let negativeZeroLabel = "_double.constant.negativezero"
-let biggestQuadwordLabel = "_double.constant.biggestquadword"
+let negativeZeroLabel = "L._double.constant.negativezero"
+let biggestQuadwordLabel = "L._double.constant.biggestquadword"
 let longMaxPlusOne : UInt64 = 9223372036854775808
 let biggestQuadwordValue : Double = Double(longMaxPlusOne)
 
@@ -123,7 +123,7 @@ class Assembly {
         private var counter : Int = 1
 
         func makeLabel() -> String {
-            let out = "_double.constant.\(counter)"
+            let out = "L._double.constant.\(counter)"
             counter = counter + 1
             return out
         }
@@ -201,7 +201,7 @@ class Assembly {
 
     private var labelCounter : UInt = 0
     func makeLabel() -> String {
-        let out = "_assembly.label.\(labelCounter)"
+        let out = "L._assembly.label.\(labelCounter)"
         labelCounter = labelCounter + 1
         return out
     }
