@@ -666,8 +666,9 @@ class Assembly {
                 case .Int: fallthrough
                 case .UnsignedInt: fallthrough
                 case .Long: fallthrough
-                case .UnsignedLong:
-                    let asmType : Tree.AssemblyType = (checkerType == .Int ? .Longword : .Quadword)
+                case .UnsignedLong: fallthrough
+                case .Double:
+                    let asmType : Tree.AssemblyType = (checkerType == .Double) ? .Double : (checkerType == .Int ? .Longword : .Quadword)
                     let isStatic: Bool
                     switch attrs {
                         case .StaticAttr(_, _):
@@ -689,9 +690,6 @@ class Assembly {
                             print("Meaningless non-function attributes attached to function \(name)")
                             exit(ExitCode.internalError.rawValue)
                     }
-                case .Double:
-                    print("As-yet-unhandled floating point value found while generating assembly")
-                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -783,10 +781,18 @@ class Assembly {
                         replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
                         replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
                     ))
-                case .Cvttsd2dsi(_, _, _): fallthrough
-                case .Cvtsi2sd(_, _, _):
-                    print("As-yet-unhandled conversion instruction found while generating assembly")
-                    exit(ExitCode.internalError.rawValue)
+                case .Cvttsd2dsi(let tp, let src, let dst):
+                    out.append(.Cvttsd2dsi(
+                        tp,
+                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
+                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
+                    ))
+                case .Cvtsi2sd(let tp, let src, let dst):
+                    out.append(.Cvtsi2sd(
+                        tp,
+                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
+                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
+                    ))
             }
         }
 
@@ -963,10 +969,42 @@ class Assembly {
                             print("Unreachable: immediate as the destination of a movzx")
                             exit(ExitCode.internalError.rawValue)
                     }
-                case .Cvttsd2dsi(_, _, _): fallthrough
-                case .Cvtsi2sd(_, _, _):
-                    print("As-yet-unhandled floating point conversion found while fixing up moves")
-                    exit(ExitCode.internalError.rawValue)
+                case .Cvttsd2dsi(let tp, let src, let dst):
+                    switch dst {
+                        case .Register(_): out.append(instr)
+                        case .Stack(_): fallthrough
+                        case .Data(_):
+                            out.append(.Cvttsd2dsi(tp, src, .Register(.R11)))
+                            out.append(.Mov(tp, .Register(.R11), dst))
+                        case .Pseudo(_):
+                            print("Unreachable: psuedo slot survived past pseudo replacement")
+                            exit(ExitCode.internalError.rawValue)
+                        case .Immediate(_):
+                            print("Unreachable: immediate as the destination of a Cvttsd2dsi")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                case .Cvtsi2sd(let tp, let src, let dst):
+                    let realSrc: Assembly.Tree.Operand
+                    switch src {
+                        case .Immediate(_):
+                            realSrc = .Register(.R11)
+                            out.append(.Mov(tp, src, realSrc))
+                        default:
+                            realSrc = src
+                    }
+                    switch dst {
+                        case .Register(_): out.append(instr)
+                        case .Stack(_): fallthrough
+                        case .Data(_):
+                            out.append(.Cvtsi2sd(tp, realSrc, .Register(.XMM15)))
+                            out.append(.Mov(tp, .Register(.XMM15), dst))
+                        case .Pseudo(_):
+                            print("Unreachable: pseudo slot survived past pseudo replacement")
+                            exit(ExitCode.internalError.rawValue)
+                        case .Immediate(_):
+                            print("Unreachable: immediate as the destination of a Cvtsi2sd")
+                            exit(ExitCode.internalError.rawValue)
+                    }
             }
         }
         return out
