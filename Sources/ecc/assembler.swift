@@ -1179,11 +1179,9 @@ class Assembly {
                                     case .Call(_): fallthrough
                                     case .Movzx(_, _): fallthrough
                                     case .Div(_, _): fallthrough
-                                    case .Ret: fixedBody.append(instr)
+                                    case .Ret: fallthrough
                                     case .Cvttsd2dsi(_, _, _): fallthrough
-                                    case .Cvtsi2sd(_, _, _):
-                                        print("As-yet-unhandled floating point conversion found while fixing up immediates")
-                                        exit(ExitCode.internalError.rawValue)
+                                    case .Cvtsi2sd(_, _, _): fixedBody.append(instr)
                                 }
                             }
                             fixedDecls.append(.Function(name, isGlobal, fixedBody))
