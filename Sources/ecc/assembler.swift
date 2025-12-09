@@ -902,28 +902,43 @@ class Assembly {
                         default: out.append(instr)
                     }
                 case .Cmp(let tp, let left, let right):
-                    switch left {
-                        case .Data(_): fallthrough
-                        case .Stack(_):
-                            switch right {
-                                case .Data(_): fallthrough
-                                case .Stack(_):
-                                    out.append(.Mov(tp, left, .Register(.R10)))
-                                    out.append(.Cmp(tp, .Register(.R10), right))
-                                case .Immediate(_):
-                                    out.append(.Mov(tp, right, .Register(.R11)))
-                                    out.append(.Cmp(tp, left, .Register(.R11)))
-                                default:
-                                    out.append(instr)
-                            }
-                        default:
-                            switch right {
-                                case .Immediate(_):
-                                    out.append(.Mov(tp, right, .Register(.R11)))
-                                    out.append(.Cmp(tp, left, .Register(.R11)))
-                                default:
-                                    out.append(instr)
-                            }
+                    if tp == .Double {
+                        switch right {
+                            case .Data(_): fallthrough
+                            case .Stack(_): fallthrough
+                            case .Immediate(_):
+                                out.append(.Mov(tp, right, .Register(.XMM15)))
+                                out.append(.Cmp(tp, left, .Register(.XMM15)))
+                            case .Register(_):
+                                out.append(instr)
+                            case .Pseudo(_):
+                                print("Unreachable: pseudo slot survived past pseudo replacement")
+                                exit(ExitCode.internalError.rawValue)
+                        }
+                    } else {
+                        switch left {
+                            case .Data(_): fallthrough
+                            case .Stack(_):
+                                switch right {
+                                    case .Data(_): fallthrough
+                                    case .Stack(_):
+                                        out.append(.Mov(tp, left, .Register(.R10)))
+                                        out.append(.Cmp(tp, .Register(.R10), right))
+                                    case .Immediate(_):
+                                        out.append(.Mov(tp, right, .Register(.R11)))
+                                        out.append(.Cmp(tp, left, .Register(.R11)))
+                                    default:
+                                        out.append(instr)
+                                }
+                            default:
+                                switch right {
+                                    case .Immediate(_):
+                                        out.append(.Mov(tp, right, .Register(.R11)))
+                                        out.append(.Cmp(tp, left, .Register(.R11)))
+                                    default:
+                                        out.append(instr)
+                                }
+                        }
                     }
                 case .Jmp(_): out.append(instr)
                 case .JmpCC(_, _): out.append(instr)
