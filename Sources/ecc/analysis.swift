@@ -65,6 +65,10 @@ class SemanticAnalyzer {
                     return .FunctionCall(resolveExpression(fun, &nameMap), parameters.map { resolveExpression($0, &nameMap) }, nil)
                 case .Cast(let targetType, let child, _):
                     return .Cast(targetType, resolveExpression(child, &nameMap), nil)
+                case .Dereference(_, _): fallthrough
+                case .AddrOf(_, _):
+                    print("As-yet unhandled pointer-related expression found while resolving variables")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -696,6 +700,10 @@ class SemanticAnalyzer {
                     // print("TYPE CHECKING CAST OF \(child) TO \(targetType): \(tmp)")
                     // END DEBUG
                     return (.Cast(targetType, tmp.0, Self.deConvert(tmp.1)), tmp.1)
+                case .Dereference(_, _): fallthrough
+                case .AddrOf(_, _):
+                    print("As-yet unhandled pointer-related expression found while type checking")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -1048,6 +1056,9 @@ func converCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.Ty
         case .UnsignedInt: return .UnsignedInt
         case .UnsignedLong: return .UnsignedLong
         case .Double: return .Double
+        case .Pointer(_):
+            print("As-yet unhandled pointer type found while converting C type to checker type")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 

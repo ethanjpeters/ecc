@@ -340,6 +340,10 @@ class Tacky {
                 } else {
                     return unCastedValue
                 }
+            case .Dereference(_, _): fallthrough
+            case .AddrOf(_, _):
+                print("As-yet unhandled pointer-related expression found while generating TACKY expression")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 

@@ -53,6 +53,8 @@ class Parser {
             case Conditional(Expression /* condition */, Expression, Expression, CType?)
             case FunctionCall(Expression /* "name" */, [Expression] /* parameters */, CType?)
             case Cast(CType, Expression, CType?)
+            case Dereference(Expression, CType?)
+            case AddrOf(Expression, CType?)
         }
         
         enum BlockItem {
@@ -90,13 +92,14 @@ class Parser {
             case Labeled(LabeledStatement)
         }
         
-        enum CType {
+        indirect enum CType : Equatable {
             case Int
             case UnsignedInt
             case Long
             case UnsignedLong
             case Void
             case Double
+            case Pointer(CType /* referenced type */)
         }
 
         enum Parameter {
@@ -526,6 +529,12 @@ class Parser {
         case .decrement:
             let child = parseFactor(tokenStream: &tokenStream)
             lhs = .Unary(.PreDecrement, child, nil)
+        case .ampersand:
+            let child = parseFactor(tokenStream: &tokenStream)
+            lhs = .AddrOf(child, nil)
+        case .asterisk:
+            let child = parseFactor(tokenStream: &tokenStream)
+            lhs = .Dereference(child, nil)
         default:
             print("Expected expression but encountered \(next) at line \(position.0), column \(position.1)")
             exit(ExitCode.parserError.rawValue)
@@ -811,7 +820,7 @@ class Parser {
 
             return .FunctionDeclaration(declaredType, varName, params, parseBlock(tokenStream: &tokenStream), storageClass)
         } else {
-            // // does this check belong here?
+            // does this check belong here?
             if declaredType == .Void {
                 print("Variable declaration \(varName) cannot be void")
                 exit(ExitCode.semanticError.rawValue)
