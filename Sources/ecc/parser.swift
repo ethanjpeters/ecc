@@ -115,7 +115,7 @@ class Parser {
 
         enum Declaration {
             case VariableDeclaration(CType /* type */, String /* identifier name */, Expression?, StorageClass?)
-            case FunctionDeclaration(CType /* type signature */, String /* name */, Block? /* body */, StorageClass?)
+            case FunctionDeclaration(CType /* type signature */, String /* name */, [String] /* param names */, Block? /* body */, StorageClass?)
         }
 
         enum Program {
@@ -807,10 +807,11 @@ class Parser {
             case .FunType(_, _):
                 var body : AST.Block? = nil
                 if peek(tokenStream) == .openBrace {
+                    body = parseBlock(tokenStream: &tokenStream)
                 } else if peek(tokenStream) == .semicolon {
                     let _ = expect(.semicolon, &tokenStream)
                 }
-                return .FunctionDeclaration(declType, varName, body, storageClass)
+                return .FunctionDeclaration(declType, varName, params, body, storageClass)
             default:
                 // does this check belong here?
                 if declaredType == .Void {
