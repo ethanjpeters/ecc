@@ -839,6 +839,90 @@ class Parser {
         }
     }
     
+    struct DeclaratorSyntax {
+        enum ParamInfo {
+            case Param(AST.CType, Declarator)
+        }
+
+        indirect enum Declarator {
+            case Ident(String /* identifier */)
+            case PointerDeclarator(Declarator)
+            case FunDeclarator([ParamInfo] /* params */, Declarator)
+        }
+    }
+
+    func parseSimpleDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> DeclaratorSyntax.Declarator {
+        switch peek(tokenStream) {
+            case .identifier(let name):
+                return .Ident(name)
+            case .openParen:
+                let _ = expect(.openParen, &tokenStream)
+                let out = parseDeclarator(tokenStream: &tokenStream)
+                let _ = expect(.closeParen, &tokenStream)
+                return out
+            default:
+                print("Unexpected token \(peek(tokenStream)) found at line \(tokenStream[0].1.0), column \(tokenStream[0].1.1) while trying to parse simple declarator")
+                exit(ExitCode.parserError.rawValue)
+        }
+    }
+
+    func parseDirectDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> DeclaratorSyntax.Declarator {
+        // <simple-declarator> [ <param-list> ]
+        let sd = parseSimpleDeclarator(tokenStream: &tokenStream)
+        var paramList : [DeclaratorSyntax.ParamInfo] = []
+        if peek(tokenStream) == .openParen {
+            let _ = expect(.openParen, &tokenStream)
+            if peek(tokenStream) != .keywordVoid {
+
+                while peek(tokenStream) != .closeParen {
+                    func isNonStorageTypeSpecifier(_ tok: Lexer.Token) -> Bool {
+                        switch tok {
+                            case .keywordInt: fallthrough
+                            case .keywordLong: fallthrough
+                            case .keywordUnsigned: fallthrough
+                            case .keywordSigned: fallthrough
+                            case .keywordDouble: return true
+                            default: return false
+                        }
+                    }
+
+                    if !isNonStorageTypeSpecifier(peek(tokenStream)) {
+                        let (line, col) = tokenStream[0].1
+                        print("Expected type-specifier at line \(line), column \(col) but encountered \(tokenStream[0].0)")
+                        exit(ExitCode.parserError.rawValue)
+                    }
+
+                    var typeSpecifierList : [(Lexer.Token, LexerPosition)] = []
+
+                    // enforce that there's nothing screwy like "static" or "extern" in a function parameter list
+                    while isNonStorageTypeSpecifier(peek(tokenStream)) {
+                        typeSpecifierList.append(tokenStream.removeFirst())
+                    }
+
+                    let (tp, _) = parseType(&typeSpecifierList)
+
+                    paramList.append(.Param(tp, parseDeclarator(tokenStream: &tokenStream)))
+                }
+            }
+            let _ = expect(.closeParen, &tokenStream)
+
+            return .FunDeclarator(paramList, sd)
+        } else {
+            return sd
+        }
+    }
+
+    func parseDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> DeclaratorSyntax.Declarator {
+        if peek(tokenStream) == .asterisk {
+            // * <declarator>
+            let _ = expect(.asterisk, &tokenStream)
+            return parseDeclarator(tokenStream: &tokenStream)
+        } else {
+            // <direct-declarator>
+            return parseDirectDeclarator(tokenStream: &tokenStream)
+        }
+    }
+
     func parseForInit(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.ForInit {
         // NOTE: will need to modify this when we introduce more types
         if isType(tokenStream) || isTypeSpecifier(tokenStream)  {
