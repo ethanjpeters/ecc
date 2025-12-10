@@ -115,7 +115,7 @@ class Parser {
 
         enum Declaration {
             case VariableDeclaration(CType /* type */, String /* identifier name */, Expression?, StorageClass?)
-            case FunctionDeclaration(CType /* return type */, String /* name */, [Parameter] /* type signature */, Block? /* body */, StorageClass?)
+            case FunctionDeclaration(CType /* type signature */, String /* name */, Block? /* body */, StorageClass?)
         }
 
         enum Program {
@@ -797,46 +797,37 @@ class Parser {
     }
 
     func parseDeclaration(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Declaration {
-        // parse a "specifier"
-
+        // parse the specifier list
         let (declaredType, storageClass) = parseType(&tokenStream)
-        let varName = expectIdentifier(&tokenStream)
+
+        let declarator = parseDeclarator(tokenStream: &tokenStream)
+        let (varName, declType, params) = processDeclarator(declarator: declarator, baseType: declaredType)
         
-        if peek(tokenStream) == .openParen {
-            // we're looking at a function declaration
-            let _ = expect(.openParen, &tokenStream)
-            let params : [Parser.AST.Parameter]
-            if peek(tokenStream) != .closeParen {
-                params = parseFunctionParameters(tokenStream: &tokenStream)
-            } else {
-                params = []
-            }
-
-            let _ = expect(.closeParen, &tokenStream)
-
-            if peek(tokenStream) == .semicolon {
+        switch declType {
+            case .FunType(_, _):
+                var body : AST.Block? = nil
+                if peek(tokenStream) == .openBrace {
+                } else if peek(tokenStream) == .semicolon {
+                    let _ = expect(.semicolon, &tokenStream)
+                }
+                return .FunctionDeclaration(declType, varName, body, storageClass)
+            default:
+                // does this check belong here?
+                if declaredType == .Void {
+                    print("Variable declaration \(varName) cannot be void")
+                    exit(ExitCode.semanticError.rawValue)
+                }
+                let exp : Parser.AST.Expression?
+                if peek(tokenStream) == .equal {
+                    let _ = expect(.equal, &tokenStream)
+                    exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                } else {
+                    exp = nil
+                }
+                
                 let _ = expect(.semicolon, &tokenStream)
-                return .FunctionDeclaration(declaredType, varName, params, nil, storageClass)
-            }
-
-            return .FunctionDeclaration(declaredType, varName, params, parseBlock(tokenStream: &tokenStream), storageClass)
-        } else {
-            // does this check belong here?
-            if declaredType == .Void {
-                print("Variable declaration \(varName) cannot be void")
-                exit(ExitCode.semanticError.rawValue)
-            }
-            let exp : Parser.AST.Expression?
-            if peek(tokenStream) == .equal {
-                let _ = expect(.equal, &tokenStream)
-                exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
-            } else {
-                exp = nil
-            }
-            
-            let _ = expect(.semicolon, &tokenStream)
-            
-            return .VariableDeclaration(declaredType, varName, exp, storageClass)
+                
+                return .VariableDeclaration(declaredType, varName, exp, storageClass)
         }
     }
     
