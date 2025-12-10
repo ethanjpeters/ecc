@@ -100,6 +100,7 @@ class Parser {
             case Void
             case Double
             case Pointer(CType /* referenced type */)
+            case FunType([CType] /* params */, CType /* returns */)
         }
 
         enum Parameter {
@@ -920,6 +921,40 @@ class Parser {
         } else {
             // <direct-declarator>
             return parseDirectDeclarator(tokenStream: &tokenStream)
+        }
+    }
+
+    func processDeclarator(declarator: DeclaratorSyntax.Declarator, baseType: AST.CType) -> (String /* name */, AST.CType, [String] /* param names */) {
+        switch declarator {
+            case .Ident(let name): return (name, baseType, [])
+            case .PointerDeclarator(let d):
+                let derivedType : Parser.AST.CType = .Pointer(baseType)
+                return processDeclarator(declarator: d, baseType: derivedType)
+            case .FunDeclarator(let params, let d):
+                switch d {
+                    case .Ident(let name):
+                        var paramNames : [String] = []
+                        var paramTypes : [AST.CType] = []
+                        for p in params {
+                            switch p {
+                                case .Param(let pBType, let dd):
+                                    let (pName, pType, _) = processDeclarator(declarator: dd, baseType: pBType)
+                                    switch pType {
+                                        case .FunType(_, _):
+                                            print("Cannot pass a function pointer as a parameter")
+                                            exit(ExitCode.parserError.rawValue)
+                                        default: ()
+                                    }
+                                    paramNames.append(pName)
+                                    paramTypes.append(pType)
+                            }
+                        }
+                        let derivedType : Parser.AST.CType = .FunType(paramTypes, baseType)
+                        return (name, derivedType, paramNames)
+                    default:
+                        print("Can't apply additional type derivations to a function type")
+                        exit(ExitCode.parserError.rawValue)
+                }
         }
     }
 

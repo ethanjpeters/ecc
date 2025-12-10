@@ -1056,6 +1056,9 @@ func converCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.Ty
         case .UnsignedInt: return .UnsignedInt
         case .UnsignedLong: return .UnsignedLong
         case .Double: return .Double
+        case .FunType(_, _):
+            print("As-yet unhandled function type found while converting C type to checker type")
+            exit(ExitCode.internalError.rawValue)
         case .Pointer(_):
             print("As-yet unhandled pointer type found while converting C type to checker type")
             exit(ExitCode.internalError.rawValue)
