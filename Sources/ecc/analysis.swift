@@ -491,6 +491,7 @@ class SemanticAnalyzer {
             case UnsignedLong
             case Double
             case Void
+            case Pointer(CheckerType /* pointee type */)
             case Function(CheckerType /* return */, [CheckerType] /* params */)
         }
 
@@ -522,6 +523,7 @@ class SemanticAnalyzer {
                 case .Long: return .Long
                 case .UnsignedLong: return .UnsignedLong
                 case .Double: return .Double
+                case .Pointer(let tp): return .Pointer(deConvert(tp))
                 case .Function(_, _):
                     print("UNREACHABLE FUNC")
                     exit(ExitCode.internalError.rawValue)
@@ -692,17 +694,26 @@ class SemanticAnalyzer {
                         case .Long: fallthrough
                         case .UnsignedLong: fallthrough
                         case .Double: fallthrough
+                        case .Pointer(_): fallthrough
                         case .Void:
                             print("Can not call value \(lValue) of type \(fType)")
                             exit(ExitCode.semanticError.rawValue)
                     }
                 case .Cast(let targetType, let child, _):
                     let tmp = typeCheck(child, nameMap)
-                    // DEBUG
-                    // print("TYPE CHECKING CAST OF \(child) TO \(targetType): \(tmp)")
-                    // END DEBUG
                     return (.Cast(targetType, tmp.0, Self.deConvert(tmp.1)), tmp.1)
-                case .Dereference(_, _): fallthrough
+                case .Dereference(let ptr, _):
+                    // type check the pointer expression
+                    let (child, childType) = typeCheck(ptr, nameMap)
+                    // verify that the expression is a pointer
+                    switch childType {
+                        case .Pointer(let pointeeType):
+                            // our type is whatever it points to
+                            return (.Dereference(child, Self.deConvert(pointeeType)), pointeeType)
+                        default:
+                            print("Attempted to dereference a value of non-pointer type \(childType)")
+                            exit(ExitCode.semanticError.rawValue)
+                    }
                 case .AddrOf(_, _):
                     print("As-yet unhandled pointer-related expression found while type checking")
                     exit(ExitCode.internalError.rawValue)
@@ -1086,6 +1097,7 @@ func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Int {
         case .Long: return 8
         case .UnsignedLong: return 8
         case .Double: return 8
+        case .Pointer(_): return 8
         case .Void:
             print("GETTING TYPE SIZE OF VOID MAKES NO SENSE")
             exit(ExitCode.internalError.rawValue)
@@ -1098,6 +1110,7 @@ func isSigned(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
         case .Long: return true
         case .UnsignedInt: fallthrough
         case .UnsignedLong: return false
+        case .Pointer(_): return false
         case .Function(_, _):
             print("GETTING SIGNED-NESS OF FUNCTION MAKES NO SENSE")
             exit(ExitCode.internalError.rawValue)
@@ -1114,6 +1127,7 @@ func isFloatingPoint(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
         case .Long: fallthrough
         case .UnsignedInt: fallthrough
         case .UnsignedLong: return false
+        case .Pointer(_): return false
         case .Function(_, _):
             print("GETTING FP-NESS OF FUNCTION MAKES NO SENSE")
             exit(ExitCode.internalError.rawValue)

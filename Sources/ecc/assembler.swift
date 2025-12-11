@@ -261,6 +261,9 @@ class Assembly {
                     case .UnsignedLong: fallthrough
                     case .Long: return .Quadword
                     case .Double: return .Double
+                    case .Pointer(_):
+                        print("As-yet unhandled pointer found while deducing assembly type")
+                        exit(ExitCode.internalError.rawValue)
                 }
         }
     }
@@ -291,6 +294,7 @@ class Assembly {
                     case .UnsignedLong: return false
                     case .Long: return true
                     case .Double: return true
+                    case .Pointer(_): return false
                 }
         }
     }
@@ -690,6 +694,9 @@ class Assembly {
                             print("Meaningless non-function attributes attached to function \(name)")
                             exit(ExitCode.internalError.rawValue)
                     }
+                case .Pointer(_):
+                    print("As-yet unhandled pointer found while deducing assembly type")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -718,6 +725,7 @@ class Assembly {
                     case .Long: width = 8
                     case .UnsignedLong: width = 8
                     case .Double: width = 8
+                    case .Pointer(_): width = 8
                 }
                 if let slot = nameStackMapping[name] {
                     return .Stack(-slot)
