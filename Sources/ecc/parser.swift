@@ -133,6 +133,13 @@ class Parser {
         if nextToken != tok {
             let (line, col) = position
             print("Expected \(tok) at line \(line), column \(col) but encountered \(nextToken)")
+
+            // DEBUG
+            for s in Thread.callStackSymbols {
+                print(s)
+            }
+            // END DEBUG
+
             exit(ExitCode.parserError.rawValue)
         }
         
@@ -799,10 +806,9 @@ class Parser {
     func parseDeclaration(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Declaration {
         // parse the specifier list
         let (declaredType, storageClass) = parseType(&tokenStream)
-
         let declarator = parseDeclarator(tokenStream: &tokenStream)
         let (varName, declType, params) = processDeclarator(declarator: declarator, baseType: declaredType)
-        
+
         switch declType {
             case .FunType(_, _):
                 var body : AST.Block? = nil
@@ -847,6 +853,7 @@ class Parser {
     func parseSimpleDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> DeclaratorSyntax.Declarator {
         switch peek(tokenStream) {
             case .identifier(let name):
+                tokenStream.removeFirst()
                 return .Ident(name)
             case .openParen:
                 let _ = expect(.openParen, &tokenStream)
@@ -866,7 +873,6 @@ class Parser {
         if peek(tokenStream) == .openParen {
             let _ = expect(.openParen, &tokenStream)
             if peek(tokenStream) != .keywordVoid {
-
                 while peek(tokenStream) != .closeParen {
                     func isNonStorageTypeSpecifier(_ tok: Lexer.Token) -> Bool {
                         switch tok {
@@ -896,6 +902,8 @@ class Parser {
 
                     paramList.append(.Param(tp, parseDeclarator(tokenStream: &tokenStream)))
                 }
+            } else {
+                let _ = expect(.keywordVoid, &tokenStream)
             }
             let _ = expect(.closeParen, &tokenStream)
 

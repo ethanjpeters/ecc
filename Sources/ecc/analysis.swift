@@ -524,6 +524,11 @@ class SemanticAnalyzer {
                 case .Double: return .Double
                 case .Function(_, _):
                     print("UNREACHABLE FUNC")
+                    // DEBUG
+                    for s in Thread.callStackSymbols {
+                        print(s)
+                    }
+                    // END DEBUG
                     exit(ExitCode.internalError.rawValue)
             }
         }
@@ -871,8 +876,16 @@ class SemanticAnalyzer {
                         nameMap[pName] = (pType, .LocalAttr)
                     }
                     let typeCheckedBody : Parser.AST.Block?
+                    let retType : Parser.AST.CType
                     if let b = body {
-                        typeCheckedBody = typeCheck(b, &nameMap, funType)
+                        switch funType {
+                            case .FunType(_, let rType):
+                                retType = rType
+                            default:
+                                print("FUNCTION WITH NO FUNCTION TYPE WHAT IS GOING ON?!?!?")
+                                exit(ExitCode.internalError.rawValue)
+                        }
+                        typeCheckedBody = typeCheck(b, &nameMap, retType)
                     } else {
                         typeCheckedBody = nil
                     }
