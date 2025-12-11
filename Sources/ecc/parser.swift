@@ -894,6 +894,15 @@ class Parser {
                     let (tp, _) = parseType(&typeSpecifierList)
 
                     paramList.append(.Param(tp, parseDeclarator(tokenStream: &tokenStream)))
+
+                    if peek(tokenStream) != .closeParen {
+                        if peek(tokenStream) == .comma {
+                            let _ = expect(.comma, &tokenStream)
+                        } else {
+                            print("Expected comma separator in parameters list")
+                            exit(ExitCode.parserError.rawValue)
+                        }
+                    }
                 }
             } else {
                 let _ = expect(.keywordVoid, &tokenStream)
