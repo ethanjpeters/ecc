@@ -28,6 +28,7 @@ class SemanticAnalyzer {
         func isValidLValue(_ exp: Parser.AST.Expression) -> Bool {
             switch exp {
                 case .Var(_, _): return true
+                case .Dereference(_, _): return true
                 default: return false
             }
         }
@@ -530,6 +531,14 @@ class SemanticAnalyzer {
             }
         }
 
+        func isValidLValue(_ exp: Parser.AST.Expression) -> Bool {
+            switch exp {
+                case .Var(_, _): return true
+                case .Dereference(_, _): return true
+                default: return false
+            }
+        }
+
         func typeConvert(_ exp: Parser.AST.Expression, ofType: CheckerType, toType: CheckerType) -> Parser.AST.Expression {
             if ofType == toType { return exp }
             return .Cast(Self.deConvert(toType), exp, Self.deConvert(ofType))
@@ -714,9 +723,17 @@ class SemanticAnalyzer {
                             print("Attempted to dereference a value of non-pointer type \(childType)")
                             exit(ExitCode.semanticError.rawValue)
                     }
-                case .AddrOf(_, _):
-                    print("As-yet unhandled pointer-related expression found while type checking")
-                    exit(ExitCode.internalError.rawValue)
+                case .AddrOf(let exp, _):
+                    // type check the child expression
+                    let (child, childType) = typeCheck(exp, nameMap)
+                    // verify that it is an lvalue
+                    if !isValidLValue(child) {
+                        print("Attempted to get the address of non-lvalue expression \(child)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                    // our type is pointer to the child's type
+                    let ourType : CheckerType = .Pointer(childType)
+                    return (.AddrOf(child, Self.deConvert(ourType)), ourType)
             }
         }
 
@@ -1081,9 +1098,7 @@ func convertCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.T
                 convertCTypeToCheckerType(returnType),
                 paramTypes.map { convertCTypeToCheckerType($0) }
             )
-        case .Pointer(_):
-            print("As-yet unhandled pointer type found while converting C type to checker type")
-            exit(ExitCode.internalError.rawValue)
+        case .Pointer(let nestedType): return .Pointer(convertCTypeToCheckerType(nestedType))
     }
 }
 

@@ -801,7 +801,6 @@ class Parser {
         let (declaredType, storageClass) = parseType(&tokenStream)
         let declarator = parseDeclarator(tokenStream: &tokenStream)
         let (varName, declType, params) = processDeclarator(declarator: declarator, baseType: declaredType)
-
         switch declType {
             case .FunType(_, _):
                 var body : AST.Block? = nil
@@ -813,7 +812,7 @@ class Parser {
                 return .FunctionDeclaration(declType, varName, params, body, storageClass)
             default:
                 // does this check belong here?
-                if declaredType == .Void {
+                if declType == .Void {
                     print("Variable declaration \(varName) cannot be void")
                     exit(ExitCode.semanticError.rawValue)
                 }
@@ -827,7 +826,7 @@ class Parser {
                 
                 let _ = expect(.semicolon, &tokenStream)
                 
-                return .VariableDeclaration(declaredType, varName, exp, storageClass)
+                return .VariableDeclaration(declType, varName, exp, storageClass)
         }
     }
     
@@ -919,7 +918,7 @@ class Parser {
         if peek(tokenStream) == .asterisk {
             // * <declarator>
             let _ = expect(.asterisk, &tokenStream)
-            return parseDeclarator(tokenStream: &tokenStream)
+            return .PointerDeclarator(parseDeclarator(tokenStream: &tokenStream))
         } else {
             // <direct-declarator>
             return parseDirectDeclarator(tokenStream: &tokenStream)
