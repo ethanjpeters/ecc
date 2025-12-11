@@ -564,7 +564,7 @@ class SemanticAnalyzer {
                         default:
                             outType = Self.deConvert(eType)
                     }
-                    return (.Unary(unOp, checkedE, outType), converCTypeToCheckerType(outType))
+                    return (.Unary(unOp, checkedE, outType), convertCTypeToCheckerType(outType))
                 case .Binary(let binOp, let left, let right, _):
                     // TODO: not all binary operations on all pairs of types make sense
                     let (checkedLeft, leftType) = typeCheck(left, nameMap)
@@ -713,7 +713,7 @@ class SemanticAnalyzer {
                             exit(ExitCode.semanticError.rawValue)
                         }
                         let (outExp, outTp) = typeCheck(e, nameMap)
-                        let castExp = typeConvert(outExp, ofType: outTp, toType: converCTypeToCheckerType(enclosingFuncReturnType))
+                        let castExp = typeConvert(outExp, ofType: outTp, toType: convertCTypeToCheckerType(enclosingFuncReturnType))
                         return .Return(castExp)
                     } else {
                         if enclosingFuncReturnType != .Void {
@@ -837,7 +837,7 @@ class SemanticAnalyzer {
                     let paramCTypes : [Parser.AST.CType]
                     switch funType {
                         case .FunType(let params, let ret):
-                            constructedType = .Function(converCTypeToCheckerType(ret), params.map { converCTypeToCheckerType($0) })
+                            constructedType = .Function(convertCTypeToCheckerType(ret), params.map { convertCTypeToCheckerType($0) })
                             paramCTypes = params
                         default:
                             print("Expected function type for function")
@@ -869,7 +869,7 @@ class SemanticAnalyzer {
                     nameMap[name] = (constructedType, .FunAttr(isDefined, isGlobal))
                     for p in zip(params, paramCTypes) {
                         let (pName, pType) = p
-                        nameMap[pName] = (converCTypeToCheckerType(pType), .LocalAttr)
+                        nameMap[pName] = (convertCTypeToCheckerType(pType), .LocalAttr)
                     }
                     let typeCheckedBody : Parser.AST.Block?
                     if let b = body {
@@ -881,7 +881,7 @@ class SemanticAnalyzer {
                 case .VariableDeclaration(let tp, let name, let initExp, let storageClass):
                     var typeCheckedInit : Parser.AST.Expression?
                     let initType : CheckerType
-                    let conTp = converCTypeToCheckerType(tp)
+                    let conTp = convertCTypeToCheckerType(tp)
                     if let e = initExp {
                         (typeCheckedInit, initType) = typeCheck(e, nameMap)
                         // previously we converted to the "greater" or "common" type here, but that was incorrect; we should always
@@ -1045,7 +1045,7 @@ class SemanticAnalyzer {
     }
 }
 
-func converCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.TypeChecker.CheckerType {
+func convertCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.TypeChecker.CheckerType {
     switch pType {
         case .Int: return .Int
         case .Void: return .Void

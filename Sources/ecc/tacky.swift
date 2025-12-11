@@ -88,7 +88,7 @@ class Tacky {
 
     func makeTempVariable(_ tp: Parser.AST.CType, _ symbolTable: inout SymbolTable) -> Tacky.IR.Value {
         let varName = makeTemp()
-        symbolTable[varName] = (converCTypeToCheckerType(tp), .LocalAttr)
+        symbolTable[varName] = (convertCTypeToCheckerType(tp), .LocalAttr)
         return .Var(varName)
     }
 
@@ -310,8 +310,8 @@ class Tacky {
                 if targetType != tp {
                     let dst = makeTempVariable(targetType, &symbolTable)
 
-                    let targetCp = converCTypeToCheckerType(targetType)
-                    let innerCp = converCTypeToCheckerType(tp!)
+                    let targetCp = convertCTypeToCheckerType(targetType)
+                    let innerCp = convertCTypeToCheckerType(tp!)
 
                     if isFloatingPoint(targetCp) && !isFloatingPoint(innerCp) {
                         if isSigned(innerCp) {
