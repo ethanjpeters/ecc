@@ -514,11 +514,8 @@ class Tacky {
                             }
                             instrs.append(.Return(.Constant(returnType == .Long ? .ConstLong(0) : .ConstInt(0))))
                             var tackyIds : [String] = []
-                            for p in parameters {
-                                switch p {
-                                    case .NamedParameter(_, let name):
-                                        tackyIds.append(name)
-                                }
+                            for name in parameters {
+                                tackyIds.append(name)
                             }
                             return .Function(name, storageClass != .Static, tackyIds, instrs)
                     }

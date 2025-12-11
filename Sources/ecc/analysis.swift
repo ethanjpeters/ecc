@@ -154,14 +154,11 @@ class SemanticAnalyzer {
                 case .FunctionDeclaration(let returnType, let name, let params, let body,  let storageClass):
                     nameMap[name] = .init(newName: name, currentScope: true, hasLinkage: true)
                     var copiedNameMap = copyNameMap(nameMap)
-                    var mangledPNames: [Parser.AST.Parameter] = []
-                    for p in params {
-                        switch p {
-                            case .NamedParameter(let pType, let pName):
-                                let uniqueName = makeTemp(pName)
-                                copiedNameMap[pName] = .init(newName: uniqueName, currentScope: true, hasLinkage: false)
-                                mangledPNames.append(.NamedParameter(pType, uniqueName))
-                        }
+                    var mangledPNames: [String] = []
+                    for pName in params {
+                        let uniqueName = makeTemp(pName)
+                        copiedNameMap[pName] = .init(newName: uniqueName, currentScope: true, hasLinkage: false)
+                        mangledPNames.append(pName)
                     }
                     if let b = body {
                         switch b {
@@ -829,21 +826,23 @@ class SemanticAnalyzer {
 
         func typeCheck(_ declaration: Parser.AST.Declaration, _ fileLevel: Bool, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)]) -> Parser.AST.Declaration {
             switch declaration {
-                case .FunctionDeclaration(let returnType, let name, let params, let body, let storageClass):
+                case .FunctionDeclaration(let funType, let name, let params, let body, let storageClass):
                     if !fileLevel && body != nil {
                         print("Cannot define function \(name) inline")
                         exit(ExitCode.semanticError.rawValue)
                     }
                     let sc : Parser.AST.StorageClass
                     if storageClass != nil { sc = storageClass! } else { sc = .Extern }
-                    var paramTypes : [CheckerType] = []
-                    for p in params {
-                        switch p {
-                            case .NamedParameter(let tp, _):
-                                paramTypes.append(converCTypeToCheckerType(tp))
-                        }
+                    let constructedType : CheckerType
+                    let paramCTypes : [Parser.AST.CType]
+                    switch funType {
+                        case .FunType(let params, let ret):
+                            constructedType = .Function(converCTypeToCheckerType(ret), params.map { converCTypeToCheckerType($0) })
+                            paramCTypes = params
+                        default:
+                            print("Expected function type for function")
+                            exit(ExitCode.internalError.rawValue)
                     }
-                    let constructedType : CheckerType = .Function(converCTypeToCheckerType(returnType), paramTypes)
                     let isDefined : Bool = body != nil
                     let isGlobal : Bool = sc != .Static
                     if let preExistingFunction = nameMap[name] {
@@ -868,19 +867,17 @@ class SemanticAnalyzer {
                         }
                     }
                     nameMap[name] = (constructedType, .FunAttr(isDefined, isGlobal))
-                    for p in params {
-                        switch p {
-                            case .NamedParameter(let tp, let name):
-                                nameMap[name] = (converCTypeToCheckerType(tp), .LocalAttr)
-                        }
+                    for p in zip(params, paramCTypes) {
+                        let (pName, pType) = p
+                        nameMap[pName] = (converCTypeToCheckerType(pType), .LocalAttr)
                     }
                     let typeCheckedBody : Parser.AST.Block?
                     if let b = body {
-                        typeCheckedBody = typeCheck(b, &nameMap, returnType)
+                        typeCheckedBody = typeCheck(b, &nameMap, funType)
                     } else {
                         typeCheckedBody = nil
                     }
-                    return .FunctionDeclaration(returnType, name, params, typeCheckedBody, storageClass)
+                    return .FunctionDeclaration(funType, name, params, typeCheckedBody, storageClass)
                 case .VariableDeclaration(let tp, let name, let initExp, let storageClass):
                     var typeCheckedInit : Parser.AST.Expression?
                     let initType : CheckerType
