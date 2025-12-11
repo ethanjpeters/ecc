@@ -833,16 +833,7 @@ class SemanticAnalyzer {
                     }
                     let sc : Parser.AST.StorageClass
                     if storageClass != nil { sc = storageClass! } else { sc = .Extern }
-                    let constructedType : CheckerType
-                    let paramCTypes : [Parser.AST.CType]
-                    switch funType {
-                        case .FunType(let params, let ret):
-                            constructedType = .Function(convertCTypeToCheckerType(ret), params.map { convertCTypeToCheckerType($0) })
-                            paramCTypes = params
-                        default:
-                            print("Expected function type for function")
-                            exit(ExitCode.internalError.rawValue)
-                    }
+                    let constructedType : CheckerType = convertCTypeToCheckerType(funType)
                     let isDefined : Bool = body != nil
                     let isGlobal : Bool = sc != .Static
                     if let preExistingFunction = nameMap[name] {
@@ -867,9 +858,17 @@ class SemanticAnalyzer {
                         }
                     }
                     nameMap[name] = (constructedType, .FunAttr(isDefined, isGlobal))
-                    for p in zip(params, paramCTypes) {
+                    let paramTypes : [CheckerType]
+                    switch constructedType {
+                        case .Function(_, let pTypes):
+                            paramTypes = pTypes
+                        default:
+                            print("Nonsense non-function type found describing function")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                    for p in zip(params, paramTypes) {
                         let (pName, pType) = p
-                        nameMap[pName] = (convertCTypeToCheckerType(pType), .LocalAttr)
+                        nameMap[pName] = (pType, .LocalAttr)
                     }
                     let typeCheckedBody : Parser.AST.Block?
                     if let b = body {
@@ -1053,9 +1052,11 @@ func convertCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.T
         case .UnsignedInt: return .UnsignedInt
         case .UnsignedLong: return .UnsignedLong
         case .Double: return .Double
-        case .FunType(_, _):
-            print("As-yet unhandled function type found while converting C type to checker type")
-            exit(ExitCode.internalError.rawValue)
+        case .FunType(let paramTypes, let returnType):
+            return .Function(
+                convertCTypeToCheckerType(returnType),
+                paramTypes.map { convertCTypeToCheckerType($0) }
+            )
         case .Pointer(_):
             print("As-yet unhandled pointer type found while converting C type to checker type")
             exit(ExitCode.internalError.rawValue)
