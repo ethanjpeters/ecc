@@ -158,7 +158,7 @@ class SemanticAnalyzer {
                     for pName in params {
                         let uniqueName = makeTemp(pName)
                         copiedNameMap[pName] = .init(newName: uniqueName, currentScope: true, hasLinkage: false)
-                        mangledPNames.append(pName)
+                        mangledPNames.append(uniqueName)
                     }
                     if let b = body {
                         switch b {
@@ -524,11 +524,6 @@ class SemanticAnalyzer {
                 case .Double: return .Double
                 case .Function(_, _):
                     print("UNREACHABLE FUNC")
-                    // DEBUG
-                    for s in Thread.callStackSymbols {
-                        print(s)
-                    }
-                    // END DEBUG
                     exit(ExitCode.internalError.rawValue)
             }
         }
@@ -625,8 +620,13 @@ class SemanticAnalyzer {
                     }
                 case .Var(let name, _):
                     // name is enforced to exist
-                    let (tp, _) = nameMap[name]!
-                    return (.Var(name, Self.deConvert(tp)), tp)
+                    if let x = nameMap[name] {
+                        let (tp, _) = x
+                        return (.Var(name, Self.deConvert(tp)), tp)
+                    } else {
+                        print("Variable \(name) was not found in name map")
+                        exit(ExitCode.internalError.rawValue)
+                    }
                 case .Assignment(let lValue, let exp, _):
                     // lValue is already enforced to be a valid lValue
                     let name: String

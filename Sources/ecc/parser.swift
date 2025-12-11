@@ -133,13 +133,6 @@ class Parser {
         if nextToken != tok {
             let (line, col) = position
             print("Expected \(tok) at line \(line), column \(col) but encountered \(nextToken)")
-
-            // DEBUG
-            for s in Thread.callStackSymbols {
-                print(s)
-            }
-            // END DEBUG
-
             exit(ExitCode.parserError.rawValue)
         }
         
@@ -742,7 +735,7 @@ class Parser {
         let startPosition = tokenStream[0].1
         // start by eating all of the specifiers
         var specifierList : [Lexer.Token] = []
-        while isType(tokenStream) || isTypeSpecifier(tokenStream) {
+        while !tokenStream.isEmpty && (isType(tokenStream) || isTypeSpecifier(tokenStream)) {
             specifierList.append(tokenStream.removeFirst().0)
         }
 
@@ -1006,7 +999,8 @@ class Parser {
         // right now, only functions and function declarations
         var declarations : [Parser.AST.Declaration] = []
         while !tokenStream.isEmpty {
-            declarations.append(parseDeclaration(tokenStream: &tokenStream))
+            let d = parseDeclaration(tokenStream: &tokenStream)
+            declarations.append(d)
         }
         return .Statement(declarations)
     }
