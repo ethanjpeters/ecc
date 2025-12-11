@@ -65,10 +65,10 @@ class SemanticAnalyzer {
                     return .FunctionCall(resolveExpression(fun, &nameMap), parameters.map { resolveExpression($0, &nameMap) }, nil)
                 case .Cast(let targetType, let child, _):
                     return .Cast(targetType, resolveExpression(child, &nameMap), nil)
-                case .Dereference(_, _): fallthrough
-                case .AddrOf(_, _):
-                    print("As-yet unhandled pointer-related expression found while resolving variables")
-                    exit(ExitCode.internalError.rawValue)
+                case .Dereference(let exp, _):
+                    return .Dereference(resolveExpression(exp, &nameMap), nil)
+                case .AddrOf(let exp, _):
+                    return .AddrOf(resolveExpression(exp, &nameMap), nil)
             }
         }
 
