@@ -568,6 +568,13 @@ class SemanticAnalyzer {
                         }
                     }
 
+                    // NOTE: soon we will add pointer arithmetic and some unary
+                    // operations will become legal to perform on pointers
+                    if isPointerType(eType) {
+                        print("Can not presently perform unary operation \(unOp) on pointer type \(eType)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+
                     let outType : Parser.AST.CType
                     switch unOp {
                         case .Not:
@@ -595,7 +602,6 @@ class SemanticAnalyzer {
                         default: ()
                     }
 
-
                     if isFloatingPoint(leftType) || isFloatingPoint(rightType) {
                         if binOp == .Remainder {
                             print("Remainder operator does not apply to floating point types")
@@ -603,31 +609,54 @@ class SemanticAnalyzer {
                         }
                     }
 
-                    switch binOp {
-                        case .And: fallthrough
-                        case .Or:
-                            return (.Binary(binOp, checkedLeft, checkedRight, .Int), .Int)
-                        default: ()
-                    }
-                    let outType = getCommonType(leftType, rightType)
-                    let binExp : Parser.AST.Expression = .Binary(
-                        binOp,
-                        typeConvert(checkedLeft, ofType: leftType, toType: outType),
-                        typeConvert(checkedRight, ofType: rightType, toType: outType),
-                        Self.deConvert(outType)
-                    )
-                    switch binOp {
-                        case .Add: fallthrough
-                        case .Subtract: fallthrough
-                        case .Multiply: fallthrough
-                        case .Divide: fallthrough
-                        case .Remainder: fallthrough
-                        case .BitwiseShiftLeft: fallthrough
-                        case .BitwiseShiftRight: fallthrough
-                        case .BitwiseXor:
-                            return (binExp, outType)
-                        default:
-                            return (binExp, .Int)
+                    // NOTE: soon we will add pointer arithmetic and some binary
+                    // operations will become legal to perform on pointers which
+                    // are not presently legal
+                    if isPointerType(leftType) || isPointerType(rightType) {
+                        switch binOp {
+                            case .Equal: fallthrough
+                            case .NotEqual:
+                                // this call will fail if the types are not compatible
+                                let outType = getCommonPointerType((checkedLeft, leftType), (checkedRight, rightType))
+                                let binExp : Parser.AST.Expression = .Binary(
+                                    binOp,
+                                    typeConvert(checkedLeft, ofType: leftType, toType: outType),
+                                    typeConvert(checkedRight, ofType: rightType, toType: outType),
+                                    Self.deConvert(outType)
+                                )
+                                return (binExp, outType)
+                            default:
+                                print("Invalid binary operation \(binOp) called on pointer type(s) (\(leftType), \(rightType))")
+                                exit(ExitCode.semanticError.rawValue)
+                        }
+                    } else {
+
+                        switch binOp {
+                            case .And: fallthrough
+                            case .Or:
+                                return (.Binary(binOp, checkedLeft, checkedRight, .Int), .Int)
+                            default: ()
+                        }
+                        let outType = getCommonType(leftType, rightType)
+                        let binExp : Parser.AST.Expression = .Binary(
+                            binOp,
+                            typeConvert(checkedLeft, ofType: leftType, toType: outType),
+                            typeConvert(checkedRight, ofType: rightType, toType: outType),
+                            Self.deConvert(outType)
+                        )
+                        switch binOp {
+                            case .Add: fallthrough
+                            case .Subtract: fallthrough
+                            case .Multiply: fallthrough
+                            case .Divide: fallthrough
+                            case .Remainder: fallthrough
+                            case .BitwiseShiftLeft: fallthrough
+                            case .BitwiseShiftRight: fallthrough
+                            case .BitwiseXor:
+                                return (binExp, outType)
+                            default:
+                                return (binExp, .Int)
+                        }
                     }
                 case .Var(let name, _):
                     // name is enforced to exist
@@ -1167,4 +1196,49 @@ func getCommonType(_ left : SemanticAnalyzer.TypeChecker.CheckerType, _ right: S
     } else {
         return right
     }
+}
+
+func isPointerType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    switch tp {
+        case .Pointer(_): return true
+        default: return false
+    }
+}
+
+func getPointeeType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> SemanticAnalyzer.TypeChecker.CheckerType {
+    switch tp {
+        case .Pointer(let x): return x
+        default:
+            print("Doesn't make sense to get pointee type of non-pointer type \(tp)")
+            exit(ExitCode.internalError.rawValue)
+    }
+}
+
+func getCommonPointerType(_ left: (Parser.AST.Expression, SemanticAnalyzer.TypeChecker.CheckerType), _ right: (Parser.AST.Expression, SemanticAnalyzer.TypeChecker.CheckerType)) -> SemanticAnalyzer.TypeChecker.CheckerType {
+    let (leftExp, leftType) = left
+    let (rightExp, rightType) = right
+
+    func isNullConstant(_ e: Parser.AST.Expression) -> Bool {
+        switch e {
+            case .Constant(let val, _):
+                switch val {
+                    case .ConstDouble(_): return false
+                    case .ConstInt(let i): return i == 0
+                    case .ConstLong(let l): return l == 0
+                    case .ConstUnsignedInt(let ui) : return ui == 0
+                    case .ConstUnsignedLong(let ul) : return ul == 0
+                }
+            default: return false
+        }
+    }
+
+    if leftType == rightType {
+        return leftType
+    }
+
+    if isNullConstant(leftExp) { return rightType }
+    if isNullConstant(rightExp) { return rightType }
+
+    print("Alleged pointers \(leftExp) and \(rightExp) have incompatible types \(leftType) and \(rightType)")
+    exit(ExitCode.semanticError.rawValue)
 }
