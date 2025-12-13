@@ -574,7 +574,7 @@ class SemanticAnalyzer {
 
                     // NOTE: soon we will add pointer arithmetic and some unary
                     // operations will become legal to perform on pointers
-                    if isPointerType(eType) {
+                    if isPointerType(eType) && unOp != .Not {
                         print("Can not presently perform unary operation \(unOp) on pointer type \(eType)")
                         exit(ExitCode.semanticError.rawValue)
                     }
@@ -629,6 +629,9 @@ class SemanticAnalyzer {
                                     Self.deConvert(outType)
                                 )
                                 return (binExp, outType)
+                            case .And: fallthrough
+                            case .Or:
+                                return (.Binary(binOp, checkedLeft, checkedRight, .Int), .Int)
                             default:
                                 print("Invalid binary operation \(binOp) called on pointer type(s) (\(leftType), \(rightType))")
                                 exit(ExitCode.semanticError.rawValue)
