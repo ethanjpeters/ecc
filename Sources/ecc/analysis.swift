@@ -668,22 +668,25 @@ class SemanticAnalyzer {
                         exit(ExitCode.internalError.rawValue)
                     }
                 case .Assignment(let lValue, let exp, _):
-                    // lValue is already enforced to be a valid lValue
-                    let name: String
-                    switch lValue {
-                        case .Var(let nm, _):
-                            name = nm
-                        default:
-                            print("Unreachable non lValue in assignment \(lValue)")
-                            exit(ExitCode.internalError.rawValue)
+                    if !isValidLValue(lValue) {
+                        print("Attempted to assign to non-lvalue expression \(lValue)")
+                        exit(ExitCode.semanticError.rawValue)
                     }
-                    let (tp, _) = nameMap[name]!
+
                     let (checkedExp, expType) = typeCheck(exp, nameMap)
-                    return (.Assignment(
-                        .Var(name, Self.deConvert(tp)),
-                        typeConvert(checkedExp, ofType: expType, toType: tp),
-                        Self.deConvert(tp)
-                    ), tp)
+                    let (lV, lT) = typeCheck(lValue, nameMap)
+                    if expType == lT {
+                        return (.Assignment(lV, checkedExp, Self.deConvert(lT)), lT)
+                    }
+                    if isArithmeticType(lT) && isArithmeticType(expType) {
+                        return (.Assignment(lV, typeConvert(checkedExp, ofType: expType, toType: lT), Self.deConvert(lT)), lT)
+                    }
+                    if isNullConstant(checkedExp) && isPointerType(lT) {
+                        return (.Assignment(lV, typeConvert(checkedExp, ofType: expType, toType: lT), Self.deConvert(lT)), lT)
+                    }
+
+                    print("Cannot convert type \(expType) to \(lT) for assignment \(expression)")
+                    exit(ExitCode.semanticError.rawValue)
                 case .CompoundAssignment(_, _, _, _):
                     print("Unreachable compound assignment found during type checking")
                     exit(ExitCode.internalError.rawValue)
@@ -1182,6 +1185,19 @@ func isFloatingPoint(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
     }
 }
 
+func isArithmeticType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    switch tp {
+        case .Int: fallthrough
+        case .Long: fallthrough
+        case .UnsignedInt: fallthrough
+        case .UnsignedLong: fallthrough
+        case .Double: return true
+        case .Function(_, _): fallthrough
+        case .Pointer(_): fallthrough
+        case .Void: return false
+    }
+}
+
 func getCommonType(_ left : SemanticAnalyzer.TypeChecker.CheckerType, _ right: SemanticAnalyzer.TypeChecker.CheckerType) -> SemanticAnalyzer.TypeChecker.CheckerType {
     if left == right { return left }
     // upcast to floating point where necessary
@@ -1214,23 +1230,23 @@ func getPointeeType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> SemanticA
     }
 }
 
+func isNullConstant(_ e: Parser.AST.Expression) -> Bool {
+    switch e {
+        case .Constant(let val, _):
+            switch val {
+                case .ConstDouble(_): return false
+                case .ConstInt(let i): return i == 0
+                case .ConstLong(let l): return l == 0
+                case .ConstUnsignedInt(let ui) : return ui == 0
+                case .ConstUnsignedLong(let ul) : return ul == 0
+            }
+        default: return false
+    }
+}
+
 func getCommonPointerType(_ left: (Parser.AST.Expression, SemanticAnalyzer.TypeChecker.CheckerType), _ right: (Parser.AST.Expression, SemanticAnalyzer.TypeChecker.CheckerType)) -> SemanticAnalyzer.TypeChecker.CheckerType {
     let (leftExp, leftType) = left
     let (rightExp, rightType) = right
-
-    func isNullConstant(_ e: Parser.AST.Expression) -> Bool {
-        switch e {
-            case .Constant(let val, _):
-                switch val {
-                    case .ConstDouble(_): return false
-                    case .ConstInt(let i): return i == 0
-                    case .ConstLong(let l): return l == 0
-                    case .ConstUnsignedInt(let ui) : return ui == 0
-                    case .ConstUnsignedLong(let ul) : return ul == 0
-                }
-            default: return false
-        }
-    }
 
     if leftType == rightType {
         return leftType
