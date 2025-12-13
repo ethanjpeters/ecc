@@ -541,6 +541,10 @@ class SemanticAnalyzer {
 
         func typeConvert(_ exp: Parser.AST.Expression, ofType: CheckerType, toType: CheckerType) -> Parser.AST.Expression {
             if ofType == toType { return exp }
+            if (isPointerType(ofType) && isFloatingPoint(toType)) || (isPointerType(toType) && isFloatingPoint(ofType)) {
+                print("Can not cast double to pointer or pointer to double")
+                exit(ExitCode.semanticError.rawValue)
+            }
             return .Cast(Self.deConvert(toType), exp, Self.deConvert(ofType))
         }
 
