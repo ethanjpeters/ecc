@@ -65,6 +65,9 @@ class Tacky {
             case DoubleToUInt(Value /* src */, Value /* dst */)
             case IntToDouble(Value /* src */, Value /* dst */)
             case UIntToDouble(Value /* src */, Value /* dst */)
+            case GetAddress(Value /* src */, Value /* dst */)
+            case Load(Value /* src_ptr */, Value /* dst */)
+            case Store(Value /* src */, Value /* dst_ptr */)
         }
 
         enum Declaration {

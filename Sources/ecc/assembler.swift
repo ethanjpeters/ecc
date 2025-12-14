@@ -186,6 +186,11 @@ class Assembly {
                                             extract(src, &out)
                                         case .UIntToDouble(let src, _):
                                             extract(src, &out)
+                                        case .GetAddress(let src, _):
+                                            extract(src, &out)
+                                        case .Load(_, _): ()
+                                        case .Store(let src, _):
+                                            extract(src, &out)
                                     }
                                 }
                             case .StaticVariable(_, _, _, _): ()
@@ -593,7 +598,12 @@ class Assembly {
                         out.append(.Binary(.Add, .Double, convert(dst, symbolTable), convert(dst, symbolTable)))
                         out.append(.Label(endLabel))
                     }
-}
+                case .GetAddress(_, _): fallthrough
+                case .Load(_, _): fallthrough
+                case .Store(_, _):
+                    print("As-yet unhandled pointer operation found while generating assembly")
+                    exit(ExitCode.internalError.rawValue)
+            }
         }
     }
 
