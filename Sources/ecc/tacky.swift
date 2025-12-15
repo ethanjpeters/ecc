@@ -139,7 +139,12 @@ class Tacky {
         }
     }
 
-    func generateTACKYExpression(_ exp: Parser.AST.Expression, out: inout [Tacky.IR.Instruction], symbolTable: inout SymbolTable) -> Tacky.IR.Value {
+    enum ExpResult {
+        case PlainOperand(IR.Value)
+        case DereferencedPointer(IR.Value)
+    }
+
+    func generateTACKYExpression(_ exp: Parser.AST.Expression, out: inout [Tacky.IR.Instruction], symbolTable: inout SymbolTable) -> ExpResult {
 
         func generateTACKYOp(_ op: Parser.AST.UnaryOperator) -> Tacky.IR.UnaryOperator {
             switch op {
@@ -167,61 +172,61 @@ class Tacky {
             case .Constant(let c, _):
                 switch c {
                     case .ConstInt(let val):
-                        return .Constant(.ConstInt(val))
+                        return .PlainOperand(.Constant(.ConstInt(val)))
                     case .ConstLong(let val):
-                        return .Constant(.ConstLong(val))
+                        return .PlainOperand(.Constant(.ConstLong(val)))
                     case .ConstUnsignedInt(let val):
-                        return .Constant(.ConstUnsignedInt(val))
+                        return .PlainOperand(.Constant(.ConstUnsignedInt(val)))
                     case .ConstUnsignedLong(let val):
-                        return .Constant(.ConstUnsignedLong(val))
+                        return .PlainOperand(.Constant(.ConstUnsignedLong(val)))
                     case .ConstDouble(let val):
-                        return .Constant(.ConstDouble(val))
+                        return .PlainOperand(.Constant(.ConstDouble(val)))
                 }
             case .Unary(let op, let exp, let tp):
                 if isIncOrDec(op) {
-                    let src = generateTACKYExpression(exp, out: &out, symbolTable: &symbolTable)
+                    let src = generateTACKYExpressionAndConvert(exp, out: &out, symbolTable: &symbolTable)
                     let dst = makeTempVariable(tp!, &symbolTable)
                     let one : Tacky.IR.Value = .Constant(tp == .Int ? .ConstInt(1) : .ConstLong(1))
                     switch op {
                         case .PreIncrement:
                             out.append(.Binary(.Add, one, src, dst))
                             out.append(.Copy(dst, src))
-                            return src
+                            return .PlainOperand(src)
                         case .PreDecrement:
                             out.append(.Binary(.Subtract, src, one, dst))
                             out.append(.Copy(dst, src))
-                            return src
+                            return .PlainOperand(src)
                         case .PostIncrement:
                             let tmp = makeTempVariable(tp!, &symbolTable)
                             out.append(.Copy(src, tmp))
                             out.append(.Binary(.Add, one, src, dst))
                             out.append(.Copy(dst, src))
-                            return tmp
+                            return .PlainOperand(tmp)
                         case .PostDecrement:
                             let tmp = makeTempVariable(tp!, &symbolTable)
                             out.append(.Copy(src, tmp))
                             out.append(.Binary(.Subtract, src, one, dst))
                             out.append(.Copy(dst, src))
-                            return tmp
+                            return .PlainOperand(tmp)
                         default:
                             print("Unreachable B")
                             exit(ExitCode.internalError.rawValue)
                     }
                 } else {
-                    let src = generateTACKYExpression(exp, out: &out, symbolTable: &symbolTable)
+                    let src = generateTACKYExpressionAndConvert(exp, out: &out, symbolTable: &symbolTable)
                     let dst = makeTempVariable(tp!, &symbolTable)
                     let tackyOp = generateTACKYOp(op)
                     out.append(.Unary(tackyOp, src, dst))
-                    return dst
+                    return .PlainOperand(dst)
                 }
             case .Binary(let op, let left, let right, let tp):
                 let one : Tacky.IR.Value = .Constant(tp == .Int ? .ConstInt(1) : .ConstLong(1))
                 let zero : Tacky.IR.Value = .Constant(tp == .Int ? .ConstInt(0) : .ConstLong(0))
                 if op == .And {
-                    let v1 = generateTACKYExpression(left, out: &out, symbolTable: &symbolTable)
+                    let v1 = generateTACKYExpressionAndConvert(left, out: &out, symbolTable: &symbolTable)
                     let falseLabel = makeLabel("and_false")
                     out.append(.JumpIfZero(v1, falseLabel))
-                    let v2 = generateTACKYExpression(right, out: &out, symbolTable: &symbolTable)
+                    let v2 = generateTACKYExpressionAndConvert(right, out: &out, symbolTable: &symbolTable)
                     out.append(.JumpIfZero(v2, falseLabel))
                     let result = makeTempVariable(tp!, &symbolTable)
                     // result = 1
@@ -232,12 +237,12 @@ class Tacky {
                     // result = 0
                     out.append(.Copy(zero, result))
                     out.append(.Label(endLabel))
-                    return result
+                    return .PlainOperand(result)
                 } else if op == .Or {
-                    let v1: Tacky.IR.Value = generateTACKYExpression(left, out: &out, symbolTable: &symbolTable)
+                    let v1: Tacky.IR.Value = generateTACKYExpressionAndConvert(left, out: &out, symbolTable: &symbolTable)
                     let trueLabel = makeLabel("or_true")
                     out.append(.JumpIfNotZero(v1, trueLabel))
-                    let v2 = generateTACKYExpression(right, out: &out, symbolTable: &symbolTable)
+                    let v2 = generateTACKYExpressionAndConvert(right, out: &out, symbolTable: &symbolTable)
                     out.append(.JumpIfNotZero(v2, trueLabel))
                     let result = makeTempVariable(tp!, &symbolTable)
                     // result = 0
@@ -248,44 +253,37 @@ class Tacky {
                     // result = 1
                     out.append(.Copy(one, result))
                     out.append(.Label(endLabel))
-                    return result
+                    return .PlainOperand(result)
                 } else {
-                    let v1 = generateTACKYExpression(left, out: &out, symbolTable: &symbolTable)
-                    let v2  = generateTACKYExpression(right, out: &out, symbolTable: &symbolTable)
+                    let v1 = generateTACKYExpressionAndConvert(left, out: &out, symbolTable: &symbolTable)
+                    let v2  = generateTACKYExpressionAndConvert(right, out: &out, symbolTable: &symbolTable)
                     let dst = makeTempVariable(tp!, &symbolTable)
                     let tackyOp = convert(op)
                     out.append(.Binary(tackyOp, v1, v2, dst))
-                    return dst
+                    return .PlainOperand(dst)
                 }
             case .Var(let name, _):
-                return .Var(name)
+                return .PlainOperand(.Var(name))
             case .Assignment(let lVal, let rVal, _):
-                let result = generateTACKYExpression(rVal, out: &out, symbolTable: &symbolTable)
-                switch lVal {
-                    case .Var(let name, _):
-                        out.append(.Copy(result, .Var(name)))
-                        return .Var(name)
-                    default:
-                        print("Unreachable non-variable lValue")
-                        exit(ExitCode.internalError.rawValue)
-                }
+                // EJP - MARK
+                return .PlainOperand(.Var("Foo"))
             case .CompoundAssignment(_,_,_,_):
                 print("Unreachable compound assignment")
                 exit(ExitCode.internalError.rawValue)
             case .Conditional(let cond, let left, let right, let tp):
-                let condValue = generateTACKYExpression(cond, out: &out, symbolTable: &symbolTable)
+                let condValue = generateTACKYExpressionAndConvert(cond, out: &out, symbolTable: &symbolTable)
                 let dst = makeTempVariable(tp!, &symbolTable)
                 let e2Label = makeLabel("right")
                 let endLabel = makeLabel("end")
                 out.append(.JumpIfZero(condValue, e2Label))
-                let e1Value = generateTACKYExpression(left, out: &out, symbolTable: &symbolTable)
+                let e1Value = generateTACKYExpressionAndConvert(left, out: &out, symbolTable: &symbolTable)
                 out.append(.Copy(e1Value, dst))
                 out.append(.Jump(endLabel))
                 out.append(.Label(e2Label))
-                let e2Value = generateTACKYExpression(right, out: &out, symbolTable: &symbolTable)
+                let e2Value = generateTACKYExpressionAndConvert(right, out: &out, symbolTable: &symbolTable)
                 out.append(.Copy(e2Value, dst))
                 out.append(.Label(endLabel))
-                return dst
+                return .PlainOperand(dst)
             case .FunctionCall(let fun, let params, let tp):
                 // fun has already been constrained to an lValue, currently just a name
                 let funName : String
@@ -298,18 +296,13 @@ class Tacky {
                 }
                 var paramValues : [Tacky.IR.Value] = []
                 for p in params {
-                    paramValues.append(generateTACKYExpression(p, out: &out, symbolTable: &symbolTable))
+                    paramValues.append(generateTACKYExpressionAndConvert(p, out: &out, symbolTable: &symbolTable))
                 }
                 let dst = makeTempVariable(tp!, &symbolTable)
                 out.append(.Call(funName, paramValues, dst))
-                return dst
+                return .PlainOperand(dst)
             case .Cast(let targetType, let child, let tp):
-
-                // DEBUG
-                // print("CONSIDERING CASTING \(child) OF TYPE \(tp) TO TYPE \(targetType)")
-                // END DEBUG
- 
-                let unCastedValue = generateTACKYExpression(child, out: &out, symbolTable: &symbolTable)
+                let unCastedValue = generateTACKYExpressionAndConvert(child, out: &out, symbolTable: &symbolTable)
                 if targetType != tp {
                     let dst = makeTempVariable(targetType, &symbolTable)
 
@@ -339,14 +332,41 @@ class Tacky {
                             out.append(.ZeroExtend(unCastedValue, dst))
                         }
                     }
-                    return dst
+                    return .PlainOperand(dst)
                 } else {
-                    return unCastedValue
+                    return .PlainOperand(unCastedValue)
                 }
+            // EJP -- MARK
             case .Dereference(_, _): fallthrough
             case .AddrOf(_, _):
                 print("As-yet unhandled pointer-related expression found while generating TACKY expression")
                 exit(ExitCode.internalError.rawValue)
+        }
+    }
+
+    func generateTACKYExpressionAndConvert(_ exp: Parser.AST.Expression, out: inout [Tacky.IR.Instruction], symbolTable: inout SymbolTable) -> IR.Value {
+        func getType(_ e: Parser.AST.Expression) -> Parser.AST.CType {
+            switch e {
+                case .Constant(_, let tp): return tp!
+                case .Unary(_, _, let tp): return tp!
+                case .Binary(_, _, _, let tp): return tp!
+                case .Var(_, let tp): return tp!
+                case .Assignment(_, _, let tp): return tp!
+                case .CompoundAssignment(_, _, _, let tp): return tp!
+                case .Conditional(_, _, _, let tp): return tp!
+                case .FunctionCall(_, _, let tp): return tp!
+                case .Cast(_, _, let tp): return tp!
+                case .Dereference(_, let tp): return tp!
+                case .AddrOf(_, let tp): return tp!
+            }
+        }
+
+        switch generateTACKYExpression(exp, out: &out, symbolTable: &symbolTable) {
+            case .PlainOperand(let val): return val
+            case .DereferencedPointer(let ptr):
+                let dst = makeTempVariable(getType(exp), &symbolTable)
+                out.append(.Load(ptr, dst))
+                return dst
         }
     }
 
@@ -355,7 +375,7 @@ class Tacky {
             case .Return(let exp):
                 let child : Tacky.IR.Value?
                 if let e = exp {
-                    child = generateTACKYExpression(e, out: &out, symbolTable: &symbolTable)
+                    child = generateTACKYExpressionAndConvert(e, out: &out, symbolTable: &symbolTable)
                 } else {
                     child = nil
                 }
@@ -363,7 +383,7 @@ class Tacky {
             case .Expression(let exp):
                 let _ = generateTACKYExpression(exp, out: &out, symbolTable: &symbolTable)
             case .If(let cond, let thenStatement, let elseStatement):
-                let condValue = generateTACKYExpression(cond, out: &out, symbolTable: &symbolTable)
+                let condValue = generateTACKYExpressionAndConvert(cond, out: &out, symbolTable: &symbolTable)
                 let elseLabel = makeLabel("ifelse")
                 let endLabel = makeLabel("ifend")
                 out.append(.JumpIfZero(condValue, elseLabel))
@@ -414,7 +434,7 @@ class Tacky {
                 out.append(.Label(startLabel))  // for debugging purposes
                 let continueLabel = makeLoopLabel("\(label).continue")
                 out.append(.Label(continueLabel))
-                let condValue = generateTACKYExpression(condition, out: &out, symbolTable: &symbolTable)
+                let condValue = generateTACKYExpressionAndConvert(condition, out: &out, symbolTable: &symbolTable)
                 let breakLabel = makeLoopLabel("\(label).break")
                 out.append(.JumpIfZero(condValue, breakLabel))
                 generateTACKYStatement(statement: body, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue, symbolTable: &symbolTable)
@@ -426,7 +446,7 @@ class Tacky {
                 generateTACKYStatement(statement: body, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue, symbolTable: &symbolTable)
                 let continueLabel = makeLoopLabel("\(label).continue")
                 out.append(.Label(continueLabel))
-                let condValue = generateTACKYExpression(condition, out: &out, symbolTable: &symbolTable)
+                let condValue = generateTACKYExpressionAndConvert(condition, out: &out, symbolTable: &symbolTable)
                 out.append(.JumpIfNotZero(condValue, startLabel))
                 out.append(.Label(makeLoopLabel("\(label).break")))
             case .For(let forInit, let condition, let increment, let body, let label):
@@ -442,7 +462,7 @@ class Tacky {
                 out.append(.Label(startLabel))
                 let condValue : Tacky.IR.Value
                 if let c = condition {
-                    condValue = generateTACKYExpression(c, out: &out, symbolTable: &symbolTable)
+                    condValue = generateTACKYExpressionAndConvert(c, out: &out, symbolTable: &symbolTable)
                 } else {
                     condValue = .Constant(.ConstInt(1))
                 }
@@ -451,14 +471,14 @@ class Tacky {
                 generateTACKYStatement(statement: body, out: &out, switchValue: switchValue, fallthroughValue: fallthroughValue, symbolTable: &symbolTable)
                 out.append(.Label(makeLoopLabel("\(label).continue")))
                 if let inc = increment {
-                    let _ = generateTACKYExpression(inc, out: &out, symbolTable: &symbolTable)
+                    let _ = generateTACKYExpressionAndConvert(inc, out: &out, symbolTable: &symbolTable)
                 }
                 out.append(.Jump(startLabel))
                 out.append(.Label(breakLabel))
             case .Switch(let toggle, let stmt, let label):
                 // NOTE: something here is broken, duff's device does not function properly
                 let breakLabel = makeLoopLabel("\(label).break")
-                let toggleVal = generateTACKYExpression(toggle, out: &out, symbolTable: &symbolTable)
+                let toggleVal = generateTACKYExpressionAndConvert(toggle, out: &out, symbolTable: &symbolTable)
                 let ftVal = makeTempVariable(.Int, &symbolTable)
                 out.append(.Copy(.Constant(.ConstInt(0)), ftVal))
                 generateTACKYStatement(statement: stmt, out: &out, switchValue: toggleVal, fallthroughValue: ftVal, symbolTable: &symbolTable)
@@ -471,7 +491,7 @@ class Tacky {
                         let ftCmpTmp = makeTempVariable(.Int, &symbolTable)
                         out.append(.Binary(.Equal, fallthroughValue!, .Constant(.ConstInt(1)), ftCmpTmp))
                         out.append(.JumpIfNotZero(ftCmpTmp, ftLabel))
-                        let labelVal = generateTACKYExpression(labelExp, out: &out, symbolTable: &symbolTable)
+                        let labelVal = generateTACKYExpressionAndConvert(labelExp, out: &out, symbolTable: &symbolTable)
                         let tmp = makeTempVariable(.Int, &symbolTable)
                         // semantic analyzer catches when we're not in a switch statement
                         // and switchValue would be nil
@@ -498,7 +518,7 @@ class Tacky {
             // TODO: use type information to determine size of parameters
             case .VariableDeclaration(_, let name, let exp, _):
                 if exp != nil {
-                    let child = generateTACKYExpression(exp!, out: &out, symbolTable: &symbolTable)
+                    let child = generateTACKYExpressionAndConvert(exp!, out: &out, symbolTable: &symbolTable)
                     out.append(.Copy(child, .Var(name)))
                 }
                 return nil
