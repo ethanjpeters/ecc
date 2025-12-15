@@ -117,6 +117,9 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
             return "\(slot)(%rbp)"
         case .Data(let name):
             return "\(name)(%rip)"
+        case .Memory(let reg, let off):
+            let prefix = off == 0 ? "" : "\(off)"
+            return "\(prefix)(\(convert(.Register(reg), .eightByte)))"
     }
 }
 
@@ -236,6 +239,8 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tcvttsd2si\(typeToSuffix(tp))\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
             case .Cvtsi2sd(let tp, let src, let dst):
                 out.append("\tcvtsi2sd\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
+            case .Lea(let src, let dst):
+                out.append("\tlea\t\(convert(src)), \(convert(dst))")
         }
     }
 }

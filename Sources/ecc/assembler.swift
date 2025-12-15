@@ -52,6 +52,7 @@ class Assembly {
             case Pseudo(String)
             case Stack(Int)
             case Data(String /* identifier */)
+            case Memory(Register, Int)
         }
 
         enum UnaryOperator {
@@ -99,6 +100,7 @@ class Assembly {
             case Push(Operand)
             case Call(String /* identifier */)
             case Ret
+            case Lea(Operand /* src */, Operand /* dst */)
         }
 
         enum Declaration {
@@ -267,9 +269,7 @@ class Assembly {
                     case .UnsignedLong: fallthrough
                     case .Long: return .Quadword
                     case .Double: return .Double
-                    case .Pointer(_):
-                        print("As-yet unhandled pointer found while deducing assembly type")
-                        exit(ExitCode.internalError.rawValue)
+                    case .Pointer(_): return .Quadword
                 }
         }
     }
@@ -599,11 +599,14 @@ class Assembly {
                         out.append(.Binary(.Add, .Double, convert(dst, symbolTable), convert(dst, symbolTable)))
                         out.append(.Label(endLabel))
                     }
-                case .GetAddress(_, _): fallthrough
-                case .Load(_, _): fallthrough
-                case .Store(_, _):
-                    print("As-yet unhandled pointer operation found while generating assembly")
-                    exit(ExitCode.internalError.rawValue)
+                case .GetAddress(let src, let dst):
+                    out.append(.Lea(convert(src, symbolTable), convert(dst, symbolTable)))
+                case .Load(let ptr, let dst):
+                    out.append(.Mov(.Quadword, convert(ptr, symbolTable), .Register(.AX)))
+                    out.append(.Mov(deduceType(dst, typedSymbolTable), .Memory(.AX, 0), convert(dst, symbolTable)))
+                case .Store(let src, let ptr):
+                    out.append(.Mov(.Quadword, convert(ptr, symbolTable), .Register(.AX)))
+                    out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable), .Memory(.AX, 0)))
             }
         }
     }
@@ -682,8 +685,9 @@ class Assembly {
                 case .UnsignedInt: fallthrough
                 case .Long: fallthrough
                 case .UnsignedLong: fallthrough
-                case .Double:
-                    let asmType : Tree.AssemblyType = (checkerType == .Double) ? .Double : (checkerType == .Int ? .Longword : .Quadword)
+                case .Double: fallthrough
+                case .Pointer(_):
+                    let asmType : Tree.AssemblyType = (checkerType == .Double) ? .Double : (checkerType == .Int ? .Longword : .Quadword)    // pointers and longs both fall through to Quadword
                     let isStatic: Bool
                     switch attrs {
                         case .StaticAttr(_, _):
@@ -705,9 +709,6 @@ class Assembly {
                             print("Meaningless non-function attributes attached to function \(name)")
                             exit(ExitCode.internalError.rawValue)
                     }
-                case .Pointer(_):
-                    print("As-yet unhandled pointer found while deducing assembly type")
-                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -752,6 +753,8 @@ class Assembly {
             case .Stack(_):
                 return op
             case .Data(_):
+                return op
+            case .Memory(_, _):
                 return op
         }
     }
@@ -812,6 +815,11 @@ class Assembly {
                         replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
                         replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
                     ))
+                case .Lea(let src, let dst):
+                    out.append(.Lea(
+                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
+                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
+                    ))
             }
         }
 
@@ -847,9 +855,11 @@ class Assembly {
                     let scratchRegister : Assembly.Tree.Operand = .Register(tp == .Double ? .XMM14 : .R10)
                     switch opSrc {
                         case .Stack(_): fallthrough
+                        case .Memory(_, _): fallthrough
                         case .Data(_):
                             switch opDst {
                                 case .Stack(_): fallthrough
+                                case .Memory(_, _): fallthrough
                                 case .Data(_):
                                     out.append(.Mov(tp, opSrc, scratchRegister))
                                     out.append(.Mov(tp, scratchRegister, opDst))
@@ -870,6 +880,7 @@ class Assembly {
                             case .DivDouble:
                                 switch dst {
                                     case .Data(_): fallthrough
+                                    case .Memory(_, _): fallthrough
                                     case .Stack(_):
                                         out.append(.Binary(op, tp, src, .Register(.XMM15)))
                                         out.append(.Mov(tp, .Register(.XMM15), dst))
@@ -892,6 +903,7 @@ class Assembly {
                             case .And:
                                 switch src {
                                     case .Data(_): fallthrough
+                                    case .Memory(_, _): fallthrough
                                     case .Stack(_):
                                     switch dst {
                                         case .Data(_): fallthrough
@@ -907,6 +919,7 @@ class Assembly {
                             case .Xor:
                                 switch dst {
                                     case .Data(_): fallthrough
+                                    case .Memory(_, _): fallthrough
                                     case .Stack(_):
                                         out.append(.Mov(tp, dst, .Register(.R11)))
                                         out.append(.Binary(op, tp, src, .Register(.R11)))
@@ -918,6 +931,7 @@ class Assembly {
                             case .Shl:
                                 switch src {
                                     case .Data(_): fallthrough
+                                    case .Memory(_, _): fallthrough
                                     case .Stack(_):
                                         // move the value off of the stack and into CL, which is currently never used otherwise
                                         // and is in no danger of being overwritten
@@ -951,6 +965,7 @@ class Assembly {
                         switch right {
                             case .Data(_): fallthrough
                             case .Stack(_): fallthrough
+                            case .Memory(_, _): fallthrough
                             case .Immediate(_):
                                 out.append(.Mov(tp, right, .Register(.XMM15)))
                                 out.append(.Cmp(tp, left, .Register(.XMM15)))
@@ -966,6 +981,7 @@ class Assembly {
                             case .Stack(_):
                                 switch right {
                                     case .Data(_): fallthrough
+                                    case .Memory(_, _): fallthrough
                                     case .Stack(_):
                                         out.append(.Mov(tp, left, .Register(.R10)))
                                         out.append(.Cmp(tp, .Register(.R10), right))
@@ -1005,6 +1021,7 @@ class Assembly {
                     let postfix : Tree.Instruction?
                     switch dst {
                         case .Data(_): fallthrough
+                        case .Memory(_, _): fallthrough
                         case .Stack(_):
                             realDst = .Register(.R11)
                             postfix = .Mov(.Quadword, realDst, dst)
@@ -1019,6 +1036,7 @@ class Assembly {
                         case .Register(_):
                             out.append(.Mov(.Longword, src, dst))
                         case .Stack(_): fallthrough
+                        case .Memory(_, _): fallthrough
                         case .Data(_):
                             out.append(.Mov(.Longword, src, .Register(.R11)))
                             out.append(.Mov(.Quadword, .Register(.R11), dst))
@@ -1033,6 +1051,7 @@ class Assembly {
                     switch dst {
                         case .Register(_): out.append(instr)
                         case .Stack(_): fallthrough
+                        case .Memory(_, _): fallthrough
                         case .Data(_):
                             out.append(.Cvttsd2si(tp, src, .Register(.R11)))
                             out.append(.Mov(tp, .Register(.R11), dst))
@@ -1055,6 +1074,7 @@ class Assembly {
                     switch dst {
                         case .Register(_): out.append(instr)
                         case .Stack(_): fallthrough
+                        case .Memory(_, _): fallthrough
                         case .Data(_):
                             out.append(.Cvtsi2sd(tp, realSrc, .Register(.XMM15)))
                             out.append(.Mov(tp, .Register(.XMM15), dst))
@@ -1063,6 +1083,31 @@ class Assembly {
                             exit(ExitCode.internalError.rawValue)
                         case .Immediate(_):
                             print("Unreachable: immediate as the destination of a Cvtsi2sd")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                case .Lea(let src, let dst):
+                    switch src {
+                        case .Immediate(_): fallthrough
+                        case .Register(_):
+                            print("src of lea must be a memory address: \(src)")
+                            exit(ExitCode.internalError.rawValue)
+                        case .Stack(_): fallthrough
+                        case .Data(_): fallthrough
+                        case .Memory(_, _): ()
+                        case .Pseudo(_):
+                            print("Unreachable: pseudo slot survived past pseudo replacement")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                    switch dst {
+                        case .Immediate(_): fallthrough
+                        case .Stack(_): fallthrough
+                        case .Data(_): fallthrough
+                        case .Memory(_, _):
+                            out.append(.Lea(src, .Register(.AX)))
+                            out.append(.Mov(.Quadword, .Register(.AX), dst))
+                        case .Register(_): ()
+                        case .Pseudo(_):
+                            print("Unreachable: pseudo slot survived past pseudo replacement")
                             exit(ExitCode.internalError.rawValue)
                     }
             }
@@ -1199,6 +1244,7 @@ class Assembly {
                                     case .Movzx(_, _): fallthrough
                                     case .Div(_, _): fallthrough
                                     case .Ret: fallthrough
+                                    case .Lea(_, _): fallthrough
                                     case .Cvttsd2si(_, _, _): fallthrough
                                     case .Cvtsi2sd(_, _, _): fixedBody.append(instr)
                                 }
