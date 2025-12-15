@@ -240,7 +240,7 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
             case .Cvtsi2sd(let tp, let src, let dst):
                 out.append("\tcvtsi2sd\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
             case .Lea(let src, let dst):
-                out.append("\tlea\t\(convert(src)), \(convert(dst))")
+                out.append("\tlea\t\(convert(src)), \(convert(dst, .eightByte))")
         }
     }
 }
