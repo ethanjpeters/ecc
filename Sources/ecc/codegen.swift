@@ -47,6 +47,15 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
                         case .fourByte: return "%ecx"
                         case .eightByte: return "%rcx"
                     }
+                case .BP:
+                    switch width {
+                        case .oneByte: fallthrough
+                        case .twoByte:
+                            print("Invalid access of base pointer with width \(width)")
+                            exit(ExitCode.internalError.rawValue)
+                        case .fourByte: return "%ebp"
+                        case .eightByte: return "%rbp"
+                    }
                 case .R8:
                     switch width {
                         case .oneByte: return "%r8b"

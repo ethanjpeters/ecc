@@ -29,6 +29,7 @@ class Assembly {
             case DX
             case DI
             case SI
+            case BP
             case R8
             case R9
             case R10
