@@ -265,8 +265,16 @@ class Tacky {
             case .Var(let name, _):
                 return .PlainOperand(.Var(name))
             case .Assignment(let lVal, let rVal, _):
-                // EJP - MARK
-                return .PlainOperand(.Var("Foo"))
+                let left = generateTACKYExpression(lVal, out: &out, symbolTable: &symbolTable)
+                let right = generateTACKYExpressionAndConvert(rVal, out: &out, symbolTable: &symbolTable)
+                switch left {
+                    case .PlainOperand(let obj):
+                        out.append(.Copy(right, obj))
+                        return left
+                    case .DereferencedPointer(let ptr):
+                        out.append(.Store(right, ptr))
+                        return .PlainOperand(right)
+                }
             case .CompoundAssignment(_,_,_,_):
                 print("Unreachable compound assignment")
                 exit(ExitCode.internalError.rawValue)
