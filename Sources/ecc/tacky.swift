@@ -344,11 +344,18 @@ class Tacky {
                 } else {
                     return .PlainOperand(unCastedValue)
                 }
-            // EJP -- MARK
-            case .Dereference(_, _): fallthrough
-            case .AddrOf(_, _):
-                print("As-yet unhandled pointer-related expression found while generating TACKY expression")
-                exit(ExitCode.internalError.rawValue)
+            case .Dereference(let exp, _):
+                return .DereferencedPointer(generateTACKYExpressionAndConvert(exp, out: &out, symbolTable: &symbolTable))
+            case .AddrOf(let exp, let tp):
+                let v = generateTACKYExpression(exp, out: &out, symbolTable: &symbolTable)
+                switch v {
+                    case .PlainOperand(let obj):
+                        let dst = makeTempVariable(tp!, &symbolTable)
+                        out.append(.GetAddress(obj, dst))
+                        return .PlainOperand(dst)
+                    case .DereferencedPointer(let ptr):
+                        return .PlainOperand(ptr)
+                }
         }
     }
 
