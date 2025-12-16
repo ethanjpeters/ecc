@@ -2,6 +2,16 @@
 
 # set -exu
 
+swift run ecc TestSources/pointer_basic.c
+./pointer_basic
+if [[ $? -ne 13 ]]; then
+    echo "pointer_basic: Expected exit code 13 but got $?"
+    exit 1
+else
+    echo "pointer_basic: success"
+fi
+rm pointer_basic
+
 swift run ecc TestSources/constants.c
 ./constants
 if [[ $? -ne 0 ]]; then
