@@ -184,30 +184,66 @@ class Tacky {
                 }
             case .Unary(let op, let exp, let tp):
                 if isIncOrDec(op) {
-                    let src = generateTACKYExpressionAndConvert(exp, out: &out, symbolTable: &symbolTable)
+                    let src = generateTACKYExpression(exp, out: &out, symbolTable: &symbolTable)
                     let dst = makeTempVariable(tp!, &symbolTable)
                     let one : Tacky.IR.Value = .Constant(tp == .Int ? .ConstInt(1) : .ConstLong(1))
                     switch op {
                         case .PreIncrement:
-                            out.append(.Binary(.Add, one, src, dst))
-                            out.append(.Copy(dst, src))
-                            return .PlainOperand(src)
+                            switch src {
+                                case .PlainOperand(let obj):
+                                    out.append(.Binary(.Add, one, obj, dst))
+                                    out.append(.Copy(dst, obj))
+                                    return .PlainOperand(obj)
+                                case .DereferencedPointer(let ptr):
+                                    let tmp = makeTempVariable(tp!, &symbolTable)
+                                    out.append(.Load(ptr, tmp))
+                                    out.append(.Binary(.Add, one, tmp, dst))
+                                    out.append(.Store(dst, ptr))
+                                    return .PlainOperand(dst)
+                            }
                         case .PreDecrement:
-                            out.append(.Binary(.Subtract, src, one, dst))
-                            out.append(.Copy(dst, src))
-                            return .PlainOperand(src)
+                            switch src {
+                                case .PlainOperand(let obj):
+                                    out.append(.Binary(.Subtract, obj, one, dst))
+                                    out.append(.Copy(dst, obj))
+                                    return .PlainOperand(obj)
+                                case .DereferencedPointer(let ptr):
+                                    let tmp = makeTempVariable(tp!, &symbolTable)
+                                    out.append(.Load(ptr, tmp))
+                                    out.append(.Binary(.Subtract, tmp, one, dst))
+                                    out.append(.Store(dst, ptr))
+                                    return .PlainOperand(dst)
+                            }
                         case .PostIncrement:
-                            let tmp = makeTempVariable(tp!, &symbolTable)
-                            out.append(.Copy(src, tmp))
-                            out.append(.Binary(.Add, one, src, dst))
-                            out.append(.Copy(dst, src))
-                            return .PlainOperand(tmp)
+                            switch src {
+                                case .PlainOperand(let obj):
+                                    let tmp = makeTempVariable(tp!, &symbolTable)
+                                    out.append(.Copy(obj, tmp))
+                                    out.append(.Binary(.Add, one, obj, dst))
+                                    out.append(.Copy(dst, obj))
+                                    return .PlainOperand(tmp)
+                                case .DereferencedPointer(let ptr):
+                                    let tmp = makeTempVariable(tp!, &symbolTable)
+                                    out.append(.Load(ptr, tmp))
+                                    out.append(.Binary(.Add, tmp, one, dst))
+                                    out.append(.Store(dst, ptr))
+                                    return .PlainOperand(tmp)
+                            }
                         case .PostDecrement:
-                            let tmp = makeTempVariable(tp!, &symbolTable)
-                            out.append(.Copy(src, tmp))
-                            out.append(.Binary(.Subtract, src, one, dst))
-                            out.append(.Copy(dst, src))
-                            return .PlainOperand(tmp)
+                            switch src {
+                                case .PlainOperand(let obj):
+                                    let tmp = makeTempVariable(tp!, &symbolTable)
+                                    out.append(.Copy(obj, tmp))
+                                    out.append(.Binary(.Subtract, obj, one, dst))
+                                    out.append(.Copy(dst, obj))
+                                    return .PlainOperand(tmp)
+                                case .DereferencedPointer(let ptr):
+                                    let tmp = makeTempVariable(tp!, &symbolTable)
+                                    out.append(.Load(ptr, tmp))
+                                    out.append(.Binary(.Subtract, tmp, one, dst))
+                                    out.append(.Store(dst, ptr))
+                                    return .PlainOperand(tmp)
+                            }
                         default:
                             print("Unreachable B")
                             exit(ExitCode.internalError.rawValue)
