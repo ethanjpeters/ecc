@@ -101,6 +101,7 @@ class Parser {
             case Double
             case Pointer(CType /* referenced type */)
             case FunType([CType] /* params */, CType /* returns */)
+            case ArrayType(CType /* element */, UInt /* size */)
         }
 
         enum Parameter {

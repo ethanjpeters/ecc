@@ -1138,6 +1138,9 @@ func convertCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.T
                 paramTypes.map { convertCTypeToCheckerType($0) }
             )
         case .Pointer(let nestedType): return .Pointer(convertCTypeToCheckerType(nestedType))
+        case .ArrayType(let elementType, let size):
+            print("As-yet-unhandled C type \(pType) found while converting C type to checker type")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
