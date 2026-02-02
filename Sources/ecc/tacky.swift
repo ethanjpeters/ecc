@@ -392,6 +392,9 @@ class Tacky {
                     case .DereferencedPointer(let ptr):
                         return .PlainOperand(ptr)
                 }
+            case .Subscript(let ptr, let off, _):
+                print("As-yet-unhandled subcript expression found while generating TACKY")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 
@@ -409,6 +412,7 @@ class Tacky {
                 case .Cast(_, _, let tp): return tp!
                 case .Dereference(_, let tp): return tp!
                 case .AddrOf(_, let tp): return tp!
+                case .Subscript(_, _, let tp):  return tp!
             }
         }
 

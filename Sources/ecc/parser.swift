@@ -55,6 +55,12 @@ class Parser {
             case Cast(CType, Expression, CType?)
             case Dereference(Expression, CType?)
             case AddrOf(Expression, CType?)
+            case Subscript(Expression /* pointer */, Expression /* offset */, CType?)
+        }
+
+        indirect enum Initializer {
+            case SingleInit(Expression)
+            case CompoundInit([Initializer])
         }
         
         enum BlockItem {

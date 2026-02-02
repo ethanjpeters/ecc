@@ -70,6 +70,12 @@ class SemanticAnalyzer {
                     return .Dereference(resolveExpression(exp, &nameMap), nil)
                 case .AddrOf(let exp, _):
                     return .AddrOf(resolveExpression(exp, &nameMap), nil)
+                case .Subscript(let ptr, let offset, _):
+                    return .Subscript(
+                        resolveExpression(ptr, &nameMap),
+                        resolveExpression(offset, &nameMap),
+                        nil
+                    )
             }
         }
 
@@ -773,6 +779,9 @@ class SemanticAnalyzer {
                     // our type is pointer to the child's type
                     let ourType : CheckerType = .Pointer(childType)
                     return (.AddrOf(child, Self.deConvert(ourType)), ourType)
+                case .Subscript(let ptr, let offset, _):
+                    print("As-yet-unhandled subscript expression found while type checking")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
