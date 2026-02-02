@@ -31,6 +31,8 @@ class Lexer {
         case closeParen
         case openBrace
         case closeBrace
+        case openBracket
+        case closeBracket
         // punctuation
         case semicolon
         // one character operators
@@ -405,6 +407,8 @@ class Lexer {
             case ")": return .closeParen
             case "{": return .openBrace
             case "}": return .closeBrace
+            case "[": return .openBracket
+            case "]": return .closeBracket
             case ";": return .semicolon
             default: return nil
         }
