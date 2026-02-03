@@ -846,6 +846,7 @@ class Parser {
             case Ident(String /* identifier */)
             case PointerDeclarator(Declarator)
             case FunDeclarator([ParamInfo] /* params */, Declarator)
+            case ArrayDeclarator(Declarator, UInt /* size */)
         }
     }
 
@@ -866,10 +867,11 @@ class Parser {
     }
 
     func parseDirectDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> DeclaratorSyntax.Declarator {
-        // <simple-declarator> [ <param-list> ]
+        // <direct-declarator> ::= <simple-declarator> [ declarator-suffix ]
+        // <declarator-suffix> ::= <param-list> | ( "[" <const> "]" )+
         let sd = parseSimpleDeclarator(tokenStream: &tokenStream)
-        var paramList : [DeclaratorSyntax.ParamInfo] = []
         if peek(tokenStream) == .openParen {
+            var paramList : [DeclaratorSyntax.ParamInfo] = []
             let _ = expect(.openParen, &tokenStream)
             if peek(tokenStream) != .keywordVoid {
                 while peek(tokenStream) != .closeParen {
@@ -916,6 +918,32 @@ class Parser {
             let _ = expect(.closeParen, &tokenStream)
 
             return .FunDeclarator(paramList, sd)
+        } else if peek(tokenStream) == .openBracket {
+            var outerDecl : DeclaratorSyntax.Declarator = sd
+            while peek(tokenStream) == .openBracket {
+                let _ = expect(.openBracket, &tokenStream)
+                let (constantToken, _) = tokenStream.removeFirst()
+                let _ = expect(.closeBracket, &tokenStream)
+                let sizeExpression = parseConstant(token: constantToken)
+                var size: UInt = 0
+                switch sizeExpression {
+                    case .Constant(let innerConst, _):
+                        switch innerConst { 
+                            case .ConstInt(let i32): size = UInt(i32)
+                            case .ConstUnsignedInt(let u32): size = UInt(u32)
+                            case .ConstLong(let i64): size = UInt(i64)
+                            case .ConstUnsignedLong(let u64): size = UInt(u64)
+                            case .ConstDouble(_):
+                                print("Floating point array size found while parsing direct declarator")
+                                exit(ExitCode.parserError.rawValue)
+                        }
+                    default:
+                        print("Unreachable case where parsing a constant resulted in a non-constant value")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                outerDecl = .ArrayDeclarator(outerDecl, size)
+            }
+            return outerDecl
         } else {
             return sd
         }
@@ -963,6 +991,9 @@ class Parser {
                         print("Can't apply additional type derivations to a function type")
                         exit(ExitCode.parserError.rawValue)
                 }
+            case .ArrayDeclarator(let innerDecl, let size):
+                let derivedType : AST.CType = .ArrayType(baseType, size)
+                return processDeclarator(declarator: innerDecl, baseType: derivedType)
         }
     }
 
