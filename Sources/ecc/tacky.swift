@@ -573,8 +573,10 @@ class Tacky {
             // TODO: use type information to determine size of parameters
             case .VariableDeclaration(_, let name, let exp, _):
                 if exp != nil {
-                    let child = generateTACKYExpressionAndConvert(exp!, out: &out, symbolTable: &symbolTable)
-                    out.append(.Copy(child, .Var(name)))
+                    print("As-yet-unhandled replacement of initial expression with initializer construct")
+                    exit(ExitCode.internalError.rawValue)
+                    // let child = generateTACKYExpressionAndConvert(exp!, out: &out, symbolTable: &symbolTable)
+                    // out.append(.Copy(child, .Var(name)))
                 }
                 return nil
             case .FunctionDeclaration(let returnType, let name, let parameters, let body, let storageClass):

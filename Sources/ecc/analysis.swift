@@ -151,9 +151,11 @@ class SemanticAnalyzer {
                         } else {
                             let uniqueName = makeTemp(name)
                             nameMap[name] = .init(newName: uniqueName, currentScope: true, hasLinkage: false)
-                            var outInit : Parser.AST.Expression? = nil
+                            var outInit : Parser.AST.Initializer? = nil
                             if let initializer = exp {
-                                outInit = resolveExpression(initializer, &nameMap)
+                                print("As-yet-unhandled change from initial expression to initializer construct")
+                                exit(ExitCode.internalError.rawValue)
+                                // outInit = resolveExpression(initializer, &nameMap)
                             }
                             return .VariableDeclaration(tp, uniqueName, outInit, storageClass)
                         }
@@ -325,10 +327,14 @@ class SemanticAnalyzer {
             return expression
         }
 
+        func labelLoops(_ initializer: Parser.AST.Initializer, loopLabel: String?, switchLabel: String?) -> Parser.AST.Initializer {
+            return initializer
+        }
+
         func labelLoops(_ declaration: Parser.AST.Declaration, loopLabel: String?, switchLabel: String?) -> Parser.AST.Declaration {
             switch declaration {
                 case .VariableDeclaration(let tp, let name, let exp, let storageClass):
-                    let outExp : Parser.AST.Expression?
+                    let outExp : Parser.AST.Initializer?
                     if let e = exp {
                         outExp = labelLoops(e, loopLabel: loopLabel, switchLabel: switchLabel)
                     } else {
@@ -377,6 +383,10 @@ class SemanticAnalyzer {
     class CasePlacer {
         func placeCases(_ expression: Parser.AST.Expression, isInSwitch: Bool) -> Parser.AST.Expression {
             return expression
+        }
+
+        func placeCases(_ initializer: Parser.AST.Initializer, isInSwitch: Bool) -> Parser.AST.Initializer {
+            return initializer
         }
 
         func placeCases(_ statement: Parser.AST.Statement, isInSwitch: Bool) -> Parser.AST.Statement {
@@ -552,6 +562,11 @@ class SemanticAnalyzer {
                 exit(ExitCode.semanticError.rawValue)
             }
             return .Cast(Self.deConvert(toType), exp, Self.deConvert(ofType))
+        }
+
+        func typeConvert(_ initializer: Parser.AST.Initializer, ofType: CheckerType, toType: CheckerType) -> Parser.AST.Initializer {
+            print("As-yet-unhandled type conversion of initializer construct")
+            exit(ExitCode.internalError.rawValue)
         }
 
         func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Expression, CheckerType) {
@@ -785,6 +800,12 @@ class SemanticAnalyzer {
             }
         }
 
+        func typeCheck(_ initializer: Parser.AST.Initializer, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Initializer, CheckerType) {
+            // TODO:
+            print("As-yet-unhandled type checking of initializer construct")
+            exit(ExitCode.internalError.rawValue)
+        }
+
         func typeCheck(_ statement: Parser.AST.Statement, _ nameMap: inout [String: (CheckerType, IdentifierAttributes)], _ enclosingFuncReturnType : Parser.AST.CType) -> Parser.AST.Statement {
             switch statement {
                 case .Return(let exp):
@@ -967,7 +988,7 @@ class SemanticAnalyzer {
                     }
                     return .FunctionDeclaration(funType, name, params, typeCheckedBody, storageClass)
                 case .VariableDeclaration(let tp, let name, let initExp, let storageClass):
-                    var typeCheckedInit : Parser.AST.Expression?
+                    var typeCheckedInit : Parser.AST.Initializer?
                     let initType : CheckerType
                     let conTp = convertCTypeToCheckerType(tp)
                     if let e = initExp {
@@ -986,22 +1007,28 @@ class SemanticAnalyzer {
                         var initVal : InitialValue
                         if let ie = initExp {
                             switch ie {
-                                case .Constant(let c, _):
-                                    switch c {
-                                        case .ConstInt(let i):
-                                            initVal = .Initial(.IntInit(Int32(i)))
-                                        case .ConstLong(let i):
-                                            initVal = .Initial(.LongInit(Int64(i)))
-                                        case .ConstUnsignedInt(let i):
-                                            initVal = .Initial(.UIntInit(UInt32(i)))
-                                        case .ConstUnsignedLong(let i):
-                                            initVal = .Initial(.ULongInit(UInt64(i)))
-                                        case .ConstDouble(let d):
-                                            initVal = .Initial(.DoubleInit(Double(d)))
+                                case .SingleInit(let exp):
+                                    switch exp {
+                                        case .Constant(let c, _):
+                                            switch c {
+                                                case .ConstInt(let i):
+                                                    initVal = .Initial(.IntInit(Int32(i)))
+                                                case .ConstLong(let i):
+                                                    initVal = .Initial(.LongInit(Int64(i)))
+                                                case .ConstUnsignedInt(let i):
+                                                    initVal = .Initial(.UIntInit(UInt32(i)))
+                                                case .ConstUnsignedLong(let i):
+                                                    initVal = .Initial(.ULongInit(UInt64(i)))
+                                                case .ConstDouble(let d):
+                                                    initVal = .Initial(.DoubleInit(Double(d)))
+                                            }
+                                        default:
+                                            // NOTE: we could allow things that evaluate constantly, but we don't yet
+                                            print("Non constant expression \(ie) used to initialize global \(name)")
+                                            exit(ExitCode.semanticError.rawValue)
                                     }
-                                default:
-                                    // NOTE: we could allow things that evaluate constantly, but we don't yet
-                                    print("Non constant expression \(ie) used to initialize global \(name)")
+                                case .CompoundInit(let initList):
+                                    print("I'm not even going to try to handle static compound initializers so heck off with that crap")
                                     exit(ExitCode.semanticError.rawValue)
                             }
                         } else {
@@ -1076,21 +1103,27 @@ class SemanticAnalyzer {
                             let initValue : InitialValue
                             if let e = initExp {
                                 switch e {
-                                    case .Constant(let c, _):
-                                        switch c {
-                                            case .ConstInt(let i):
-                                                initValue = .Initial(.IntInit(Int32(i)))
-                                            case .ConstLong(let i):
-                                                initValue = .Initial(.LongInit(Int64(i)))
-                                            case .ConstUnsignedInt(let i):
-                                                initValue = .Initial(.UIntInit(UInt32(i)))
-                                            case .ConstUnsignedLong(let i):
-                                                initValue = .Initial(.ULongInit(UInt64(i)))
-                                            case .ConstDouble(let d):
-                                                initValue = .Initial(.DoubleInit(Double(d)))
+                                    case .SingleInit(let ee):
+                                        switch ee {
+                                            case .Constant(let c, _):
+                                                switch c {
+                                                    case .ConstInt(let i):
+                                                        initValue = .Initial(.IntInit(Int32(i)))
+                                                    case .ConstLong(let i):
+                                                        initValue = .Initial(.LongInit(Int64(i)))
+                                                    case .ConstUnsignedInt(let i):
+                                                        initValue = .Initial(.UIntInit(UInt32(i)))
+                                                    case .ConstUnsignedLong(let i):
+                                                        initValue = .Initial(.ULongInit(UInt64(i)))
+                                                    case .ConstDouble(let d):
+                                                        initValue = .Initial(.DoubleInit(Double(d)))
+                                                }
+                                            default:
+                                                print("Non-constant initializer on local static variable \(name)")
+                                                exit(ExitCode.semanticError.rawValue)
                                         }
-                                    default:
-                                        print("Non-constant initializer on local static variable \(name)")
+                                    case .CompoundInit(let initList):
+                                        print("Nope! Not even allowing static compound initializers at the non-file level")
                                         exit(ExitCode.semanticError.rawValue)
                                 }
                             } else {

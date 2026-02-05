@@ -121,7 +121,7 @@ class Parser {
         }
 
         enum Declaration {
-            case VariableDeclaration(CType /* type */, String /* identifier name */, Expression?, StorageClass?)
+            case VariableDeclaration(CType /* type */, String /* identifier name */, Initializer?, StorageClass?)
             case FunctionDeclaration(CType /* type signature */, String /* name */, [String] /* param names */, Block? /* body */, StorageClass?)
         }
 
@@ -807,6 +807,25 @@ class Parser {
         return (.Int, storageClass)
     }
 
+    func parseInitializer(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> AST.Initializer {
+        // <initializer> ::= <exp> | "{" <initializer { "," <initializer> } [","] "}"
+        if peek(tokenStream) == .openBrace {
+            let _ = expect(.openBrace, &tokenStream)
+            var innerExps : [AST.Initializer] = [parseInitializer(tokenStream: &tokenStream)]
+            while peek(tokenStream) == .comma {
+                let _ = expect(.comma, &tokenStream)
+                if peek(tokenStream) != .closeBrace {
+                    innerExps.append(parseInitializer(tokenStream: &tokenStream))
+                }
+            }
+            let _ = expect(.closeBrace, &tokenStream)
+
+            return .CompoundInit(innerExps)
+        } else {
+            return .SingleInit(parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0))
+        }
+    }
+
     func parseDeclaration(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Declaration {
         // parse the specifier list
         let (declaredType, storageClass) = parseType(&tokenStream)
@@ -827,17 +846,18 @@ class Parser {
                     print("Variable declaration \(varName) cannot be void")
                     exit(ExitCode.semanticError.rawValue)
                 }
-                let exp : Parser.AST.Expression?
+                let initializer : Parser.AST.Initializer?
                 if peek(tokenStream) == .equal {
                     let _ = expect(.equal, &tokenStream)
-                    exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                    // exp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                    initializer = parseInitializer(tokenStream: &tokenStream)
                 } else {
-                    exp = nil
+                    initializer = nil
                 }
                 
                 let _ = expect(.semicolon, &tokenStream)
                 
-                return .VariableDeclaration(declType, varName, exp, storageClass)
+                return .VariableDeclaration(declType, varName, initializer, storageClass)
         }
     }
     
@@ -1131,6 +1151,13 @@ class Parser {
         }
     }
     
+    func fixUpCompoundAssignments(_ initializer: Parser.AST.Initializer) -> Parser.AST.Initializer {
+        switch initializer {
+            case .SingleInit(let exp): return .SingleInit(fixUpCompoundAssignments(exp))
+            case .CompoundInit(let initList): return .CompoundInit(initList.map { fixUpCompoundAssignments($0) })
+        }
+    }
+
     func fixUpCompoundAssignments(_ labeledStmt: Parser.AST.LabeledStatement) -> Parser.AST.LabeledStatement {
         return labeledStmt
     }
@@ -1186,7 +1213,7 @@ class Parser {
                 return .S(fixUpCompoundAssignments(stmt))
         }
     }
-    
+
     func fixUpCompoundAssignments(_ decl: Parser.AST.Declaration) -> Parser.AST.Declaration {
         switch decl {
             case .FunctionDeclaration(let returnType, let name, let params, let body, let storageClass):
