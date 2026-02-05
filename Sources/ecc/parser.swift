@@ -97,11 +97,6 @@ class Parser {
             case Switch(Expression /* condition */, Statement /* body */, String /* label */)
             case Labeled(LabeledStatement)
         }
-
-        indirect enum AbstractorDeclarator {
-            case AbstractPointer(AbstractorDeclarator)
-            case AbstractBase
-        }
         
         indirect enum CType : Equatable {
             case Int
@@ -857,6 +852,11 @@ class Parser {
             case FunDeclarator([ParamInfo] /* params */, Declarator)
             case ArrayDeclarator(Declarator, UInt /* size */)
         }
+
+        indirect enum AbstractorDeclarator {
+            case AbstractPointer(AbstractorDeclarator)
+            case AbstractBase
+        }
     }
 
     func parseSimpleDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> DeclaratorSyntax.Declarator {
@@ -1006,14 +1006,14 @@ class Parser {
         }
     }
 
-    func parseAbstractDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> AST.AbstractorDeclarator {
+    func parseAbstractDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> DeclaratorSyntax.AbstractorDeclarator {
         // <abstract-declarator> ::= "*" [ <abstract-declarator> ] | <direct-abstract-declarator>
         // <direct-abstract-declarator> ::= "(" <abstract-declarator> ")"
 
         if peek(tokenStream) == .asterisk {
             let _ = expect(.asterisk, &tokenStream)
             let next = peek(tokenStream)
-            let nested : AST.AbstractorDeclarator
+            let nested : DeclaratorSyntax.AbstractorDeclarator
             // NOTE: this is a little bit delicate
             if next == .asterisk || next == .openParen {
                 nested = parseAbstractDeclarator(tokenStream: &tokenStream)
@@ -1029,7 +1029,7 @@ class Parser {
         }
     }
 
-    func processAbstractDeclarator(decl: AST.AbstractorDeclarator, baseType: AST.CType) -> AST.CType {
+    func processAbstractDeclarator(decl: DeclaratorSyntax.AbstractorDeclarator, baseType: AST.CType) -> AST.CType {
         switch decl {
             case .AbstractBase: return baseType
             case .AbstractPointer(let inner):
