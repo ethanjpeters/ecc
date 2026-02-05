@@ -565,6 +565,11 @@ class Parser {
                 // get paremeters
                 let params = parseFunctionCallParameters(tokenStream: &tokenStream)
                 lhs = .FunctionCall(lhs, params, nil)
+            case .openBracket:
+                let _ = expect(.openBracket, &tokenStream)
+                let sizeExp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
+                let _ = expect(.closeBracket, &tokenStream)
+                lhs = .Subscript(lhs, sizeExp, nil)
             default:
                 break
         }
