@@ -97,6 +97,11 @@ class Parser {
             case Switch(Expression /* condition */, Statement /* body */, String /* label */)
             case Labeled(LabeledStatement)
         }
+
+        indirect enum AbstractorDeclarator {
+            case AbstractPointer(AbstractorDeclarator)
+            case AbstractBase
+        }
         
         indirect enum CType : Equatable {
             case Int
@@ -508,7 +513,11 @@ class Parser {
         case .openParen:
             if isType(tokenStream) || isTypeSpecifier(tokenStream) {
                 // "(" <type> ")" <exp>
-                let (tp, storage) = parseType(&tokenStream)
+                var (tp, storage) = parseType(&tokenStream)
+                if peek(tokenStream) != .closeParen {
+                    let absDecl = parseAbstractDeclarator(tokenStream: &tokenStream)
+                    tp = processAbstractDeclarator(decl: absDecl, baseType: tp)
+                }
                 let _ = expect(.closeParen, &tokenStream)
                 let child = parseFactor(tokenStream: &tokenStream)
                 if storage != nil {
@@ -994,6 +1003,38 @@ class Parser {
             case .ArrayDeclarator(let innerDecl, let size):
                 let derivedType : AST.CType = .ArrayType(baseType, size)
                 return processDeclarator(declarator: innerDecl, baseType: derivedType)
+        }
+    }
+
+    func parseAbstractDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> AST.AbstractorDeclarator {
+        // <abstract-declarator> ::= "*" [ <abstract-declarator> ] | <direct-abstract-declarator>
+        // <direct-abstract-declarator> ::= "(" <abstract-declarator> ")"
+
+        if peek(tokenStream) == .asterisk {
+            let _ = expect(.asterisk, &tokenStream)
+            let next = peek(tokenStream)
+            let nested : AST.AbstractorDeclarator
+            // NOTE: this is a little bit delicate
+            if next == .asterisk || next == .openParen {
+                nested = parseAbstractDeclarator(tokenStream: &tokenStream)
+            } else {
+                nested = .AbstractBase
+            }
+            return .AbstractPointer(nested)
+        } else {
+            let _ = expect(.openParen, &tokenStream)
+            let out = parseAbstractDeclarator(tokenStream: &tokenStream)
+            let _ = expect(.closeParen, &tokenStream)
+            return out
+        }
+    }
+
+    func processAbstractDeclarator(decl: AST.AbstractorDeclarator, baseType: AST.CType) -> AST.CType {
+        switch decl {
+            case .AbstractBase: return baseType
+            case .AbstractPointer(let inner):
+                let derivedType : AST.CType = .Pointer(baseType)
+                return processAbstractDeclarator(decl: inner, baseType: derivedType)
         }
     }
 
