@@ -853,8 +853,9 @@ class Parser {
             case ArrayDeclarator(Declarator, UInt /* size */)
         }
 
-        indirect enum AbstractorDeclarator {
-            case AbstractPointer(AbstractorDeclarator)
+        indirect enum AbstractDeclarator {
+            case AbstractPointer(AbstractDeclarator)
+            case AbstractArray(AbstractDeclarator, UInt /* size */)
             case AbstractBase
         }
     }
@@ -933,23 +934,7 @@ class Parser {
                 let _ = expect(.openBracket, &tokenStream)
                 let (constantToken, _) = tokenStream.removeFirst()
                 let _ = expect(.closeBracket, &tokenStream)
-                let sizeExpression = parseConstant(token: constantToken)
-                var size: UInt = 0
-                switch sizeExpression {
-                    case .Constant(let innerConst, _):
-                        switch innerConst { 
-                            case .ConstInt(let i32): size = UInt(i32)
-                            case .ConstUnsignedInt(let u32): size = UInt(u32)
-                            case .ConstLong(let i64): size = UInt(i64)
-                            case .ConstUnsignedLong(let u64): size = UInt(u64)
-                            case .ConstDouble(_):
-                                print("Floating point array size found while parsing direct declarator")
-                                exit(ExitCode.parserError.rawValue)
-                        }
-                    default:
-                        print("Unreachable case where parsing a constant resulted in a non-constant value")
-                        exit(ExitCode.internalError.rawValue)
-                }
+                let size = extractSizeFromConstant(exp: parseConstant(token: constantToken))
                 outerDecl = .ArrayDeclarator(outerDecl, size)
             }
             return outerDecl
@@ -1006,14 +991,42 @@ class Parser {
         }
     }
 
-    func parseAbstractDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> DeclaratorSyntax.AbstractorDeclarator {
+    func extractSizeFromConstant(exp: AST.Expression) -> UInt {
+        switch exp {
+            case .Constant(let innerConst, _):
+                switch innerConst {
+                    case .ConstInt(let i32):
+                        if i32 <= 0 {
+                            print("Size constant \(i32) is less than or equal to zero")
+                            exit(ExitCode.parserError.rawValue)
+                        }
+                        return UInt(i32)
+                    case .ConstUnsignedInt(let u32): return UInt(u32)
+                    case .ConstLong(let i64):
+                        if i64 <= 0 {
+                            print("Size constant \(i64) is less than or equal to zero")
+                            exit(ExitCode.parserError.rawValue)
+                        }
+                        return UInt(i64)
+                    case .ConstUnsignedLong(let u64): return UInt(u64)
+                    case .ConstDouble(let f):
+                        print("Size constant \(f) is not an integral value")
+                        exit(ExitCode.parserError.rawValue)
+                }
+            default:
+                print("Unreachable case where parsing a constant resulted in a non-constant value")
+                exit(ExitCode.internalError.rawValue)
+        }
+    }
+
+    func parseAbstractDeclarator(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> DeclaratorSyntax.AbstractDeclarator {
         // <abstract-declarator> ::= "*" [ <abstract-declarator> ] | <direct-abstract-declarator>
-        // <direct-abstract-declarator> ::= "(" <abstract-declarator> ")"
+        // <direct-abstract-declarator> ::= "(" <abstract-declarator> ")" { "[" const "]" } | { "[" const "]" }
 
         if peek(tokenStream) == .asterisk {
             let _ = expect(.asterisk, &tokenStream)
             let next = peek(tokenStream)
-            let nested : DeclaratorSyntax.AbstractorDeclarator
+            let nested : DeclaratorSyntax.AbstractDeclarator
             // NOTE: this is a little bit delicate
             if next == .asterisk || next == .openParen {
                 nested = parseAbstractDeclarator(tokenStream: &tokenStream)
@@ -1021,19 +1034,37 @@ class Parser {
                 nested = .AbstractBase
             }
             return .AbstractPointer(nested)
+        } else if peek(tokenStream) == .openBracket {
+            let _ = expect(.openBracket, &tokenStream)
+            let (cnstTkn, _) = tokenStream.removeFirst()
+            let _ = expect(.closeBracket, &tokenStream)
+            let size = extractSizeFromConstant(exp: parseConstant(token: cnstTkn))
+            return .AbstractArray(.AbstractBase, size)
         } else {
             let _ = expect(.openParen, &tokenStream)
             let out = parseAbstractDeclarator(tokenStream: &tokenStream)
             let _ = expect(.closeParen, &tokenStream)
+
+            if peek(tokenStream) == .openBracket {
+                let _ = expect(.openBracket, &tokenStream)
+                let (cnstTkn, _) = tokenStream.removeFirst()
+                let _ = expect(.closeBracket, &tokenStream)
+                let size = extractSizeFromConstant(exp: parseConstant(token: cnstTkn))
+                return .AbstractArray(out, size)
+            }
+
             return out
         }
     }
 
-    func processAbstractDeclarator(decl: DeclaratorSyntax.AbstractorDeclarator, baseType: AST.CType) -> AST.CType {
+    func processAbstractDeclarator(decl: DeclaratorSyntax.AbstractDeclarator, baseType: AST.CType) -> AST.CType {
         switch decl {
             case .AbstractBase: return baseType
             case .AbstractPointer(let inner):
                 let derivedType : AST.CType = .Pointer(baseType)
+                return processAbstractDeclarator(decl: inner, baseType: derivedType)
+            case .AbstractArray(let inner, let size):
+                let derivedType : AST.CType = .ArrayType(baseType, size)
                 return processAbstractDeclarator(decl: inner, baseType: derivedType)
         }
     }
