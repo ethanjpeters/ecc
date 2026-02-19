@@ -873,6 +873,12 @@ class SemanticAnalyzer {
                             exit(ExitCode.semanticError.rawValue)
                     }
                 case .Cast(let targetType, let child, _):
+                    switch targetType {
+                        case .ArrayType(_, _):
+                            print("Can't cast \(child) (or anything) to an array")
+                            exit(ExitCode.semanticError.rawValue)
+                        default: ()
+                    }
                     let tmp = typeCheckAndConvert(child, nameMap)
                     return (.Cast(targetType, tmp.0, Self.deConvert(tmp.1)), tmp.1)
                 case .Dereference(let ptr, _):
