@@ -510,6 +510,7 @@ class SemanticAnalyzer {
             case Void
             case Pointer(CheckerType /* pointee type */)
             case Function(CheckerType /* return */, [CheckerType] /* params */)
+            case ArrayType(CheckerType /* element */, UInt /* size */)
         }
 
         enum StaticInit {
@@ -541,6 +542,7 @@ class SemanticAnalyzer {
                 case .UnsignedLong: return .UnsignedLong
                 case .Double: return .Double
                 case .Pointer(let tp): return .Pointer(deConvert(tp))
+                case .ArrayType(let tp, let sz): return .ArrayType(deConvert(tp), sz)
                 case .Function(_, _):
                     print("UNREACHABLE FUNC")
                     exit(ExitCode.internalError.rawValue)
@@ -580,7 +582,7 @@ class SemanticAnalyzer {
                         case .ConstDouble(let val): return (.Constant(.ConstDouble(val), .Double), .Double)
                     }
                 case .Unary(let unOp, let e, _):
-                    let (checkedE, eType) = typeCheck(e, nameMap) // TODO: not all operators make sense on every type
+                    let (checkedE, eType) = typeCheckAndConvert(e, nameMap)
                     if eType == .Void {
                         print("Tried to perform unary operation \(unOp) on void expression \(e)")
                         exit(ExitCode.semanticError.rawValue)
@@ -610,7 +612,7 @@ class SemanticAnalyzer {
                     return (.Unary(unOp, checkedE, outType), convertCTypeToCheckerType(outType))
                 case .Binary(let binOp, let left, let right, _):
                     // TODO: not all binary operations on all pairs of types make sense
-                    let (checkedLeft, leftType) = typeCheck(left, nameMap)
+                    let (checkedLeft, leftType) = typeCheckAndConvert(left, nameMap)
                     switch leftType {
                         case .Void: fallthrough
                         case .Function(_, _):
@@ -618,7 +620,7 @@ class SemanticAnalyzer {
                             exit(ExitCode.semanticError.rawValue)
                         default: ()
                     }
-                    let (checkedRight, rightType) = typeCheck(right, nameMap)
+                    let (checkedRight, rightType) = typeCheckAndConvert(right, nameMap)
                     switch rightType {
                         case .Void: fallthrough
                         case .Function(_, _):
@@ -701,8 +703,8 @@ class SemanticAnalyzer {
                         exit(ExitCode.semanticError.rawValue)
                     }
 
-                    let (checkedExp, expType) = typeCheck(exp, nameMap)
-                    let (lV, lT) = typeCheck(lValue, nameMap)
+                    let (checkedExp, expType) = typeCheckAndConvert(exp, nameMap)
+                    let (lV, lT) = typeCheckAndConvert(lValue, nameMap)
                     if expType == lT {
                         return (.Assignment(lV, checkedExp, Self.deConvert(lT)), lT)
                     }
@@ -719,9 +721,9 @@ class SemanticAnalyzer {
                     print("Unreachable compound assignment found during type checking")
                     exit(ExitCode.internalError.rawValue)
                 case .Conditional(let cond, let left, let right, _):
-                    let (checkedCond, condType) = typeCheck(cond, nameMap)
-                    let (checkedLeft, leftType) = typeCheck(left, nameMap)
-                    let (checkedRight, rightType) = typeCheck(right, nameMap)
+                    let (checkedCond, condType) = typeCheckAndConvert(cond, nameMap)
+                    let (checkedLeft, leftType) = typeCheckAndConvert(left, nameMap)
+                    let (checkedRight, rightType) = typeCheckAndConvert(right, nameMap)
                     let outType = getCommonType(leftType, rightType)
                     return (.Conditional(
                         typeConvert(checkedCond, ofType: condType, toType: .Int),
@@ -741,7 +743,7 @@ class SemanticAnalyzer {
                     }
                     var checkedParams : [(Parser.AST.Expression, TypeChecker.CheckerType)] = []
                     for p in params {
-                        let q = typeCheck(p, nameMap)
+                        let q = typeCheckAndConvert(p, nameMap)
                         checkedParams.append(q)
                     }
                     let (fType, _) = nameMap[name]!
@@ -769,11 +771,11 @@ class SemanticAnalyzer {
                             exit(ExitCode.semanticError.rawValue)
                     }
                 case .Cast(let targetType, let child, _):
-                    let tmp = typeCheck(child, nameMap)
+                    let tmp = typeCheckAndConvert(child, nameMap)
                     return (.Cast(targetType, tmp.0, Self.deConvert(tmp.1)), tmp.1)
                 case .Dereference(let ptr, _):
                     // type check the pointer expression
-                    let (child, childType) = typeCheck(ptr, nameMap)
+                    let (child, childType) = typeCheckAndConvert(ptr, nameMap)
                     // verify that the expression is a pointer
                     switch childType {
                         case .Pointer(let pointeeType):
@@ -785,7 +787,7 @@ class SemanticAnalyzer {
                     }
                 case .AddrOf(let exp, _):
                     // type check the child expression
-                    let (child, childType) = typeCheck(exp, nameMap)
+                    let (child, childType) = typeCheckAndConvert(exp, nameMap)
                     // verify that it is an lvalue
                     if !isValidLValue(child) {
                         print("Attempted to get the address of non-lvalue expression \(child)")
@@ -814,7 +816,7 @@ class SemanticAnalyzer {
                             print("Attempted to return non-void value \(e) from void function")
                             exit(ExitCode.semanticError.rawValue)
                         }
-                        let (outExp, outTp) = typeCheck(e, nameMap)
+                        let (outExp, outTp) = typeCheckAndConvert(e, nameMap)
                         let castExp = typeConvert(outExp, ofType: outTp, toType: convertCTypeToCheckerType(enclosingFuncReturnType))
                         return .Return(castExp)
                     } else {
@@ -825,9 +827,9 @@ class SemanticAnalyzer {
                         return .Return(nil)
                     }
                 case .Expression(let exp):
-                    return .Expression(typeCheck(exp, nameMap).0)
+                    return .Expression(typeCheckAndConvert(exp, nameMap).0)
                 case .If(let condition, let thenClause, let elseClause):
-                    let checkedCond = typeCheck(condition, nameMap).0   // TODO: do we need to cast this guy?
+                    let checkedCond = typeCheckAndConvert(condition, nameMap).0   // TODO: do we need to cast this guy?
                     let checkedThen = typeCheck(thenClause, &nameMap, enclosingFuncReturnType)
                     let checkedElse: Parser.AST.Statement?
                     if let els = elseClause {
@@ -842,12 +844,12 @@ class SemanticAnalyzer {
                 case .Break(_): return statement
                 case .Continue(_): return statement
                 case .While(let condition, let body, let lbl):
-                    let checkedCond = typeCheck(condition, nameMap)
+                    let checkedCond = typeCheckAndConvert(condition, nameMap)
                     let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
                     return .While(checkedCond.0, checkedBody, lbl)
                 case .DoWhile(let body, let condition, let lbl):
                     let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
-                    let checkedCond = typeCheck(condition, nameMap)
+                    let checkedCond = typeCheckAndConvert(condition, nameMap)
                     return .DoWhile(checkedBody, checkedCond.0, lbl)
                 case .For(let forInit, let condition, let post, let body, let lbl):
                     let checkedInit : Parser.AST.ForInit
@@ -862,20 +864,20 @@ class SemanticAnalyzer {
                             }
                         case .InitExp(let exp):
                             if let e = exp {
-                                checkedInit = .InitExp(typeCheck(e, nameMap).0)
+                                checkedInit = .InitExp(typeCheckAndConvert(e, nameMap).0)
                             } else {
                                 checkedInit = .InitExp(nil)
                             }
                     }
                     let checkedCondition : Parser.AST.Expression?
                     if let c = condition {
-                        checkedCondition = typeCheck(c, nameMap).0
+                        checkedCondition = typeCheckAndConvert(c, nameMap).0
                     } else {
                         checkedCondition = nil
                     }
                     let checkedPost : Parser.AST.Expression?
                     if let p = post {
-                        checkedPost = typeCheck(p, nameMap).0
+                        checkedPost = typeCheckAndConvert(p, nameMap).0
                     } else {
                         checkedPost = nil
                     }
@@ -883,7 +885,7 @@ class SemanticAnalyzer {
                     return .For(checkedInit, checkedCondition, checkedPost, checkedBody, lbl)
                 case .Switch(let toggle, let body, let lbl):
                     // TODO: cast this to bool-like
-                    let checkedToggle = typeCheck(toggle, nameMap)
+                    let checkedToggle = typeCheckAndConvert(toggle, nameMap)
                     let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
                     return .Switch(checkedToggle.0, checkedBody, lbl)
                 case .Labeled(let ls):
@@ -1148,6 +1150,17 @@ class SemanticAnalyzer {
                     return .Statement(typeCheckedDecls)
             }
         }
+
+        func typeCheckAndConvert(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Expression, CheckerType) {
+            let (typedExpression, expressionType) = typeCheck(expression, nameMap)
+
+            switch expressionType {
+                case .ArrayType(let elementType, _):
+                    let addrOfType : CheckerType = .Pointer(elementType)
+                    return (.AddrOf(typedExpression, Self.deConvert(addrOfType)), addrOfType)
+                default: return (typedExpression, expressionType)
+            }
+        }
     }
 
     func analyze(_ program: Parser.AST.Program) -> (Parser.AST.Program, [String : (TypeChecker.CheckerType, TypeChecker.IdentifierAttributes)]) {
@@ -1181,8 +1194,7 @@ func convertCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.T
             )
         case .Pointer(let nestedType): return .Pointer(convertCTypeToCheckerType(nestedType))
         case .ArrayType(let elementType, let size):
-            print("As-yet-unhandled C type \(pType) found while converting C type to checker type")
-            exit(ExitCode.internalError.rawValue)
+            return .ArrayType(convertCTypeToCheckerType(elementType), size)
     }
 }
 
