@@ -766,7 +766,8 @@ class SemanticAnalyzer {
                         case .UnsignedLong: fallthrough
                         case .Double: fallthrough
                         case .Pointer(_): fallthrough
-                        case .Void:
+                        case .Void: fallthrough
+                        case .ArrayType(_, _):
                             print("Can not call value \(lValue) of type \(fType)")
                             exit(ExitCode.semanticError.rawValue)
                     }
@@ -1209,6 +1210,7 @@ func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Int {
         case .UnsignedLong: return 8
         case .Double: return 8
         case .Pointer(_): return 8
+        case .ArrayType(_, _): return 8 // devolves to a pointer; should never reach here
         case .Void:
             print("GETTING TYPE SIZE OF VOID MAKES NO SENSE")
             exit(ExitCode.internalError.rawValue)
@@ -1226,9 +1228,12 @@ func isSigned(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
             print("GETTING SIGNED-NESS OF FUNCTION MAKES NO SENSE")
             exit(ExitCode.internalError.rawValue)
         case .Void:
-            print("VOID IS NEITHER SIGNED NOR SIGNED DOES NOT COMPUTE BEEP BOOP")
+            print("VOID IS NEITHER SIGNED NOR UNSIGNED DOES NOT COMPUTE BEEP BOOP")
             exit(ExitCode.internalError.rawValue)
         case .Double: return true   // feels like a lie by omission
+        case .ArrayType(_, _):
+            print("ARRAY IS NEITEHR SIGNED NOR UNSIGNED")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
@@ -1246,6 +1251,9 @@ func isFloatingPoint(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
             print("VOID IS NEITHER FP NOR NOT FP DOES NOT COMPUTE BEEP BOOP")
             exit(ExitCode.internalError.rawValue)
         case .Double: return true
+        case .ArrayType(_, _):
+            print("ARRAY IS NEITHER FP NOR NOT FP")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
@@ -1258,6 +1266,7 @@ func isArithmeticType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
         case .Double: return true
         case .Function(_, _): fallthrough
         case .Pointer(_): fallthrough
+        case .ArrayType(_, _): fallthrough
         case .Void: return false
     }
 }

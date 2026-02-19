@@ -270,6 +270,9 @@ class Assembly {
                     case .Long: return .Quadword
                     case .Double: return .Double
                     case .Pointer(_): return .Quadword
+                    case .ArrayType(_, _):
+                        print("Unreachable scenario where the assembler is looking at an array")
+                        exit(ExitCode.internalError.rawValue)
                 }
         }
     }
@@ -301,6 +304,9 @@ class Assembly {
                     case .Long: return true
                     case .Double: return true
                     case .Pointer(_): return false
+                    case .ArrayType(_, _):
+                        print("Unreachable case where a variable was still an array and had not been converted to a pointer")
+                        exit(ExitCode.internalError.rawValue)
                 }
         }
     }
@@ -709,6 +715,9 @@ class Assembly {
                             print("Meaningless non-function attributes attached to function \(name)")
                             exit(ExitCode.internalError.rawValue)
                     }
+                case .ArrayType(_, _):
+                    print("Unreachable case where assembly is being generated for an array")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -738,6 +747,9 @@ class Assembly {
                     case .UnsignedLong: width = 8
                     case .Double: width = 8
                     case .Pointer(_): width = 8
+                    case .ArrayType(_, _):
+                        print("Unreachable case getting the width of an array in the assembler")
+                        exit(ExitCode.internalError.rawValue)
                 }
                 if let slot = nameStackMapping[name] {
                     return .Stack(-slot)
