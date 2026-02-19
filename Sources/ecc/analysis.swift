@@ -637,9 +637,6 @@ class SemanticAnalyzer {
                         }
                     }
 
-                    // NOTE: soon we will add pointer arithmetic and some binary
-                    // operations will become legal to perform on pointers which
-                    // are not presently legal
                     if isPointerType(leftType) || isPointerType(rightType) {
                         switch binOp {
                             case .Equal: fallthrough
@@ -656,6 +653,109 @@ class SemanticAnalyzer {
                             case .And: fallthrough
                             case .Or:
                                 return (.Binary(binOp, checkedLeft, checkedRight, .Int), .Int)
+                            case .Add:
+                                if isPointerType(leftType) && isPointerType(rightType) {
+                                    print("Cannot add pointers")
+                                    exit(ExitCode.semanticError.rawValue)
+                                }
+                                if isPointerType(leftType) {
+                                    // add/subtract only integers
+                                    if !isIntegralType(rightType) {
+                                        print("Tried to add non-integral value \(checkedRight) of type \(rightType) to pointer")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
+
+                                    return (.Binary(
+                                        binOp,
+                                        checkedLeft,
+                                        typeConvert(checkedRight, ofType: rightType, toType: .Long),
+                                        Self.deConvert(leftType)
+                                    ), leftType)
+                                } else {
+                                    // add/subtract only integers
+                                    if !isIntegralType(leftType) {
+                                        print("Tried to add non-integral value \(checkedLeft) of type \(leftType) to pointer")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
+
+                                    return (.Binary(
+                                        binOp,
+                                        typeConvert(checkedLeft, ofType: leftType, toType: .Long),
+                                        checkedRight,
+                                        Self.deConvert(rightType)
+                                    ), rightType)
+                                }
+                            case .Subtract:
+                                if isPointerType(leftType) && isPointerType(rightType) {
+                                    // subtracting one pointer from another yields an implementation defined
+                                    // signed integer; we'll choose "long"
+                                    return (.Binary(binOp, checkedLeft, checkedRight, .Long), .Long)
+                                } else if isPointerType(leftType) {
+                                    // add/subtract only integers
+                                    if !isIntegralType(rightType) {
+                                        print("Tried to add non-integral value \(checkedRight) of type \(rightType) to pointer")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
+
+                                    return (.Binary(
+                                        binOp,
+                                        checkedLeft,
+                                        typeConvert(checkedRight, ofType: rightType, toType: .Long),
+                                        Self.deConvert(leftType)
+                                    ), leftType)
+                                // } else if isPointerType(rightType) {    // redundant, but helps my head 🤕
+                                } else {    // ok, I'd love to the above, but the compiler is being less-than-helpful
+                                    // add/subtract only integers
+                                    if !isIntegralType(leftType) {
+                                        print("Tried to add non-integral value \(checkedLeft) of type \(leftType) to pointer")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
+
+                                    switch checkedLeft {
+                                        case .Constant(let cnstn, _):
+                                            switch cnstn {
+                                                case .ConstInt(let i32): if i32 == 0 {
+                                                    print("Cannot subtract pointer from NULL")
+                                                    exit(ExitCode.semanticError.rawValue)
+                                                }
+                                                case .ConstUnsignedInt(let u32): if u32 == 0 {
+                                                    print("Cannot subtract pointer from NULL")
+                                                    exit(ExitCode.semanticError.rawValue)
+                                                }
+                                                case .ConstLong(let i64): if i64 == 0 {
+                                                    print("Cannot subtract pointer from NULL")
+                                                    exit(ExitCode.semanticError.rawValue)
+                                                }
+                                                case .ConstUnsignedLong(let u64): if u64 == 0 {
+                                                    print("Cannot subtract pointer from NULL")
+                                                    exit(ExitCode.semanticError.rawValue)
+                                                }
+                                                case .ConstDouble(_):
+                                                    print("Unreachable case where a constant double was subtracted from a pointer")
+                                                    exit(ExitCode.internalError.rawValue)
+                                            }
+                                        default: () // not a constant, totally fine
+                                    }
+                                    return (.Binary(
+                                        binOp,
+                                        typeConvert(checkedLeft, ofType: leftType, toType: .Long),
+                                        checkedRight,
+                                        Self.deConvert(rightType)
+                                    ), rightType)
+                                }
+                            case .GreaterOrEqual: fallthrough
+                            case .GreaterThan: fallthrough
+                            case .LessOrEqual: fallthrough
+                            case .LessThan:
+                                // TODO: compare only to integers
+                                // NOTE: this would be a good place to check if someone is trying to compare to a NULL pointer,
+                                // let's circle back to that
+                                return (.Binary(
+                                    binOp,
+                                    checkedLeft,
+                                    checkedRight,
+                                    .Int
+                                ), .Int)
                             default:
                                 print("Invalid binary operation \(binOp) called on pointer type(s) (\(leftType), \(rightType))")
                                 exit(ExitCode.semanticError.rawValue)
@@ -1256,6 +1356,20 @@ func isFloatingPoint(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
         case .ArrayType(_, _):
             print("ARRAY IS NEITHER FP NOR NOT FP")
             exit(ExitCode.internalError.rawValue)
+    }
+}
+
+func isIntegralType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    switch tp {
+        case .Int: fallthrough
+        case .Long: fallthrough
+        case .UnsignedInt: fallthrough
+        case .UnsignedLong: return true
+        case .Double: return false
+        case .Function(_, _): return false
+        case .Pointer(_): return false
+        case .ArrayType(_, _): return false
+        case .Void: return false
     }
 }
 
