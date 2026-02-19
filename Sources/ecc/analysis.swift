@@ -1080,6 +1080,18 @@ class SemanticAnalyzer {
                     let sc : Parser.AST.StorageClass
                     if storageClass != nil { sc = storageClass! } else { sc = .Extern }
                     let constructedType : CheckerType = convertCTypeToCheckerType(funType)
+                    switch constructedType {
+                        case .Function(let returnType, _):
+                            switch returnType {
+                                case .ArrayType(_, _):
+                                    print("Tried to return an array from function \(name)")
+                                    exit(ExitCode.semanticError.rawValue)
+                                default: ()
+                            }
+                        default:
+                            print("Unreachable case where function \(name) is not of function type")
+                            exit(ExitCode.internalError.rawValue)
+                    }
                     let isDefined : Bool = body != nil
                     let isGlobal : Bool = sc != .Static
                     if let preExistingFunction = nameMap[name] {
