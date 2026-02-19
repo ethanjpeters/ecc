@@ -553,6 +553,7 @@ class SemanticAnalyzer {
             switch exp {
                 case .Var(_, _): return true
                 case .Dereference(_, _): return true
+                case .Subscript(_, _, _): return true
                 default: return false
             }
         }
@@ -698,13 +699,14 @@ class SemanticAnalyzer {
                         exit(ExitCode.internalError.rawValue)
                     }
                 case .Assignment(let lValue, let exp, _):
-                    if !isValidLValue(lValue) {
+                    let (lV, lT) = typeCheckAndConvert(lValue, nameMap)
+
+                    if !isValidLValue(lV) {
                         print("Attempted to assign to non-lvalue expression \(lValue)")
                         exit(ExitCode.semanticError.rawValue)
                     }
 
                     let (checkedExp, expType) = typeCheckAndConvert(exp, nameMap)
-                    let (lV, lT) = typeCheckAndConvert(lValue, nameMap)
                     if expType == lT {
                         return (.Assignment(lV, checkedExp, Self.deConvert(lT)), lT)
                     }
