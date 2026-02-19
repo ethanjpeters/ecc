@@ -612,7 +612,7 @@ class SemanticAnalyzer {
                     }
                     return (.Unary(unOp, checkedE, outType), convertCTypeToCheckerType(outType))
                 case .Binary(let binOp, let left, let right, _):
-                    // TODO: not all binary operations on all pairs of types make sense
+                    // not all binary operations on all pairs of types make sense
                     let (checkedLeft, leftType) = typeCheckAndConvert(left, nameMap)
                     switch leftType {
                         case .Void: fallthrough
@@ -747,9 +747,8 @@ class SemanticAnalyzer {
                             case .GreaterThan: fallthrough
                             case .LessOrEqual: fallthrough
                             case .LessThan:
-                                // TODO: compare only to integers
-                                // NOTE: this would be a good place to check if someone is trying to compare to a NULL pointer,
-                                // let's circle back to that
+                                // TODO: comparisons against NULL pointer are technically invalid, but Clang and GCC
+                                // are more permissive than the standard so maybe we should be as well
                                 return (.Binary(
                                     binOp,
                                     checkedLeft,
