@@ -899,8 +899,42 @@ class SemanticAnalyzer {
                     let ourType : CheckerType = .Pointer(childType)
                     return (.AddrOf(child, Self.deConvert(ourType)), ourType)
                 case .Subscript(let ptr, let offset, _):
-                    print("As-yet-unhandled subscript expression found while type checking")
-                    exit(ExitCode.internalError.rawValue)
+                    // well, actually, either ptr or offset could be the pointer; the other one has to be an integer though
+                    let (checkedPtr, ptrType) = typeCheckAndConvert(ptr, nameMap)
+                    let (checkedOffset, offsetType) = typeCheckAndConvert(offset, nameMap)
+                    if isPointerType(ptrType) && isIntegralType(offsetType) {
+                        let savedInnerType: CheckerType
+                        switch ptrType {
+                            case .Pointer(let innerType):
+                                savedInnerType = innerType
+                            default:
+                                print("Unreachable: Non-pointer type \(ptrType) somehow snuck through as a pointer")
+                                exit(ExitCode.internalError.rawValue)
+                        }
+                        return (.Subscript(
+                            checkedPtr,
+                            typeConvert(checkedOffset, ofType: offsetType, toType: .Long),
+                            Self.deConvert(savedInnerType)
+                        ), savedInnerType)
+                    } else if isPointerType(offsetType) && isIntegralType(ptrType) {
+                        // .... what? Yes, this is legal.
+                        let savedInnerType: CheckerType
+                        switch offsetType {
+                            case .Pointer(let innerType):
+                                savedInnerType = innerType
+                            default:
+                                print("Unreachable: Non-pointer type \(offsetType) somehow snuck through as a pointer")
+                                exit(ExitCode.internalError.rawValue)
+                        }
+                        return (.Subscript(
+                            typeConvert(checkedPtr, ofType: ptrType, toType: .Long),
+                            checkedOffset,
+                            Self.deConvert(savedInnerType)
+                        ), savedInnerType)
+                    } else {
+                        print("Invalid operand types \(ptrType), \(offsetType) for subscript expression \(expression)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
             }
         }
 
