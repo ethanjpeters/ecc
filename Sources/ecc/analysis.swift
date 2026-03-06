@@ -130,6 +130,13 @@ class SemanticAnalyzer {
             }
         }
 
+        func resolveInitializer(_ initializer: Parser.AST.Initializer, _ nameMap: inout [String: NameMapEntry]) -> Parser.AST.Initializer {
+            switch initializer {
+                case .SingleInit(let exp): return .SingleInit(resolveExpression(exp, &nameMap))
+                case .CompoundInit(let exps): return .CompoundInit(exps.map { resolveInitializer($0, &nameMap) })
+            }
+        }
+
         func resolveDeclaration(_ decl: Parser.AST.Declaration, _ fileScope: Bool, _ nameMap: inout [String : NameMapEntry]) -> Parser.AST.Declaration {
             switch decl {
                 case .VariableDeclaration(let tp, let name, let exp, let storageClass):
@@ -153,9 +160,7 @@ class SemanticAnalyzer {
                             nameMap[name] = .init(newName: uniqueName, currentScope: true, hasLinkage: false)
                             var outInit : Parser.AST.Initializer? = nil
                             if let initializer = exp {
-                                print("As-yet-unhandled change from initial expression to initializer construct")
-                                exit(ExitCode.internalError.rawValue)
-                                // outInit = resolveExpression(initializer, &nameMap)
+                                outInit = resolveInitializer(initializer, &nameMap)
                             }
                             return .VariableDeclaration(tp, uniqueName, outInit, storageClass)
                         }
@@ -519,6 +524,7 @@ class SemanticAnalyzer {
             case LongInit(Int64)
             case ULongInit(UInt64)
             case DoubleInit(Double)
+            //case ZeroInit(/* widthInBytes */ UInt)    // no idea what this is for
         }
 
         enum InitialValue {

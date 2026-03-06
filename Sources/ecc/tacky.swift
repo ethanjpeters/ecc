@@ -614,7 +614,7 @@ class Tacky {
                 case .StaticAttr(let initVal, let isGlobal):
                     switch initVal {
                         case .Initial(let i):
-                            tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), i))
+                            tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), i[0])) // TODO: this doesn't seem right
                         case .Tentative:
                             tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), tp == .Long ? .LongInit(0) : .IntInit(0)))
                         case .NoInitializer: ()
