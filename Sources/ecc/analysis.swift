@@ -523,7 +523,7 @@ class SemanticAnalyzer {
 
         enum InitialValue {
             case Tentative
-            case Initial(StaticInit)   // NOTE: other types will affect this
+            case Initial([StaticInit])   // NOTE: other types will affect this
             case NoInitializer
         }
 
@@ -1223,15 +1223,15 @@ class SemanticAnalyzer {
                                         case .Constant(let c, _):
                                             switch c {
                                                 case .ConstInt(let i):
-                                                    initVal = .Initial(.IntInit(Int32(i)))
+                                                    initVal = .Initial([.IntInit(Int32(i))])
                                                 case .ConstLong(let i):
-                                                    initVal = .Initial(.LongInit(Int64(i)))
+                                                    initVal = .Initial([.LongInit(Int64(i))])
                                                 case .ConstUnsignedInt(let i):
-                                                    initVal = .Initial(.UIntInit(UInt32(i)))
+                                                    initVal = .Initial([.UIntInit(UInt32(i))])
                                                 case .ConstUnsignedLong(let i):
-                                                    initVal = .Initial(.ULongInit(UInt64(i)))
+                                                    initVal = .Initial([.ULongInit(UInt64(i))])
                                                 case .ConstDouble(let d):
-                                                    initVal = .Initial(.DoubleInit(Double(d)))
+                                                    initVal = .Initial([.DoubleInit(Double(d))])
                                             }
                                         default:
                                             // NOTE: we could allow things that evaluate constantly, but we don't yet
@@ -1239,7 +1239,7 @@ class SemanticAnalyzer {
                                             exit(ExitCode.semanticError.rawValue)
                                     }
                                 case .CompoundInit(let initList):
-                                    print("I'm not even going to try to handle static compound initializers so heck off with that crap")
+                                    print("as-yet-unhandled compound static initializer")
                                     exit(ExitCode.semanticError.rawValue)
                             }
                         } else {
@@ -1319,15 +1319,15 @@ class SemanticAnalyzer {
                                             case .Constant(let c, _):
                                                 switch c {
                                                     case .ConstInt(let i):
-                                                        initValue = .Initial(.IntInit(Int32(i)))
+                                                        initValue = .Initial([.IntInit(Int32(i))])
                                                     case .ConstLong(let i):
-                                                        initValue = .Initial(.LongInit(Int64(i)))
+                                                        initValue = .Initial([.LongInit(Int64(i))])
                                                     case .ConstUnsignedInt(let i):
-                                                        initValue = .Initial(.UIntInit(UInt32(i)))
+                                                        initValue = .Initial([.UIntInit(UInt32(i))])
                                                     case .ConstUnsignedLong(let i):
-                                                        initValue = .Initial(.ULongInit(UInt64(i)))
+                                                        initValue = .Initial([.ULongInit(UInt64(i))])
                                                     case .ConstDouble(let d):
-                                                        initValue = .Initial(.DoubleInit(Double(d)))
+                                                        initValue = .Initial([.DoubleInit(Double(d))])
                                                 }
                                             default:
                                                 print("Non-constant initializer on local static variable \(name)")
@@ -1338,7 +1338,7 @@ class SemanticAnalyzer {
                                         exit(ExitCode.semanticError.rawValue)
                                 }
                             } else {
-                                initValue = .Initial(.IntInit(0))
+                                initValue = .Initial([.IntInit(0)])
                             }
                             nameMap[name] = (conTp, .StaticAttr(initValue, false))
                         } else {
