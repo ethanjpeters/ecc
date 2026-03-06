@@ -1126,6 +1126,42 @@ class SemanticAnalyzer {
         }
 
         func typeCheck(_ declaration: Parser.AST.Declaration, _ fileLevel: Bool, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)]) -> Parser.AST.Declaration {
+
+            func convert(_ initializer : Parser.AST.Initializer) -> InitialValue {
+                switch initializer {
+                    case .SingleInit(let exp):
+                        switch exp {
+                            case .Constant(let c, _):
+                                let i : StaticInit
+                                switch c {
+                                    case .ConstInt(let i32): i = .IntInit(i32)
+                                    case .ConstUnsignedInt(let u32): i = .UIntInit(u32)
+                                    case .ConstLong(let i64): i = .LongInit(i64)
+                                    case .ConstUnsignedLong(let u64): i = .ULongInit(u64)
+                                    case .ConstDouble(let f): i = .DoubleInit(f)
+                                }
+                                return .Initial([i])
+                            default:
+                                print("Non constant expression \(exp) used to initialize value")
+                                exit(ExitCode.semanticError.rawValue)
+                        }
+                    case .CompoundInit(let exps):
+                        var out : [StaticInit] = []
+                        for e in exps {
+                            let ce = convert(e)
+                            switch ce {
+                                case .Initial(let ie):
+                                    out = out + ie
+                                case .Tentative: fallthrough
+                                case .NoInitializer:
+                                    print("Unreachable converted initializer that is not an initializer \(ce)")
+                                    exit(ExitCode.internalError.rawValue)
+                            }
+                        }
+                        return .Initial(out)
+                }
+            }
+
             switch declaration {
                 case .FunctionDeclaration(let funType, let name, let params, let body, let storageClass):
                     if !fileLevel && body != nil {
@@ -1217,31 +1253,7 @@ class SemanticAnalyzer {
                     if fileLevel {
                         var initVal : InitialValue
                         if let ie = initExp {
-                            switch ie {
-                                case .SingleInit(let exp):
-                                    switch exp {
-                                        case .Constant(let c, _):
-                                            switch c {
-                                                case .ConstInt(let i):
-                                                    initVal = .Initial([.IntInit(Int32(i))])
-                                                case .ConstLong(let i):
-                                                    initVal = .Initial([.LongInit(Int64(i))])
-                                                case .ConstUnsignedInt(let i):
-                                                    initVal = .Initial([.UIntInit(UInt32(i))])
-                                                case .ConstUnsignedLong(let i):
-                                                    initVal = .Initial([.ULongInit(UInt64(i))])
-                                                case .ConstDouble(let d):
-                                                    initVal = .Initial([.DoubleInit(Double(d))])
-                                            }
-                                        default:
-                                            // NOTE: we could allow things that evaluate constantly, but we don't yet
-                                            print("Non constant expression \(ie) used to initialize global \(name)")
-                                            exit(ExitCode.semanticError.rawValue)
-                                    }
-                                case .CompoundInit(let initList):
-                                    print("as-yet-unhandled compound static initializer")
-                                    exit(ExitCode.semanticError.rawValue)
-                            }
+                            initVal = convert(ie)
                         } else {
                             if storageClass == .Extern {
                                 initVal = .NoInitializer
@@ -1313,30 +1325,7 @@ class SemanticAnalyzer {
                         } else if storageClass == .Static {
                             let initValue : InitialValue
                             if let e = initExp {
-                                switch e {
-                                    case .SingleInit(let ee):
-                                        switch ee {
-                                            case .Constant(let c, _):
-                                                switch c {
-                                                    case .ConstInt(let i):
-                                                        initValue = .Initial([.IntInit(Int32(i))])
-                                                    case .ConstLong(let i):
-                                                        initValue = .Initial([.LongInit(Int64(i))])
-                                                    case .ConstUnsignedInt(let i):
-                                                        initValue = .Initial([.UIntInit(UInt32(i))])
-                                                    case .ConstUnsignedLong(let i):
-                                                        initValue = .Initial([.ULongInit(UInt64(i))])
-                                                    case .ConstDouble(let d):
-                                                        initValue = .Initial([.DoubleInit(Double(d))])
-                                                }
-                                            default:
-                                                print("Non-constant initializer on local static variable \(name)")
-                                                exit(ExitCode.semanticError.rawValue)
-                                        }
-                                    case .CompoundInit(let initList):
-                                        print("Nope! Not even allowing static compound initializers at the non-file level")
-                                        exit(ExitCode.semanticError.rawValue)
-                                }
+                                initValue = convert(e)
                             } else {
                                 initValue = .Initial([.IntInit(0)])
                             }
