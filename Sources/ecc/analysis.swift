@@ -573,11 +573,6 @@ class SemanticAnalyzer {
             return .Cast(Self.deConvert(toType), exp, Self.deConvert(ofType))
         }
 
-        func typeConvert(_ initializer: Parser.AST.Initializer, ofType: CheckerType, toType: CheckerType) -> Parser.AST.Initializer {
-            print("As-yet-unhandled type conversion of initializer construct")
-            exit(ExitCode.internalError.rawValue)
-        }
-
         func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Expression, CheckerType) {
             switch expression {
                 case .Constant(let c, _):
@@ -979,7 +974,7 @@ class SemanticAnalyzer {
                 case .SingleInit(let exp):
                     let (typecheckedExp, expType) = typeCheck(exp, nameMap)
                     let tType = convertCTypeToCheckerType(targetType)
-                    return (typeConvert(.SingleInit(typecheckedExp), ofType: expType, toType: tType), tType)
+                    return (.SingleInit(typeConvert(typecheckedExp, ofType: expType, toType: tType)), tType)
                 case .CompoundInit(let subInits):
                     let extractedInnerType : Parser.AST.CType
                     let extractedSize : UInt
@@ -1246,12 +1241,6 @@ class SemanticAnalyzer {
                     let conTp = convertCTypeToCheckerType(tp)
                     if let e = initExp {
                         (typeCheckedInit, initType) = typeCheck(tp, e, nameMap)
-                        // previously we converted to the "greater" or "common" type here, but that was incorrect; we should always
-                        // attempt to convert to the declared type
-                        // let commonType = getCommonType(initType, conTp)
-                        // typeCheckedInit = typeConvert(typeCheckedInit!, ofType: initType, toType: commonType)
-                        let targetType = conTp
-                        typeCheckedInit = typeConvert(typeCheckedInit!, ofType: initType, toType: targetType)
                     } else {
                         initType = conTp
                         typeCheckedInit = nil
