@@ -944,10 +944,65 @@ class SemanticAnalyzer {
             }
         }
 
-        func typeCheck(_ initializer: Parser.AST.Initializer, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Initializer, CheckerType) {
-            // TODO:
-            print("As-yet-unhandled type checking of initializer construct")
-            exit(ExitCode.internalError.rawValue)
+        func typeCheck(_ targetType: Parser.AST.CType, _ initializer: Parser.AST.Initializer, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Initializer, CheckerType) {
+            func zeroInitializer(_ initType: Parser.AST.CType) -> Parser.AST.Initializer {
+                switch initType {
+                    case .Int: return .SingleInit(.Constant(.ConstInt(0), .Int))
+                    case .UnsignedInt: return .SingleInit(.Constant(.ConstUnsignedInt(0), .UnsignedInt))
+                    case .Long: return .SingleInit(.Constant(.ConstLong(0), .Long))
+                    case .UnsignedLong: return .SingleInit(.Constant(.ConstUnsignedLong(0), .UnsignedLong))
+                    case .Void:
+                        print("UNREACHABLE: Can not initialize type Void to zero")
+                        exit(ExitCode.internalError.rawValue)
+                    case .Double: return .SingleInit(.Constant(.ConstDouble(0), .Double))
+                    case .Pointer(_): return .SingleInit(.Constant(.ConstUnsignedLong(0), .UnsignedLong))
+                    case .FunType(_, _):
+                        print("UNREACHABLE: Can not initialize a function to zero")
+                        exit(ExitCode.internalError.rawValue)
+                    case .ArrayType(let innerType, let size):
+                        var out : [Parser.AST.Initializer] = []
+                        var i = 0
+                        while i < size {
+                            out.append(zeroInitializer(innerType))
+                            i = i + 1
+                        }
+                        return .CompoundInit(out)
+                }
+            }
+            switch initializer {
+                case .SingleInit(let exp):
+                    let (typecheckedExp, expType) = typeCheck(exp, nameMap)
+                    let tType = convertCTypeToCheckerType(targetType)
+                    return (typeConvert(.SingleInit(typecheckedExp), ofType: expType, toType: tType), tType)
+                case .CompoundInit(let subInits):
+                    let extractedInnerType : Parser.AST.CType
+                    let extractedSize : UInt
+                    switch targetType {
+                        case .ArrayType(let innerType, let size):
+                            extractedInnerType = innerType
+                            extractedSize = size
+                        default:
+                            print("Compound initializer \(initializer) can not be used to initialize a non-array type \(targetType)")
+                            exit(ExitCode.semanticError.rawValue)
+                    }
+
+                    if subInits.count > extractedSize {
+                        print("Compound initializer \(initializer) has more than \(extractedSize) elements")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+
+                    var typecheckedChildren : [Parser.AST.Initializer] = []
+                    for s in subInits {
+                        let (tcS, _) = typeCheck(extractedInnerType, s, nameMap)
+                        typecheckedChildren.append(tcS)
+                    }
+
+                    while typecheckedChildren.count < extractedSize {
+                        typecheckedChildren.append(zeroInitializer(extractedInnerType))
+                    }
+
+                    return (.CompoundInit(typecheckedChildren), convertCTypeToCheckerType(targetType))
+            }
         }
 
         func typeCheck(_ statement: Parser.AST.Statement, _ nameMap: inout [String: (CheckerType, IdentifierAttributes)], _ enclosingFuncReturnType : Parser.AST.CType) -> Parser.AST.Statement {
@@ -1148,7 +1203,7 @@ class SemanticAnalyzer {
                     let initType : CheckerType
                     let conTp = convertCTypeToCheckerType(tp)
                     if let e = initExp {
-                        (typeCheckedInit, initType) = typeCheck(e, nameMap)
+                        (typeCheckedInit, initType) = typeCheck(tp, e, nameMap)
                         // previously we converted to the "greater" or "common" type here, but that was incorrect; we should always
                         // attempt to convert to the declared type
                         // let commonType = getCommonType(initType, conTp)
