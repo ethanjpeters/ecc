@@ -296,8 +296,30 @@ class Tacky {
                     let v1 = generateTACKYExpressionAndConvert(left, out: &out, symbolTable: &symbolTable)
                     let v2  = generateTACKYExpressionAndConvert(right, out: &out, symbolTable: &symbolTable)
                     let dst = makeTempVariable(tp!, &symbolTable)
-                    let tackyOp = convert(op)
-                    out.append(.Binary(tackyOp, v1, v2, dst))
+
+                    let lType = convertCTypeToCheckerType(getType(left))
+                    let rType = convertCTypeToCheckerType(getType(right))
+
+                    // <ptr> + <int> uses a special instruction
+                    if op == .Add && isPointerType(lType) && isIntegralType(rType) {
+                        out.append(.AddPtr(v1, v2, UInt(getTypeSize(getPointeeType(lType))), dst))
+                    // <int> + <ptr>
+                    } else if op == .Add && isPointerType(rType) && isIntegralType(lType) {
+                        out.append(.AddPtr(v1, v2, UInt(getTypeSize(getPointeeType(rType))), dst))
+                    // <ptr> - <int> uses, oddly enough, the same special instruction
+                    } else if op == .Subtract && isPointerType(lType) && isIntegralType(rType) {
+                        let negV2 = makeTempVariable(.Long, &symbolTable)
+                        out.append(.Unary(.Negate, v2, negV2))
+                        out.append(.AddPtr(v1, negV2, UInt(getTypeSize(getPointeeType(lType))), dst))
+                    // <int> - <ptr> is nonsense
+                    // <ptr> - <ptr>, however, is valid
+                    } else if op == .Subtract && isPointerType(lType) && isPointerType(rType) {
+                        let diff : Tacky.IR.Value = makeTempVariable(tp!, &symbolTable)
+                        out.append(.Binary(.Subtract, v1, v2, diff))
+                        out.append(.Binary(.Divide, diff, .Constant(.ConstLong(Int64(getTypeSize(getPointeeType(lType))))), dst))
+                    } else {
+                        out.append(.Binary(convert(op), v1, v2, dst))
+                    }
                     return .PlainOperand(dst)
                 }
             case .Var(let name, _):
@@ -401,23 +423,6 @@ class Tacky {
     }
 
     func generateTACKYExpressionAndConvert(_ exp: Parser.AST.Expression, out: inout [Tacky.IR.Instruction], symbolTable: inout SymbolTable) -> IR.Value {
-        func getType(_ e: Parser.AST.Expression) -> Parser.AST.CType {
-            switch e {
-                case .Constant(_, let tp): return tp!
-                case .Unary(_, _, let tp): return tp!
-                case .Binary(_, _, _, let tp): return tp!
-                case .Var(_, let tp): return tp!
-                case .Assignment(_, _, let tp): return tp!
-                case .CompoundAssignment(_, _, _, let tp): return tp!
-                case .Conditional(_, _, _, let tp): return tp!
-                case .FunctionCall(_, _, let tp): return tp!
-                case .Cast(_, _, let tp): return tp!
-                case .Dereference(_, let tp): return tp!
-                case .AddrOf(_, let tp): return tp!
-                case .Subscript(_, _, let tp):  return tp!
-            }
-        }
-
         switch generateTACKYExpression(exp, out: &out, symbolTable: &symbolTable) {
             case .PlainOperand(let val): return val
             case .DereferencedPointer(let ptr):
@@ -638,6 +643,23 @@ class Tacky {
                     }
                 }
                 return (.Statement(tackyDecls), generateTACKYSymbolTable(symbolTable: symbolTable))
+        }
+    }
+
+    func getType(_ e: Parser.AST.Expression) -> Parser.AST.CType {
+        switch e {
+            case .Constant(_, let tp): return tp!
+            case .Unary(_, _, let tp): return tp!
+            case .Binary(_, _, _, let tp): return tp!
+            case .Var(_, let tp): return tp!
+            case .Assignment(_, _, let tp): return tp!
+            case .CompoundAssignment(_, _, _, let tp): return tp!
+            case .Conditional(_, _, _, let tp): return tp!
+            case .FunctionCall(_, _, let tp): return tp!
+            case .Cast(_, _, let tp): return tp!
+            case .Dereference(_, let tp): return tp!
+            case .AddrOf(_, let tp): return tp!
+            case .Subscript(_, _, let tp):  return tp!
         }
     }
 
