@@ -68,11 +68,13 @@ class Tacky {
             case GetAddress(Value /* src */, Value /* dst */)
             case Load(Value /* src_ptr */, Value /* dst */)
             case Store(Value /* src */, Value /* dst_ptr */)
+            case AddPtr(Value /* ptr */, Value /* index */, UInt /* scale */, Value /* dst */)
+            case CopyToOffset(Value /* src */, String /* identifier dst */, UInt /* offset */)
         }
 
         enum Declaration {
             case Function(String /* name */, Bool /* is global */, [String] /* params */, [Instruction] /* body */)
-            case StaticVariable(String /* name */, Bool /* is global */, Parser.AST.CType, SemanticAnalyzer.TypeChecker.StaticInit /* initial value */)
+            case StaticVariable(String /* name */, Bool /* is global */, Parser.AST.CType, [SemanticAnalyzer.TypeChecker.StaticInit] /* initial value */)
         }
 
         enum Program {
@@ -614,9 +616,9 @@ class Tacky {
                 case .StaticAttr(let initVal, let isGlobal):
                     switch initVal {
                         case .Initial(let i):
-                            tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), i[0])) // TODO: this doesn't seem right
+                            tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), i))
                         case .Tentative:
-                            tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), tp == .Long ? .LongInit(0) : .IntInit(0)))
+                            tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), [tp == .Long ? .LongInit(0) : .IntInit(0)]))
                         case .NoInitializer: ()
                     }
                 default: ()

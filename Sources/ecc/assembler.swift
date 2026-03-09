@@ -194,6 +194,10 @@ class Assembly {
                                         case .Load(_, _): ()
                                         case .Store(let src, _):
                                             extract(src, &out)
+                                        case .AddPtr(_, _, _, _): fallthrough
+                                        case .CopyToOffset(_, _, _):
+                                            print("As-yet-unhandled instruction \(instr) found when extracting double constants")
+                                            exit(ExitCode.internalError.rawValue)
                                     }
                                 }
                             case .StaticVariable(_, _, _, _): ()
@@ -613,6 +617,10 @@ class Assembly {
                 case .Store(let src, let ptr):
                     out.append(.Mov(.Quadword, convert(ptr, symbolTable), .Register(.AX)))
                     out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable), .Memory(.AX, 0)))
+                case .AddPtr(_, _, _, _): fallthrough
+                case .CopyToOffset(_, _, _):
+                    print("As-yet-unhandled \(instr) found when trying to generate assembly")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
     }
@@ -661,7 +669,7 @@ class Assembly {
         for tackyDef in symbolTable {
             switch tackyDef {
                 case .StaticVariable(let name, let isGlobal, let tp, let initValue):
-                    let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, tp == .Int ? 4 : 8, initValue)
+                    let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, tp == .Int ? 4 : 8, initValue[0])    // TODO: initializer list
                     assemblyDecls.append(assemblyEntry)
                     internalSymbolTable[name] = assemblyEntry
                 default: ()
