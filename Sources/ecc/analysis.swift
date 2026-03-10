@@ -909,35 +909,21 @@ class SemanticAnalyzer {
                     // well, actually, either ptr or offset could be the pointer; the other one has to be an integer though
                     let (checkedPtr, ptrType) = typeCheckAndConvert(ptr, nameMap)
                     let (checkedOffset, offsetType) = typeCheckAndConvert(offset, nameMap)
-                    if isPointerType(ptrType) && isIntegralType(offsetType) {
-                        let savedInnerType: CheckerType
-                        switch ptrType {
-                            case .Pointer(let innerType):
-                                savedInnerType = innerType
-                            default:
-                                print("Unreachable: Non-pointer type \(ptrType) somehow snuck through as a pointer")
-                                exit(ExitCode.internalError.rawValue)
-                        }
+                    if isSubscribtableType(ptrType) && isIntegralType(offsetType) {
+                        let innerType = getPointeeType(ptrType, permitArrays: true)
                         return (.Subscript(
                             checkedPtr,
                             typeConvert(checkedOffset, ofType: offsetType, toType: .Long),
-                            Self.deConvert(savedInnerType)
-                        ), savedInnerType)
-                    } else if isPointerType(offsetType) && isIntegralType(ptrType) {
+                            Self.deConvert(innerType)
+                        ), innerType)
+                    } else if isSubscribtableType(offsetType) && isIntegralType(ptrType) {
                         // .... what? Yes, this is legal.
-                        let savedInnerType: CheckerType
-                        switch offsetType {
-                            case .Pointer(let innerType):
-                                savedInnerType = innerType
-                            default:
-                                print("Unreachable: Non-pointer type \(offsetType) somehow snuck through as a pointer")
-                                exit(ExitCode.internalError.rawValue)
-                        }
+                        let innerType = getPointeeType(offsetType, permitArrays: true)
                         return (.Subscript(
                             typeConvert(checkedPtr, ofType: ptrType, toType: .Long),
                             checkedOffset,
-                            Self.deConvert(savedInnerType)
-                        ), savedInnerType)
+                            Self.deConvert(innerType)
+                        ), innerType)
                     } else {
                         print("Invalid operand types \(ptrType), \(offsetType) for subscript expression \(expression)")
                         exit(ExitCode.semanticError.rawValue)
@@ -1402,7 +1388,8 @@ func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Int {
         case .UnsignedLong: return 8
         case .Double: return 8
         case .Pointer(_): return 8
-        case .ArrayType(_, _): return 8 // devolves to a pointer; should never reach here
+        case .ArrayType(let nestedType, let length):
+            return Int(length) * getTypeSize(nestedType)
         case .Void:
             print("GETTING TYPE SIZE OF VOID MAKES NO SENSE")
             exit(ExitCode.internalError.rawValue)
@@ -1500,9 +1487,24 @@ func isPointerType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
     }
 }
 
-func getPointeeType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> SemanticAnalyzer.TypeChecker.CheckerType {
+func isSubscribtableType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    switch tp {
+        case .Pointer(_): return true
+        case .ArrayType(_, _): return true
+        default: return false
+    }
+}
+
+func getPointeeType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType, permitArrays: Bool = false) -> SemanticAnalyzer.TypeChecker.CheckerType {
     switch tp {
         case .Pointer(let x): return x
+        case .ArrayType(let innerType, _):
+            if permitArrays {
+                return innerType
+            } else {
+                print("Arrays not allowed in this context")
+                exit(ExitCode.internalError.rawValue)
+            }
         default:
             print("Doesn't make sense to get pointee type of non-pointer type \(tp)")
             exit(ExitCode.internalError.rawValue)
