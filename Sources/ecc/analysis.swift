@@ -919,9 +919,15 @@ class SemanticAnalyzer {
                     } else if isSubscribtableType(offsetType) && isIntegralType(ptrType) {
                         // .... what? Yes, this is legal.
                         let innerType = getPointeeType(offsetType, permitArrays: true)
+                        // return (.Subscript(
+                        //     typeConvert(checkedPtr, ofType: ptrType, toType: .Long),
+                        //     checkedOffset,
+                        //     Self.deConvert(innerType)
+                        // ), innerType)
+                        // can I do this?
                         return (.Subscript(
-                            typeConvert(checkedPtr, ofType: ptrType, toType: .Long),
                             checkedOffset,
+                            typeConvert(checkedPtr, ofType: ptrType, toType: .Long),
                             Self.deConvert(innerType)
                         ), innerType)
                     } else {

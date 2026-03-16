@@ -417,8 +417,13 @@ class Tacky {
                         return .PlainOperand(ptr)
                 }
             case .Subscript(let ptr, let off, let tp):
-                print("As-yet-unhandled subcript expression found while generating TACKY")
-                exit(ExitCode.internalError.rawValue)
+                let arrayValue = generateTACKYExpressionAndConvert(ptr, out: &out, symbolTable: &symbolTable)
+                let offset = generateTACKYExpressionAndConvert(off, out: &out, symbolTable: &symbolTable)
+                let tmp0 = makeTempVariable(.Pointer(tp!), &symbolTable)
+                out.append(.GetAddress(arrayValue, tmp0))
+                let tmp1 = makeTempVariable(.Pointer(tp!), &symbolTable)
+                out.append(.AddPtr(tmp0, offset, UInt(getTypeSize(convertCTypeToCheckerType(tp!))), tmp1))
+                return .DereferencedPointer(tmp1)
         }
     }
 
@@ -575,15 +580,35 @@ class Tacky {
         }
     }
 
+    func generateTACKYInit(_ i: Parser.AST.Initializer, dest: String, offset: UInt, out: inout [Tacky.IR.Instruction], symbolTable: inout SymbolTable) {
+        switch i {
+            case .SingleInit(let exp):
+                let child = generateTACKYExpressionAndConvert(exp, out: &out, symbolTable: &symbolTable)
+                out.append(.CopyToOffset(child, dest, offset))
+            case .CompoundInit(let children):
+                let size : UInt
+                switch (symbolTable[dest]!.0) {
+                    // we don't need the length here because we added zero initializers to pad the compound initializer
+                    case .ArrayType(let innerType, _):
+                        size = UInt(getTypeSize(innerType))
+                    default:
+                        print("UNREACHABLE: tried to assign compound initializer to non-array type value \(dest)")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                var off = offset
+                for c in children {
+                    generateTACKYInit(c, dest: dest, offset: off, out: &out, symbolTable: &symbolTable)
+                    off = off + size
+                }
+        }
+    }
+
     func generateTACKYDeclaration(decl: Parser.AST.Declaration, out : inout [Tacky.IR.Instruction], symbolTable: inout SymbolTable) -> Tacky.IR.Declaration? {
         switch decl {
             // TODO: use type information to determine size of parameters
             case .VariableDeclaration(_, let name, let exp, _):
                 if exp != nil {
-                    print("As-yet-unhandled replacement of initial expression with initializer construct")
-                    exit(ExitCode.internalError.rawValue)
-                    // let child = generateTACKYExpressionAndConvert(exp!, out: &out, symbolTable: &symbolTable)
-                    // out.append(.Copy(child, .Var(name)))
+                    generateTACKYInit(exp!, dest: name, offset: 0, out: &out, symbolTable: &symbolTable)
                 }
                 return nil
             case .FunctionDeclaration(let returnType, let name, let parameters, let body, let storageClass):
