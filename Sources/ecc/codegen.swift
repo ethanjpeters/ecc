@@ -271,6 +271,9 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                 case .UIntInit(let i): out.append("\t.long\t\(i)")
                 case .ULongInit(let i): out.append("\t.quad\t\(i)")
                 case .DoubleInit(let f): out.append("\t.double\t\(f)")
+                case .ZeroInit(let w):
+                    print("As-yet-unhandled zero-init of arbitrary width")
+                    exit(ExitCode.internalError.rawValue)
             }
         case .StaticConstant(let name, let alignment, let initVal):
             if alignment == 8 {
@@ -290,6 +293,9 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                     if f == -0.0 {
                         out.append("\t.quad\t0")
                     }
+                case .ZeroInit(let w):
+                    print("As-yet-unhandled zero-init of arbitrary width")
+                    exit(ExitCode.internalError.rawValue)
             }
     }
 }

@@ -648,7 +648,8 @@ class Tacky {
                         case .Initial(let i):
                             tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), i))
                         case .Tentative:
-                            tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), [tp == .Long ? .LongInit(0) : .IntInit(0)]))
+                            let tentInit : SemanticAnalyzer.TypeChecker.StaticInit = .ZeroInit(UInt(getTypeSize(tp)))
+                            tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), [tentInit]))
                         case .NoInitializer: ()
                     }
                 default: ()

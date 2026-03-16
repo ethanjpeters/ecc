@@ -524,7 +524,7 @@ class SemanticAnalyzer {
             case LongInit(Int64)
             case ULongInit(UInt64)
             case DoubleInit(Double)
-            //case ZeroInit(/* widthInBytes */ UInt)    // no idea what this is for
+            case ZeroInit(/* widthInBytes */ UInt)    // no idea what this is for
         }
 
         enum InitialValue {
