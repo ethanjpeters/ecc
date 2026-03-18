@@ -53,6 +53,8 @@ class Assembly {
             case Stack(Int)
             case Data(String /* identifier */)
             case Memory(Register, Int)
+            case PseudoMem(String /* identifier */, UInt /* offset */)
+            case Indexed(Register /* base */, Register /* index */, UInt /* scale */)
         }
 
         enum UnaryOperator {
@@ -73,10 +75,11 @@ class Assembly {
             case DivDouble
         }
 
-        enum AssemblyType {
+        enum AssemblyType : Equatable {
             case Longword
             case Quadword
             case Double
+            case ByteArray(UInt /* size */, UInt /* alignment */)
         }
 
         enum Instruction {
@@ -194,10 +197,11 @@ class Assembly {
                                         case .Load(_, _): ()
                                         case .Store(let src, _):
                                             extract(src, &out)
-                                        case .AddPtr(_, _, _, _): fallthrough
-                                        case .CopyToOffset(_, _, _):
-                                            print("As-yet-unhandled instruction \(instr) found when extracting double constants")
-                                            exit(ExitCode.internalError.rawValue)
+                                        case .AddPtr(let ptr, let index, _, _):
+                                            extract(ptr, &out)
+                                            extract(index, &out)
+                                        case .CopyToOffset(let src, _, _):
+                                            extract(src, &out)
                                     }
                                 }
                             case .StaticVariable(_, _, _, _): ()
@@ -617,8 +621,10 @@ class Assembly {
                 case .Store(let src, let ptr):
                     out.append(.Mov(.Quadword, convert(ptr, symbolTable), .Register(.AX)))
                     out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable), .Memory(.AX, 0)))
-                case .AddPtr(_, _, _, _): fallthrough
-                case .CopyToOffset(_, _, _):
+                case .AddPtr(let ptr, let index, let scale, let dst):
+                    print("As-yet-unhandled .AddPtr() instruction found when trying to generate assembly")
+                    exit(ExitCode.internalError.rawValue)
+                case .CopyToOffset(let src, let identifier, let offset):
                     print("As-yet-unhandled \(instr) found when trying to generate assembly")
                     exit(ExitCode.internalError.rawValue)
             }
@@ -776,6 +782,12 @@ class Assembly {
                 return op
             case .Memory(_, _):
                 return op
+            case .PseudoMem(_, _):
+                print("As-yet-unhandled pseudo memory operand")
+                exit(ExitCode.internalError.rawValue)
+            case .Indexed(_, _, _):
+                print("As-yet-unhandled index operand")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 
@@ -911,6 +923,12 @@ class Assembly {
                                     case .Immediate(_):
                                         print("Unreachable: immeditate was destination of floating point binary operation: \(op)")
                                         exit(ExitCode.internalError.rawValue)
+                                    case .PseudoMem(_, _):
+                                        print("As-yet-unhandled pseudo mem in binary operation")
+                                        exit(ExitCode.internalError.rawValue)
+                                    case .Indexed(_, _, _):
+                                        print("As-yet-unhandled indexed mem in binary operation")
+                                        exit(ExitCode.internalError.rawValue)
                                 }
                             // xorpd also has requirements but we generate all xorpd instructions directly so we know
                             // they're satisfied; other than that, we don't do bitwise operations on floating point values
@@ -994,6 +1012,12 @@ class Assembly {
                             case .Pseudo(_):
                                 print("Unreachable: pseudo slot survived past pseudo replacement")
                                 exit(ExitCode.internalError.rawValue)
+                            case .PseudoMem(_, _):
+                                print("As-yet-unhandled pseudo mem in cmp operation")
+                                exit(ExitCode.internalError.rawValue)
+                            case .Indexed(_, _, _):
+                                print("As-yet-unhandled index mem op in cmp")
+                                exit(ExitCode.internalError.rawValue)
                         }
                     } else {
                         switch left {
@@ -1066,6 +1090,10 @@ class Assembly {
                         case .Immediate(_):
                             print("Unreachable: immediate as the destination of a movzx")
                             exit(ExitCode.internalError.rawValue)
+                        case .PseudoMem(_, _): fallthrough
+                        case .Indexed(_, _, _):
+                            print("As-yet-unhandled operation found during .movzx fixing up")
+                            exit(ExitCode.internalError.rawValue)
                     }
                 case .Cvttsd2si(let tp, let src, let dst):
                     switch dst {
@@ -1080,6 +1108,10 @@ class Assembly {
                             exit(ExitCode.internalError.rawValue)
                         case .Immediate(_):
                             print("Unreachable: immediate as the destination of a Cvttsd2si")
+                            exit(ExitCode.internalError.rawValue)
+                        case .PseudoMem(_, _): fallthrough
+                        case .Indexed(_, _, _):
+                            print("As-yet-unhandled operation found during .Cvttsd2si fixing up")
                             exit(ExitCode.internalError.rawValue)
                     }
                 case .Cvtsi2sd(let tp, let src, let dst):
@@ -1104,6 +1136,10 @@ class Assembly {
                         case .Immediate(_):
                             print("Unreachable: immediate as the destination of a Cvtsi2sd")
                             exit(ExitCode.internalError.rawValue)
+                        case .PseudoMem(_, _): fallthrough
+                        case .Indexed(_, _, _):
+                            print("As-yet-unhandled operation found during .Cvtsi2sd fixing up")
+                            exit(ExitCode.internalError.rawValue)
                     }
                 case .Lea(let src, let dst):
                     switch src {
@@ -1117,6 +1153,10 @@ class Assembly {
                         case .Pseudo(_):
                             print("Unreachable: pseudo slot survived past pseudo replacement")
                             exit(ExitCode.internalError.rawValue)
+                        case .PseudoMem(_, _): fallthrough
+                        case .Indexed(_, _, _):
+                            print("As-yet-unhandled operation found during .lea fixing up")
+                            exit(ExitCode.internalError.rawValue)
                     }
                     switch dst {
                         case .Immediate(_): fallthrough
@@ -1128,6 +1168,10 @@ class Assembly {
                         case .Register(_): ()
                         case .Pseudo(_):
                             print("Unreachable: pseudo slot survived past pseudo replacement")
+                            exit(ExitCode.internalError.rawValue)
+                        case .PseudoMem(_, _): fallthrough
+                        case .Indexed(_, _, _):
+                            print("As-yet-unhandled operation found during .lea dst fixing up")
                             exit(ExitCode.internalError.rawValue)
                     }
             }

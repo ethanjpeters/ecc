@@ -12,6 +12,9 @@ func typeToWidth(_ tp: Assembly.Tree.AssemblyType) -> RegisterWidth {
         case .Longword: return .fourByte
         case .Quadword: return .eightByte
         case .Double: return .eightByte
+        case .ByteArray(_, _):
+            print("Getting byte array width may not make sense")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
@@ -120,6 +123,12 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
         case .Memory(let reg, let off):
             let prefix = off == 0 ? "" : "\(off)"
             return "\(prefix)(\(convert(.Register(reg), .eightByte)))"
+        case .PseudoMem(_, _):
+            print("Encountered pseudo mem way late in the pipeline")
+            exit(ExitCode.internalError.rawValue)
+        case .Indexed(_, _, _):
+            print("As-yet-unhandled index memory operand found when generating code")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
@@ -182,6 +191,9 @@ func typeToSuffix(_ tp : Assembly.Tree.AssemblyType, isPacked : Bool = false) ->
         case .Longword: return "l"
         case .Quadword: return "q"
         case .Double: return isPacked ? "pd" : "sd"
+        case .ByteArray(_, _):
+            print("Don't know how to compute suffix for byte array type")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
