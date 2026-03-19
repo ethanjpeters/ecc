@@ -222,7 +222,7 @@ class Assembly {
         return out
     }
 
-    func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration]) -> Tree.Operand {
+    func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable) -> Tree.Operand {
         switch val {
             case .Constant(let c):
                 switch c {
@@ -246,6 +246,11 @@ class Assembly {
             case .Var(let name):
                 if let _ = symbolTable[name] {
                     return .Data(name)
+                }
+                if let x = typedSymbolTable[name] {
+                    if isPointerType(x.0) {
+                        return .PseudoMem(name, UInt(getTypeSize(getPointeeType(x.0))))
+                    }
                 }
                 return .Pseudo(name)
         }
@@ -337,7 +342,7 @@ class Assembly {
                 case .Return(let val):
                     let v : Tacky.IR.Value = (val == nil ? .Constant(.ConstInt(0)) : val!)
                     let tp = deduceType(v, typedSymbolTable)
-                    out.append(.Mov(tp, convert(v, symbolTable), tp == .Double ? .Register(.XMM0) : .Register(.AX)))
+                    out.append(.Mov(tp, convert(v, symbolTable, typedSymbolTable), tp == .Double ? .Register(.XMM0) : .Register(.AX)))
                     out.append(.Ret)
                 case .Unary(let op, let src, let dst):
                     let srcType = deduceType(src, typedSymbolTable)
@@ -345,25 +350,25 @@ class Assembly {
                     if op == .Not {
                         if isFlop {
                             out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
-                            out.append(.Cmp(.Double, .Register(.XMM0), convert(src, symbolTable)))
+                            out.append(.Cmp(.Double, .Register(.XMM0), convert(src, symbolTable, typedSymbolTable)))
                         } else {
-                            out.append(.Cmp(srcType, .Immediate(0), convert(src, symbolTable)))
+                            out.append(.Cmp(srcType, .Immediate(0), convert(src, symbolTable, typedSymbolTable)))
                         }
-                        out.append(.Mov(srcType, .Immediate(0), convert(dst, symbolTable)))
-                        out.append(.SetCC(.E, convert(dst, symbolTable)))
+                        out.append(.Mov(srcType, .Immediate(0), convert(dst, symbolTable, typedSymbolTable)))
+                        out.append(.SetCC(.E, convert(dst, symbolTable, typedSymbolTable)))
                     } else {
                         if isFlop && op == .Negate {
-                            out.append(.Mov(srcType, convert(src, symbolTable), convert(dst, symbolTable)))
-                            out.append(.Binary(.Xor, srcType, .Data(negativeZeroLabel), convert(dst, symbolTable)))
+                            out.append(.Mov(srcType, convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
+                            out.append(.Binary(.Xor, srcType, .Data(negativeZeroLabel), convert(dst, symbolTable, typedSymbolTable)))
                         } else {
-                            out.append(.Mov(srcType, convert(src, symbolTable), convert(dst, symbolTable)))
-                            out.append(.Unary(convert(op), srcType, convert(dst, symbolTable)))
+                            out.append(.Mov(srcType, convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
+                            out.append(.Unary(convert(op), srcType, convert(dst, symbolTable, typedSymbolTable)))
                         }
                     }
                 case .Binary(let op, let src1, let src2, let dst):
-                    let src1Conv = convert(src1, symbolTable)
-                    let src2Conv = convert(src2, symbolTable)
-                    let dstConv = convert(dst, symbolTable)
+                    let src1Conv = convert(src1, symbolTable, typedSymbolTable)
+                    let src2Conv = convert(src2, symbolTable, typedSymbolTable)
+                    let dstConv = convert(dst, symbolTable, typedSymbolTable)
                     let srcType = deduceType(src1, typedSymbolTable)
                     let signedOp = deduceIsSigned(src1, typedSymbolTable)
                     let isFlop = (srcType == .Double)
@@ -452,7 +457,11 @@ class Assembly {
                             out.append(.Binary(.Shl, srcType, src2Conv, dstConv))
                     }
                 case .Copy(let src, let dst):
-                    out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
+                    out.append(.Mov(
+                        deduceType(src, typedSymbolTable),
+                        convert(src, symbolTable, typedSymbolTable),
+                        convert(dst, symbolTable, typedSymbolTable)
+                    ))
                 case .Jump(let label):
                     out.append(.Jmp(label))
                 case .JumpIfZero(let val, let label):
@@ -460,9 +469,9 @@ class Assembly {
                     let isFlop = (valType == .Double)
                     if isFlop {
                         out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
-                        out.append(.Cmp(valType, convert(val, symbolTable), .Register(.XMM0)))
+                        out.append(.Cmp(valType, convert(val, symbolTable, typedSymbolTable), .Register(.XMM0)))
                     } else {
-                        out.append(.Cmp(valType, .Immediate(0), convert(val, symbolTable)))
+                        out.append(.Cmp(valType, .Immediate(0), convert(val, symbolTable, typedSymbolTable)))
                     }
                     out.append(.JmpCC(.E, label))
                 case .JumpIfNotZero(let val, let label):
@@ -470,9 +479,9 @@ class Assembly {
                     let isFlop = (valType == .Double)
                     if isFlop {
                         out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
-                        out.append(.Cmp(valType, convert(val, symbolTable), .Register(.XMM0)))
+                        out.append(.Cmp(valType, convert(val, symbolTable, typedSymbolTable), .Register(.XMM0)))
                     } else {
-                        out.append(.Cmp(valType, .Immediate(0), convert(val, symbolTable)))
+                        out.append(.Cmp(valType, .Immediate(0), convert(val, symbolTable, typedSymbolTable)))
                     }
                     out.append(.JmpCC(.NE, label))
                 case .Label(let name):
@@ -490,11 +499,11 @@ class Assembly {
                         // if we're looking at a floating point value AND we have floating point registers left unallocated
                         if tp == .Double && !fpRegisterTargets.isEmpty {
                             let target = fpRegisterTargets.removeFirst()
-                            out.append(.Mov(tp, convert(p, symbolTable), .Register(target)))
+                            out.append(.Mov(tp, convert(p, symbolTable, typedSymbolTable), .Register(target)))
                         // if we're NOT looking at a floating point value AND we have non-floating point registers left unallocated
                         } else if tp != .Double && !intRegisterTargets.isEmpty {
                             let target = intRegisterTargets.removeFirst()
-                            out.append(.Mov(tp, convert(p, symbolTable), .Register(target)))
+                            out.append(.Mov(tp, convert(p, symbolTable, typedSymbolTable), .Register(target)))
                         // we ran out of registers for this type of parameter
                         } else {
                             // stack time!
@@ -511,7 +520,7 @@ class Assembly {
 
                     stackParams.reverse()
                     for p in stackParams {
-                        let src = convert(p, symbolTable)
+                        let src = convert(p, symbolTable, typedSymbolTable)
                         var shouldPushStraight : Bool = deduceType(p, typedSymbolTable) == .Quadword
                         switch src {
                             case .Register(_): fallthrough
@@ -535,92 +544,92 @@ class Assembly {
                     }
 
                     // move the result
-                    out.append(.Mov(deduceType(result, typedSymbolTable), .Register(.AX), convert(result, symbolTable)))
+                    out.append(.Mov(deduceType(result, typedSymbolTable), .Register(.AX), convert(result, symbolTable, typedSymbolTable)))
                 case .SignExtend(let src, let dst):
-                    out.append(.Movsx(convert(src, symbolTable), convert(dst, symbolTable)))
+                    out.append(.Movsx(convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                 case .Truncate(let src, let dst):
-                    out.append(.Mov(.Longword, convert(src, symbolTable), convert(dst, symbolTable)))
+                    out.append(.Mov(.Longword, convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                 case .ZeroExtend(let src, let dst):
-                    out.append(.Movzx(convert(src, symbolTable), convert(dst, symbolTable)))
+                    out.append(.Movzx(convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                 case .DoubleToInt(let src, let dst):
                     // straightforward case, done by one instruction
-                    out.append(.Cvttsd2si(deduceType(dst, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
+                    out.append(.Cvttsd2si(deduceType(dst, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                 case .DoubleToUInt(let src, let dst):
                     // not straightforward
                     // if we're dealing with one of those 4-byte integers, then we...
                     if deduceType(dst, typedSymbolTable) == .Longword {
                         // convert to a quadword, then truncate
-                        out.append(.Cvttsd2si(.Quadword, convert(src, symbolTable), .Register(.AX)))
-                        out.append(.Mov(.Longword, .Register(.AX), convert(dst, symbolTable)))
+                        out.append(.Cvttsd2si(.Quadword, convert(src, symbolTable, typedSymbolTable), .Register(.AX)))
+                        out.append(.Mov(.Longword, .Register(.AX), convert(dst, symbolTable, typedSymbolTable)))
                     } else {
                         // otherwise, oh my god...
                         // check if our value fits into a quadword
-                        out.append(.Cmp(.Double, .Data(biggestQuadwordLabel), convert(src, symbolTable)))
+                        out.append(.Cmp(.Double, .Data(biggestQuadwordLabel), convert(src, symbolTable, typedSymbolTable)))
                         let outOfRangeLabel = makeLabel()
                         out.append(.JmpCC(.AE, outOfRangeLabel))
                         // if it fits into a signed quadword, convert to a signed quadword
-                        out.append(.Cvttsd2si(.Quadword, convert(src, symbolTable), convert(dst, symbolTable)))
+                        out.append(.Cvttsd2si(.Quadword, convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                         let endLabel = makeLabel()
                         out.append(.Jmp(endLabel))
                         // if it doesn't fit into a signed quadword
                         out.append(.Label(outOfRangeLabel))
                         // subtract LONG_MAX + 1
-                        out.append(.Mov(.Double, convert(src, symbolTable), .Register(.XMM1)))
+                        out.append(.Mov(.Double, convert(src, symbolTable, typedSymbolTable), .Register(.XMM1)))
                         out.append(.Binary(.Sub, .Double, .Data(biggestQuadwordLabel), .Register(.XMM1)))
                         // then convert to a signed long
-                        out.append(.Cvttsd2si(.Quadword, .Register(.XMM1), convert(dst, symbolTable)))
+                        out.append(.Cvttsd2si(.Quadword, .Register(.XMM1), convert(dst, symbolTable, typedSymbolTable)))
                         // then add LONG_MAX + 1 back
                         // ok, we have to do a weird thing here because we *kind of* messed up; we assigned
                         // an Int value to the .Immediate data type, which technically needs an unsigned
                         // range of values, but also to be able to be signed, it's sort of a mess. To deal
                         // with this, we'll cheat by adding half the value we want to add, twice.
                         out.append(.Mov(.Quadword, .Immediate(Int(longMaxPlusOne/2)), .Register(.DX)))
-                        out.append(.Binary(.Add, .Quadword, .Register(.DX), convert(dst, symbolTable)))
-                        out.append(.Binary(.Add, .Quadword, .Register(.DX), convert(dst, symbolTable)))
+                        out.append(.Binary(.Add, .Quadword, .Register(.DX), convert(dst, symbolTable, typedSymbolTable)))
+                        out.append(.Binary(.Add, .Quadword, .Register(.DX), convert(dst, symbolTable, typedSymbolTable)))
                         out.append(.Label(endLabel))
                     }
                 case .IntToDouble(let src, let dst):
                     // straightforward case, done by one instruction
-                    out.append(.Cvtsi2sd(deduceType(dst, typedSymbolTable), convert(src, symbolTable), convert(dst, symbolTable)))
+                    out.append(.Cvtsi2sd(deduceType(dst, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                 case .UIntToDouble(let src, let dst):
                     // not straightforward
                     // if we're dealing with a 4-byte integer
                     if deduceType(src, typedSymbolTable) == .Longword {
                         // zero extend it to a quadword
-                        out.append(.Movzx(convert(src, symbolTable), .Register(.AX)))
+                        out.append(.Movzx(convert(src, symbolTable, typedSymbolTable), .Register(.AX)))
                         // then convert it
-                        out.append(.Cvtsi2sd(.Quadword, .Register(.AX), convert(dst, symbolTable)))
+                        out.append(.Cvtsi2sd(.Quadword, .Register(.AX), convert(dst, symbolTable, typedSymbolTable)))
                     } else {
                         // check if the value is positive (fits into an unsigned value)
-                        out.append(.Cmp(.Quadword, .Immediate(0), convert(src, symbolTable)))
+                        out.append(.Cmp(.Quadword, .Immediate(0), convert(src, symbolTable, typedSymbolTable)))
                         let outOfRangeLabel = makeLabel()
                         out.append(.JmpCC(.L, outOfRangeLabel))
                         // if the value is positive, go ahead and use the native instruction
-                        out.append(.Cvtsi2sd(.Quadword, convert(src, symbolTable), convert(dst, symbolTable)))
+                        out.append(.Cvtsi2sd(.Quadword, convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                         let endLabel = makeLabel()
                         out.append(.Jmp(endLabel))
                         // if the value can not be represented as an unsigned integer
                         out.append(.Label(outOfRangeLabel))
                         // cut it in half, preserving oddness
-                        out.append(.Mov(.Quadword, convert(src, symbolTable), .Register(.AX)))
+                        out.append(.Mov(.Quadword, convert(src, symbolTable, typedSymbolTable), .Register(.AX)))
                         out.append(.Mov(.Quadword, .Register(.AX), .Register(.DX)))
                         out.append(.Unary(.Shr, .Quadword, .Register(.DX)))
                         out.append(.Binary(.And, .Quadword, .Immediate(1), .Register(.AX)))
                         out.append(.Binary(.Or, .Quadword, .Register(.AX), .Register(.DX)))
                         // convert
-                        out.append(.Cvtsi2sd(.Quadword, .Register(.DX), convert(dst, symbolTable)))
+                        out.append(.Cvtsi2sd(.Quadword, .Register(.DX), convert(dst, symbolTable, typedSymbolTable)))
                         // double it
-                        out.append(.Binary(.Add, .Double, convert(dst, symbolTable), convert(dst, symbolTable)))
+                        out.append(.Binary(.Add, .Double, convert(dst, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                         out.append(.Label(endLabel))
                     }
                 case .GetAddress(let src, let dst):
-                    out.append(.Lea(convert(src, symbolTable), convert(dst, symbolTable)))
+                    out.append(.Lea(convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                 case .Load(let ptr, let dst):
-                    out.append(.Mov(.Quadword, convert(ptr, symbolTable), .Register(.AX)))
-                    out.append(.Mov(deduceType(dst, typedSymbolTable), .Memory(.AX, 0), convert(dst, symbolTable)))
+                    out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
+                    out.append(.Mov(deduceType(dst, typedSymbolTable), .Memory(.AX, 0), convert(dst, symbolTable, typedSymbolTable)))
                 case .Store(let src, let ptr):
-                    out.append(.Mov(.Quadword, convert(ptr, symbolTable), .Register(.AX)))
-                    out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable), .Memory(.AX, 0)))
+                    out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
+                    out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), .Memory(.AX, 0)))
                 case .AddPtr(let ptr, let index, let scale, let dst):
                     print("As-yet-unhandled .AddPtr() instruction found when trying to generate assembly")
                     exit(ExitCode.internalError.rawValue)
