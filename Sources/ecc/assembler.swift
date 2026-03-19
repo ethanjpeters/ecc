@@ -249,7 +249,7 @@ class Assembly {
                 }
                 if let x = typedSymbolTable[name] {
                     if isSubscribtableType(x.0) {
-                        return .PseudoMem(name, UInt(getTypeSize(getPointeeType(x.0))))
+                        return .PseudoMem(name, 0)
                     }
                 }
                 return .Pseudo(name)
@@ -317,9 +317,7 @@ class Assembly {
                     case .Long: return true
                     case .Double: return true
                     case .Pointer(_): return false
-                    case .ArrayType(_, _):
-                        print("Unreachable case where a variable was still an array and had not been converted to a pointer")
-                        exit(ExitCode.internalError.rawValue)
+                    case .ArrayType(_, _): return false
                 }
         }
     }
@@ -631,11 +629,20 @@ class Assembly {
                     out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
                     out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), .Memory(.AX, 0)))
                 case .AddPtr(let ptr, let index, let scale, let dst):
-                    print("As-yet-unhandled .AddPtr() instruction found when trying to generate assembly")
-                    exit(ExitCode.internalError.rawValue)
+                    if [1, 2, 4, 8].contains(scale) {
+                        out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
+                        out.append(.Mov(.Quadword, convert(index, symbolTable, typedSymbolTable), .Register(.DX)))
+                        out.append(.Lea(.Indexed(.AX, .DX, scale), convert(dst, symbolTable, typedSymbolTable)))
+                    } else {
+                        out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
+                        out.append(.Mov(.Quadword, convert(index, symbolTable, typedSymbolTable), .Register(.DX)))
+                        out.append(.Binary(.Mult, .Quadword, .Immediate(Int(scale)), .Register(.DX)))
+                        out.append(.Lea(.Indexed(.AX, .DX, 1), convert(dst, symbolTable, typedSymbolTable)))
+                    }
+                    // TODO: we could technically save an instruction if we determined that index was constant; heck it,
+                    // make the machine work
                 case .CopyToOffset(let src, let identifier, let offset):
-                    print("As-yet-unhandled \(instr) found when trying to generate assembly")
-                    exit(ExitCode.internalError.rawValue)
+                    out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), .PseudoMem(identifier, offset)))
             }
         }
     }
