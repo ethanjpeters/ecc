@@ -248,7 +248,7 @@ class Assembly {
                     return .Data(name)
                 }
                 if let x = typedSymbolTable[name] {
-                    if isPointerType(x.0) {
+                    if isSubscribtableType(x.0) {
                         return .PseudoMem(name, UInt(getTypeSize(getPointeeType(x.0))))
                     }
                 }
