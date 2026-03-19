@@ -283,9 +283,13 @@ class Assembly {
                     case .Long: return .Quadword
                     case .Double: return .Double
                     case .Pointer(_): return .Quadword
-                    case .ArrayType(_, _):
-                        print("Unreachable scenario where the assembler is looking at an array")
-                        exit(ExitCode.internalError.rawValue)
+                    case .ArrayType(let tp, let count):
+                        let totalSize = UInt(getTypeSize(tp)) * count
+                        if totalSize < 16 {
+                            return .ByteArray(totalSize, UInt(getTypeSize(tp)))
+                        } else {
+                            return .ByteArray(totalSize, 16)
+                        }
                 }
         }
     }
