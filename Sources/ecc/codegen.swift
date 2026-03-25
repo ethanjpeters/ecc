@@ -127,7 +127,7 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
             print("Encountered pseudo mem \(name) way late in the pipeline")
             exit(ExitCode.internalError.rawValue)
         case .Indexed(let base, let index, let scale):
-            return "(\(convert(.Register(base), width)), \(convert(.Register(index), width))), \(scale))"
+            return "(\(convert(.Register(base), width)), \(convert(.Register(index), width)), \(scale))"
     }
 }
 
@@ -251,7 +251,7 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
             case .Cvtsi2sd(let tp, let src, let dst):
                 out.append("\tcvtsi2sd\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
             case .Lea(let src, let dst):
-                out.append("\tlea\t\(convert(src)), \(convert(dst, .eightByte))")
+                out.append("\tlea\t\(convert(src, .eightByte)), \(convert(dst, .eightByte))")
         }
     }
 }
