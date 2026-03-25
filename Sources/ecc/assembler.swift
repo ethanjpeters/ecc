@@ -1202,9 +1202,7 @@ class Assembly {
                         case .Pseudo(_):
                             print("Unreachable: pseudo slot survived past pseudo replacement")
                             exit(ExitCode.internalError.rawValue)
-                        case .Indexed(_, _, _):
-                            print("As-yet-unhandled operation found during .lea fixing up")
-                            exit(ExitCode.internalError.rawValue)
+                        case .Indexed(_, _, _): ()
                     }
                     switch dst {
                         case .Immediate(_): fallthrough
