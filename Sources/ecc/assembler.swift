@@ -778,8 +778,8 @@ class Assembly {
                     let alignment: UInt = aSize >= 16 ? 16 : tSize
                     var isGlobal = false
                     switch attrs {
-                        case .StaticAttr(_, let isGlobal2):
-                            isGlobal = isGlobal2
+                        case .StaticAttr(_, _):
+                            isGlobal = true
                         case .LocalAttr:
                             isGlobal = false
                         case .FunAttr(_, _):
