@@ -248,8 +248,10 @@ class Assembly {
                     return .Data(name)
                 }
                 if let x = typedSymbolTable[name] {
-                    if isSubscribtableType(x.0) {
-                        return .PseudoMem(name, 0)
+                    switch x.0 {
+                        case .ArrayType(_, _):
+                            return .PseudoMem(name, 0)
+                        default: ()
                     }
                 }
                 return .Pseudo(name)
@@ -802,12 +804,40 @@ class Assembly {
                 return op
             case .Memory(_, _):
                 return op
-            case .PseudoMem(_, _):
-                print("As-yet-unhandled pseudo memory operand")
-                exit(ExitCode.internalError.rawValue)
+            case .PseudoMem(let name, let offset):
+                guard let (tp, attr) = symbolTable[name] else {
+                    print("Impossible situation where pseudo mem \(name) is not in the symbol table")
+                    exit(ExitCode.internalError.rawValue)
+                }
+
+                switch tp {
+                    case .ArrayType(_, _): ()
+                    default:
+                        print("Impossible situation reached where pseudo mem operand is not an array")
+                        exit(ExitCode.internalError.rawValue)
+                }
+
+                switch attr {
+                    case .StaticAttr(_, _): return .Data(name)
+                    default: ()
+                }
+
+                if let slot = nameStackMapping[name] {
+                    return .Stack(-slot + Int(offset))
+                }
+
+                let width = getTypeSize(tp)
+
+                var tmp = stackSlotCounter + width
+                if tmp % width != 0 {
+                    // must be aligned
+                    tmp = tmp + (tmp % width)
+                }
+                stackSlotCounter = tmp
+                nameStackMapping[name] = stackSlotCounter
+                return .Stack(-stackSlotCounter + Int(offset))
             case .Indexed(_, _, _):
-                print("As-yet-unhandled index operand")
-                exit(ExitCode.internalError.rawValue)
+                return op
         }
     }
 
