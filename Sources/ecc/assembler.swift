@@ -1059,11 +1059,9 @@ class Assembly {
                                 out.append(.Cmp(tp, left, .Register(.XMM15)))
                             case .Register(_):
                                 out.append(instr)
-                            case .Pseudo(_):
-                                print("Unreachable: pseudo slot survived past pseudo replacement")
-                                exit(ExitCode.internalError.rawValue)
+                            case .Pseudo(_): fallthrough
                             case .PseudoMem(_, _):
-                                print("As-yet-unhandled pseudo mem in cmp operation")
+                                print("Unreachable: pseudo slot survived past pseudo replacement")
                                 exit(ExitCode.internalError.rawValue)
                             case .Indexed(_, _, _):
                                 print("As-yet-unhandled index mem op in cmp")
@@ -1134,13 +1132,13 @@ class Assembly {
                         case .Data(_):
                             out.append(.Mov(.Longword, src, .Register(.R11)))
                             out.append(.Mov(.Quadword, .Register(.R11), dst))
-                        case .Pseudo(_):
+                        case .Pseudo(_): fallthrough
+                        case .PseudoMem(_, _):
                             print("Unreachable: psuedo slot survived past pseudo replacement")
                             exit(ExitCode.internalError.rawValue)
                         case .Immediate(_):
                             print("Unreachable: immediate as the destination of a movzx")
                             exit(ExitCode.internalError.rawValue)
-                        case .PseudoMem(_, _): fallthrough
                         case .Indexed(_, _, _):
                             print("As-yet-unhandled operation found during .movzx fixing up")
                             exit(ExitCode.internalError.rawValue)
@@ -1153,13 +1151,13 @@ class Assembly {
                         case .Data(_):
                             out.append(.Cvttsd2si(tp, src, .Register(.R11)))
                             out.append(.Mov(tp, .Register(.R11), dst))
+                        case .PseudoMem(_, _): fallthrough
                         case .Pseudo(_):
                             print("Unreachable: psuedo slot survived past pseudo replacement")
                             exit(ExitCode.internalError.rawValue)
                         case .Immediate(_):
                             print("Unreachable: immediate as the destination of a Cvttsd2si")
                             exit(ExitCode.internalError.rawValue)
-                        case .PseudoMem(_, _): fallthrough
                         case .Indexed(_, _, _):
                             print("As-yet-unhandled operation found during .Cvttsd2si fixing up")
                             exit(ExitCode.internalError.rawValue)
@@ -1180,13 +1178,13 @@ class Assembly {
                         case .Data(_):
                             out.append(.Cvtsi2sd(tp, realSrc, .Register(.XMM15)))
                             out.append(.Mov(tp, .Register(.XMM15), dst))
+                        case .PseudoMem(_, _): fallthrough
                         case .Pseudo(_):
                             print("Unreachable: pseudo slot survived past pseudo replacement")
                             exit(ExitCode.internalError.rawValue)
                         case .Immediate(_):
                             print("Unreachable: immediate as the destination of a Cvtsi2sd")
                             exit(ExitCode.internalError.rawValue)
-                        case .PseudoMem(_, _): fallthrough
                         case .Indexed(_, _, _):
                             print("As-yet-unhandled operation found during .Cvtsi2sd fixing up")
                             exit(ExitCode.internalError.rawValue)
@@ -1200,10 +1198,10 @@ class Assembly {
                         case .Stack(_): fallthrough
                         case .Data(_): fallthrough
                         case .Memory(_, _): ()
+                        case .PseudoMem(_, _): fallthrough
                         case .Pseudo(_):
                             print("Unreachable: pseudo slot survived past pseudo replacement")
                             exit(ExitCode.internalError.rawValue)
-                        case .PseudoMem(_, _): fallthrough
                         case .Indexed(_, _, _):
                             print("As-yet-unhandled operation found during .lea fixing up")
                             exit(ExitCode.internalError.rawValue)
@@ -1216,10 +1214,10 @@ class Assembly {
                             out.append(.Lea(src, .Register(.AX)))
                             out.append(.Mov(.Quadword, .Register(.AX), dst))
                         case .Register(_): ()
+                        case .PseudoMem(_, _): fallthrough
                         case .Pseudo(_):
                             print("Unreachable: pseudo slot survived past pseudo replacement")
                             exit(ExitCode.internalError.rawValue)
-                        case .PseudoMem(_, _): fallthrough
                         case .Indexed(_, _, _):
                             print("As-yet-unhandled operation found during .lea dst fixing up")
                             exit(ExitCode.internalError.rawValue)
