@@ -750,7 +750,7 @@ class Assembly {
                 case .UnsignedLong: fallthrough
                 case .Double: fallthrough
                 case .Pointer(_):
-                    let asmType : Tree.AssemblyType = (checkerType == .Double) ? .Double : (checkerType == .Int ? .Longword : .Quadword)    // pointers and longs both fall through to Quadword
+                    let asmType : Tree.AssemblyType = (checkerType == .Double) ? .Double : ((checkerType == .Int || checkerType == .UnsignedInt) ? .Longword : .Quadword)    // pointers and longs both fall through to Quadword
                     let isStatic: Bool
                     switch attrs {
                         case .StaticAttr(_, _):
@@ -772,9 +772,21 @@ class Assembly {
                             print("Meaningless non-function attributes attached to function \(name)")
                             exit(ExitCode.internalError.rawValue)
                     }
-                case .ArrayType(_, _):
-                    print("Unreachable case where assembly is being generated for an array")
-                    exit(ExitCode.internalError.rawValue)
+                case .ArrayType(let nestedType, let count):
+                    let tSize = UInt(getTypeSize(nestedType))
+                    let aSize = UInt(tSize) * count
+                    let alignment: UInt = aSize >= 16 ? 16 : tSize
+                    var isGlobal = false
+                    switch attrs {
+                        case .StaticAttr(_, let isGlobal2):
+                            isGlobal = isGlobal2
+                        case .LocalAttr:
+                            isGlobal = false
+                        case .FunAttr(_, _):
+                            print("UNREACHABLE: FUN ATTR FOR ARRAY TYPE")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                    asmSymTab[name] = .ObjEntry(.ByteArray(UInt(getTypeSize(nestedType)) * count, alignment), isGlobal)
             }
         }
 
