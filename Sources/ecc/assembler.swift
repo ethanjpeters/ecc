@@ -108,7 +108,7 @@ class Assembly {
 
         enum Declaration {
             case Function(String, Bool /* is global */, [Instruction])
-            case StaticVariable(String /* name */, Bool /* is global */, Int /* alignment */, SemanticAnalyzer.TypeChecker.StaticInit /* initial value */)
+            case StaticVariable(String /* name */, Bool /* is global */, Int /* alignment */, [SemanticAnalyzer.TypeChecker.StaticInit] /* initial values */)
             case StaticConstant(String /* name */, Int /* alignment */, SemanticAnalyzer.TypeChecker.StaticInit /* init */)
         }
 
@@ -697,7 +697,7 @@ class Assembly {
         for tackyDef in symbolTable {
             switch tackyDef {
                 case .StaticVariable(let name, let isGlobal, let tp, let initValue):
-                    let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, tp == .Int ? 4 : 8, initValue[0])    // TODO: initializer list
+                    let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, tp == .Int ? 4 : 8, initValue)
                     assemblyDecls.append(assemblyEntry)
                     internalSymbolTable[name] = assemblyEntry
                 default: ()

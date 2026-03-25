@@ -123,12 +123,11 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
         case .Memory(let reg, let off):
             let prefix = off == 0 ? "" : "\(off)"
             return "\(prefix)(\(convert(.Register(reg), .eightByte)))"
-        case .PseudoMem(_, _):
-            print("Encountered pseudo mem way late in the pipeline")
+        case .PseudoMem(let name, _):
+            print("Encountered pseudo mem \(name) way late in the pipeline")
             exit(ExitCode.internalError.rawValue)
-        case .Indexed(_, _, _):
-            print("As-yet-unhandled index memory operand found when generating code")
-            exit(ExitCode.internalError.rawValue)
+        case .Indexed(let base, let index, let scale):
+            return "(\(convert(.Register(base), width)), \(convert(.Register(index), width))), \(scale))"
     }
 }
 
@@ -270,22 +269,22 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
             out.append("\tmovq\t%rsp, %rbp")
             emitInstructions(instrs, out: &out)
             out.append("\n\n")
-        case .StaticVariable(let name, let isGlobal, let alignment, let initVal):
+        case .StaticVariable(let name, let isGlobal, let alignment, let initVals):
             if isGlobal {
                 out.append("\t.globl \(name)")
             }
             out.append("\t.data")
             out.append("\t.balign\t\(alignment)")
             out.append("\(name):")
-            switch initVal {
-                case .IntInit(let i): out.append("\t.long\t\(i)")
-                case .LongInit(let i): out.append("\t.quad\t\(i)")
-                case .UIntInit(let i): out.append("\t.long\t\(i)")
-                case .ULongInit(let i): out.append("\t.quad\t\(i)")
-                case .DoubleInit(let f): out.append("\t.double\t\(f)")
-                case .ZeroInit(let w):
-                    print("As-yet-unhandled zero-init of arbitrary width")
-                    exit(ExitCode.internalError.rawValue)
+            for initVal in initVals {
+                switch initVal {
+                    case .IntInit(let i): out.append("\t.long\t\(i)")
+                    case .LongInit(let i): out.append("\t.quad\t\(i)")
+                    case .UIntInit(let i): out.append("\t.long\t\(i)")
+                    case .ULongInit(let i): out.append("\t.quad\t\(i)")
+                    case .DoubleInit(let f): out.append("\t.double\t\(f)")
+                    case .ZeroInit(let w): out.append("\t.zero\t\(w)")
+                }
             }
         case .StaticConstant(let name, let alignment, let initVal):
             if alignment == 8 {
@@ -306,8 +305,7 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                         out.append("\t.quad\t0")
                     }
                 case .ZeroInit(let w):
-                    print("As-yet-unhandled zero-init of arbitrary width")
-                    exit(ExitCode.internalError.rawValue)
+                    out.append("\t.zero\t\(w)")
             }
     }
 }
