@@ -79,6 +79,7 @@ class Lexer {
         case identifier(String)
         case constant(String)
         case floatingPointConstant(String)
+        case stringLiteral(String)
     }
 
     private let sourceFileCharacters : [String.Element]
@@ -173,6 +174,63 @@ class Lexer {
         }
 
         return isWordBoundary(j) ? (matchedString.count > 0 ? matchedString : nil) : nil
+    }
+
+    func matchStringConstant(startingIndex: Int) -> (String, UInt)? {
+        // exit early if this is obviously not a string
+        if sourceFileCharacters[startingIndex] != "\"" {
+            return nil
+        }
+
+        // eat the quote
+        var j = startingIndex + 1
+
+        var matchedString = ""
+
+        while j < sourceFileCharacters.count {
+            let c = sourceFileCharacters[j]
+
+            if c == "\\" {
+                j = j + 1
+                if j < sourceFileCharacters.count {
+                    let d = sourceFileCharacters[j]
+                    let e : String
+                    switch d {
+                        case "'": e = "'"
+                        case "\"": e = "\""
+                        case "?": e = "?"
+                        case "\\": e = "\\"
+                        case "a": e = String(UnicodeScalar(UInt8(7)))
+                        case "b": e = String(UnicodeScalar(UInt8(8)))
+                        case "f": e = String(UnicodeScalar(UInt8(12)))
+                        case "n": e = "\n"
+                        case "r": e = "\r"
+                        case "t": e = "\t"
+                        case "v": e = String(UnicodeScalar(UInt8(11)))
+                        default:
+                            print("Unrecognized escape sequence \\\(d)")
+                            exit(ExitCode.lexerError.rawValue)
+                    }
+
+                    matchedString = matchedString + e
+                } else {
+                    print("Reached end of source stream while trying to lex string")
+                    exit(ExitCode.lexerError.rawValue)
+                }
+            } else if c == "\"" {
+                return (matchedString, UInt(j - startingIndex))
+            } else if c.isNewline {
+                print("Unexpected line break found in string literal")
+                exit(ExitCode.lexerError.rawValue)
+            } else {
+                matchedString = matchedString + String(c)
+            }
+
+            j = j + 1
+        }
+
+        print("Unexpected end of file found while parsing string constant")
+        exit(ExitCode.lexerError.rawValue)
     }
 
     func matchFloatingPointConstant(startingIndex: Int) -> String? {
@@ -468,6 +526,12 @@ class Lexer {
 
                 i = i + identifier.count
                 columnCounter = columnCounter + identifier.count
+            } else if let (stringConstant, stringLength) = matchStringConstant(startingIndex: i) {
+                out.append((.stringLiteral(stringConstant), (lineCounter, columnCounter)))
+
+                i = i + stringConstant.count + Int(stringLength)   // add 1 for the closing "
+            // } else if let charConstant = matchCharConstant(startingIndex: i) {
+                // TODO:
             } else if let constant = matchFloatingPointConstant(startingIndex: i) {
                 out.append((.floatingPointConstant(constant), (lineCounter, columnCounter)))
 
@@ -498,6 +562,9 @@ class Lexer {
 
                 i = i + 1
                 columnCounter = columnCounter + 1
+            } else {
+                print("Unrecognized character \(sourceFileCharacters[i]) at line \(lineCounter), column \(columnCounter)")
+                exit(ExitCode.lexerError.rawValue)
             }
         }
 
