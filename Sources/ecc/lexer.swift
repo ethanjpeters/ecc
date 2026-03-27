@@ -218,7 +218,7 @@ class Lexer {
                     exit(ExitCode.lexerError.rawValue)
                 }
             } else if c == "\"" {
-                return (matchedString, UInt(j - startingIndex))
+                return (matchedString, UInt(j - startingIndex + 1))
             } else if c.isNewline {
                 print("Unexpected line break found in string literal")
                 exit(ExitCode.lexerError.rawValue)
@@ -529,7 +529,8 @@ class Lexer {
             } else if let (stringConstant, stringLength) = matchStringConstant(startingIndex: i) {
                 out.append((.stringLiteral(stringConstant), (lineCounter, columnCounter)))
 
-                i = i + stringConstant.count + Int(stringLength)   // add 1 for the closing "
+                i = i + Int(stringLength)   // add 1 for the closing "
+                columnCounter = columnCounter + Int(stringLength)
             // } else if let charConstant = matchCharConstant(startingIndex: i) {
                 // TODO:
             } else if let constant = matchFloatingPointConstant(startingIndex: i) {
