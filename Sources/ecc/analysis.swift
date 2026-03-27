@@ -1229,12 +1229,10 @@ class SemanticAnalyzer {
                     return .FunctionDeclaration(funType, name, params, typeCheckedBody, storageClass)
                 case .VariableDeclaration(let tp, let name, let initExp, let storageClass):
                     var typeCheckedInit : Parser.AST.Initializer?
-                    let initType : CheckerType
                     let conTp = convertCTypeToCheckerType(tp)
                     if let e = initExp {
-                        (typeCheckedInit, initType) = typeCheck(tp, e, nameMap)
+                        (typeCheckedInit, _) = typeCheck(tp, e, nameMap)
                     } else {
-                        initType = conTp
                         typeCheckedInit = nil
                     }
                     if fileLevel {
