@@ -80,6 +80,7 @@ class Lexer {
         case constant(String)
         case floatingPointConstant(String)
         case stringLiteral(String)
+        case charLiteral(String)
     }
 
     private let sourceFileCharacters : [String.Element]
@@ -230,6 +231,66 @@ class Lexer {
         }
 
         print("Unexpected end of file found while parsing string constant")
+        exit(ExitCode.lexerError.rawValue)
+    }
+
+    func matchCharConstant(startingIndex: Int) -> (String, UInt)? {
+        // exit early if this is obviously not a character
+        if sourceFileCharacters[startingIndex] != "\'" {
+            return nil
+        }
+
+        // eat the quote
+        var j = startingIndex + 1
+
+        let c = sourceFileCharacters[j]
+
+        if c == "\\" {
+            j = j + 1
+            if j < sourceFileCharacters.count {
+                let d = sourceFileCharacters[j]
+                let e : String
+                switch d {
+                    case "'": e = "'"
+                    case "\"": e = "\""
+                    case "?": e = "?"
+                    case "\\": e = "\\"
+                    case "a": e = String(UnicodeScalar(UInt8(7)))
+                    case "b": e = String(UnicodeScalar(UInt8(8)))
+                    case "f": e = String(UnicodeScalar(UInt8(12)))
+                    case "n": e = "\n"
+                    case "r": e = "\r"
+                    case "t": e = "\t"
+                    case "v": e = String(UnicodeScalar(UInt8(11)))
+                    default:
+                        print("Unrecognized escape sequence \\\(d)")
+                        exit(ExitCode.lexerError.rawValue)
+                }
+                j = j + 1
+                if j < sourceFileCharacters.count {
+                    let f = sourceFileCharacters[j]
+                    if f == "'" {
+                        return (e, 4)
+                    }
+                } else {
+                    print("Reached end of source stream while trying to lex string")
+                    exit(ExitCode.lexerError.rawValue)
+                }
+            } else {
+                print("Reached end of source stream while trying to lex string")
+                exit(ExitCode.lexerError.rawValue)
+            }
+        } else if c == "\'" {
+            print("Empty character literal found")
+            exit(ExitCode.lexerError.rawValue)
+        } else if c.isNewline {
+            print("Unexpected line break found in character literal")
+            exit(ExitCode.lexerError.rawValue)
+        } else {
+            return (String(c), 3)
+        }
+
+        print("Unexpected end of file found while parsing character constant")
         exit(ExitCode.lexerError.rawValue)
     }
 
@@ -531,8 +592,11 @@ class Lexer {
 
                 i = i + Int(stringLength)   // add 1 for the closing "
                 columnCounter = columnCounter + Int(stringLength)
-            // } else if let charConstant = matchCharConstant(startingIndex: i) {
-                // TODO:
+            } else if let (charConstant, charLength) = matchCharConstant(startingIndex: i) {
+                out.append((.charLiteral(charConstant), (lineCounter, columnCounter)))
+
+                i = i + Int(charLength)
+                columnCounter = columnCounter + Int(charLength)
             } else if let constant = matchFloatingPointConstant(startingIndex: i) {
                 out.append((.floatingPointConstant(constant), (lineCounter, columnCounter)))
 
