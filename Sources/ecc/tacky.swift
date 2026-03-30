@@ -77,6 +77,7 @@ class Tacky {
         enum Declaration {
             case Function(String /* name */, Bool /* is global */, [String] /* params */, [Instruction] /* body */)
             case StaticVariable(String /* name */, Bool /* is global */, Parser.AST.CType, [SemanticAnalyzer.TypeChecker.StaticInit] /* initial value */)
+            case StaticConstant(String /* name */, Parser.AST.CType /* type */, SemanticAnalyzer.TypeChecker.StaticInit /* init */)
         }
 
         enum Program {
@@ -669,7 +670,10 @@ class Tacky {
                             tackyDefs.append(.StaticVariable(name, isGlobal, SemanticAnalyzer.TypeChecker.deConvert(tp), [tentInit]))
                         case .NoInitializer: ()
                     }
-                default: ()
+                case .ConstantAttr(let initVal):
+                    tackyDefs.append(.StaticConstant(name, SemanticAnalyzer.TypeChecker.deConvert(tp), initVal))
+                case .FunAttr(_, _): fallthrough
+                case .LocalAttr: ()
             }
         }
         return tackyDefs

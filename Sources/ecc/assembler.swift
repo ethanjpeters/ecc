@@ -206,6 +206,7 @@ class Assembly {
                                     }
                                 }
                             case .StaticVariable(_, _, _, _): ()
+                            case .StaticConstant(_, _, _): ()
                         }
                     }
             }
@@ -700,6 +701,9 @@ class Assembly {
                 return .Function(name, isGlobal, out)
             case .StaticVariable(_, _, _, _):
                 print("As yet unhandled global variable caught while generating assembly")
+                exit(ExitCode.internalError.rawValue)
+            case .StaticConstant(_, _, _):
+                print("As-yet-unhanlded static constant caught while generating assembly")
                 exit(ExitCode.internalError.rawValue)
         }
     }
