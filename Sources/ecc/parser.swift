@@ -533,6 +533,17 @@ class Parser {
                 let _ = expect(.closeParen, &tokenStream)
                 lhs = out
             }
+        // parse one or more string literals
+        case .stringLiteral(_):
+            var out : String = ""
+            while true {
+                switch peek(tokenStream) {
+                    case .stringLiteral(let s):
+                        out = out + s
+                        tokenStream.removeFirst()
+                    default: break
+                }
+            }
             // <unop> <exp>
         case .complement:
             let child = parseFactor(tokenStream: &tokenStream)
