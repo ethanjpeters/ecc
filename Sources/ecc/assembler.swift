@@ -772,6 +772,9 @@ class Assembly {
                             isStatic = true
                         case .LocalAttr:
                             isStatic = false
+                        case .ConstantAttr(_):
+                            print("As-yet-unhandled constant attr found when generating TACKY")
+                            exit(ExitCode.internalError.rawValue)
                         case .FunAttr(_, _):
                             print("Totally meaningless function typed int/long \(name)")
                             exit(ExitCode.internalError.rawValue)
@@ -797,6 +800,9 @@ class Assembly {
                             isGlobal = true
                         case .LocalAttr:
                             isGlobal = false
+                        case .ConstantAttr(_):
+                            print("As-yet-unhandled constant attr found when generating TACKY")
+                            exit(ExitCode.internalError.rawValue)
                         case .FunAttr(_, _):
                             print("UNREACHABLE: FUN ATTR FOR ARRAY TYPE")
                             exit(ExitCode.internalError.rawValue)

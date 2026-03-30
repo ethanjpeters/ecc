@@ -547,6 +547,7 @@ class SemanticAnalyzer {
         enum IdentifierAttributes {
             case FunAttr(Bool /* is defined */, Bool /* is global */)
             case StaticAttr(InitialValue /* init */, Bool /* is global */)
+            case ConstantAttr(StaticInit /* init */)
             case LocalAttr
         }
 
@@ -1344,6 +1345,9 @@ class SemanticAnalyzer {
                                         default:
                                             ()
                                     }
+                                case .ConstantAttr(let oldInit):
+                                    print("As-yet-unhandled constant attr")
+                                    exit(ExitCode.internalError.rawValue)
                             }
                         }
                         nameMap[name] = (conTp, .StaticAttr(initVal, isGlobal))
