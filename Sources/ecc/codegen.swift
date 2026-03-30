@@ -290,6 +290,10 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                         print("As-yet-unhandled character initializer found while emitting static constant")
                         exit(ExitCode.internalError.rawValue)
                     case .ZeroInit(let w): out.append("\t.zero\t\(w)")
+                    case .StringInit(_, _): fallthrough
+                    case .PointerInit(_):
+                        print("As-yet-unhandled initializer found while emitting static constant")
+                        exit(ExitCode.internalError.rawValue)
                 }
             }
         case .StaticConstant(let name, let alignment, let initVal):
@@ -316,6 +320,10 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                     exit(ExitCode.internalError.rawValue)
                 case .ZeroInit(let w):
                     out.append("\t.zero\t\(w)")
+                case .StringInit(_, _): fallthrough
+                case .PointerInit(_):
+                    print("As-yet-unhandled initializer found while emitting static constant")
+                    exit(ExitCode.internalError.rawValue)
             }
     }
 }

@@ -534,6 +534,8 @@ class SemanticAnalyzer {
             case CharInit(Int32)
             case UCharInit(Int32)
             case ZeroInit(/* widthInBytes */ UInt)
+            case StringInit(String /* value */, /* isNullTerminated */ Bool)
+            case PointerInit(String /* name */)
         }
 
         enum InitialValue {
@@ -988,11 +990,9 @@ class SemanticAnalyzer {
                             i = i + 1
                         }
                         return .CompoundInit(out)
-                    case .Char: fallthrough
-                    case .SChar: fallthrough
-                    case .UChar:
-                        print("As-yet-unhandled character initilizer type found while type checking")
-                        exit(ExitCode.internalError.rawValue)
+                    case .Char: return .SingleInit(.Constant(.ConstUChar(0), .Char))
+                    case .SChar: return .SingleInit(.Constant(.ConstChar(0), .SChar))
+                    case .UChar: return .SingleInit(.Constant(.ConstUChar(0), .UChar))
                 }
             }
             switch initializer {
