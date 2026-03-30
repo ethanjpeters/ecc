@@ -488,6 +488,8 @@ class Parser {
                     exit(ExitCode.parserError.rawValue)
                 }
                 return .Constant(.ConstDouble(parsedVal), nil)
+            case .charLiteral(let c):
+                return .Constant(.ConstInt(c), .Char)
             default:
                 print("Unreachable non-constant constant")
                 exit(ExitCode.internalError.rawValue)

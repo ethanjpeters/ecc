@@ -80,7 +80,7 @@ class Lexer {
         case constant(String)
         case floatingPointConstant(String)
         case stringLiteral(String)
-        case charLiteral(String)
+        case charLiteral(Int32)
     }
 
     private let sourceFileCharacters : [String.Element]
@@ -234,7 +234,7 @@ class Lexer {
         exit(ExitCode.lexerError.rawValue)
     }
 
-    func matchCharConstant(startingIndex: Int) -> (String, UInt)? {
+    func matchCharConstant(startingIndex: Int) -> (Int32, UInt)? {
         // exit early if this is obviously not a character
         if sourceFileCharacters[startingIndex] != "\'" {
             return nil
@@ -249,19 +249,19 @@ class Lexer {
             j = j + 1
             if j < sourceFileCharacters.count {
                 let d = sourceFileCharacters[j]
-                let e : String
+                let e : Int32
                 switch d {
-                    case "'": e = "'"
-                    case "\"": e = "\""
-                    case "?": e = "?"
-                    case "\\": e = "\\"
-                    case "a": e = String(UnicodeScalar(UInt8(7)))
-                    case "b": e = String(UnicodeScalar(UInt8(8)))
-                    case "f": e = String(UnicodeScalar(UInt8(12)))
-                    case "n": e = "\n"
-                    case "r": e = "\r"
-                    case "t": e = "\t"
-                    case "v": e = String(UnicodeScalar(UInt8(11)))
+                    case "'": e = 39
+                    case "\"": e = 34
+                    case "?": e = 63
+                    case "\\": e = 92
+                    case "a": e = 7
+                    case "b": e = 8
+                    case "f": e = 12
+                    case "n": e = 10
+                    case "r": e = 13
+                    case "t": e = 9
+                    case "v": e = 11
                     default:
                         print("Unrecognized escape sequence \\\(d)")
                         exit(ExitCode.lexerError.rawValue)
@@ -287,7 +287,7 @@ class Lexer {
             print("Unexpected line break found in character literal")
             exit(ExitCode.lexerError.rawValue)
         } else {
-            return (String(c), 3)
+            return (Int32(c.asciiValue!), 3)
         }
 
         print("Unexpected end of file found while parsing character constant")
