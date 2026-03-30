@@ -544,6 +544,7 @@ class Parser {
                     default: break
                 }
             }
+            lhs = .String(out)
             // <unop> <exp>
         case .complement:
             let child = parseFactor(tokenStream: &tokenStream)
