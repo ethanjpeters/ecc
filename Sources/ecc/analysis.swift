@@ -997,6 +997,24 @@ class SemanticAnalyzer {
             }
             switch initializer {
                 case .SingleInit(let exp):
+
+                    switch targetType {
+                        case .ArrayType(let innerType, let size):
+                            switch exp {
+                                case .String(let val, _):
+                                    if !isCharacterType(convertCTypeToCheckerType(innerType)) {
+                                        print("Can not initialize a non-character type with a string literal")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
+                                    if UInt(val.count) > size {
+                                        print("Too many characters to fit into string literal \"\(val)\"")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
+                                default: ()
+                            }
+                        default: ()
+                    }
+
                     let (typecheckedExp, expType) = typeCheck(exp, nameMap)
                     let tType = convertCTypeToCheckerType(targetType)
                     return (.SingleInit(typeConvert(typecheckedExp, ofType: expType, toType: tType)), tType)
