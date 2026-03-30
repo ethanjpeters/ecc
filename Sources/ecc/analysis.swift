@@ -1531,7 +1531,7 @@ func isSigned(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
             exit(ExitCode.internalError.rawValue)
         case .Double: return true   // feels like a lie by omission
         case .ArrayType(_, _):
-            print("ARRAY IS NEITEHR SIGNED NOR UNSIGNED")
+            print("ARRAY IS NEITHER SIGNED NOR UNSIGNED")
             exit(ExitCode.internalError.rawValue)
     }
 }
@@ -1593,6 +1593,10 @@ func isArithmeticType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
 
 func getCommonType(_ left : SemanticAnalyzer.TypeChecker.CheckerType, _ right: SemanticAnalyzer.TypeChecker.CheckerType) -> SemanticAnalyzer.TypeChecker.CheckerType {
     if left == right { return left }
+    if isSubscribtableType(left) || isSubscribtableType(right) {
+        print("Can not cast arrays/pointers")
+        exit(ExitCode.semanticError.rawValue)
+    }
     // upcast characters to ints
     let lLeft: SemanticAnalyzer.TypeChecker.CheckerType = isCharacterType(left) ? .Int : left
     let rRight: SemanticAnalyzer.TypeChecker.CheckerType = isCharacterType(right) ? .Int : right

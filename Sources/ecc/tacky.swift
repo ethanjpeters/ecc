@@ -389,6 +389,21 @@ class Tacky {
 
                     let targetCp = convertCTypeToCheckerType(targetType)
                     let innerCp = convertCTypeToCheckerType(tp!)
+                    // allow an array to decay to a pointer
+                    if isPointerType(targetCp) {
+                        switch innerCp {
+                            case .ArrayType(let nested, _):
+                                if nested != getPointeeType(targetCp) {
+                                    print("Can't decay array of type \(nested) to pointer of type \(targetCp)")
+                                    exit(ExitCode.semanticError.rawValue)
+                                }
+                                out.append(.GetAddress(unCastedValue, dst))
+                                return .PlainOperand(dst)
+                            default:
+                                print("Can't cast around pointers, sorry")
+                                exit(ExitCode.semanticError.rawValue)
+                        }
+                    }    
 
                     if isFloatingPoint(targetCp) && !isFloatingPoint(innerCp) {
                         if isSigned(innerCp) {
