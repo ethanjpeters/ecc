@@ -623,7 +623,7 @@ class SemanticAnalyzer {
                             outType = .Int
                         default:
                             if isCharacterType(eType) {
-                                outType = .Int
+                                return (.Unary(unOp, typeConvert(checkedE, ofType: eType, toType: .Int), .Int), .Int)
                             } else {
                                 outType = Self.deConvert(eType)
                             }
