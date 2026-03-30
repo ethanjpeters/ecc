@@ -183,6 +183,10 @@ class Tacky {
                         return .PlainOperand(.Constant(.ConstUnsignedLong(val)))
                     case .ConstDouble(let val):
                         return .PlainOperand(.Constant(.ConstDouble(val)))
+                    case .ConstChar(_): fallthrough
+                    case .ConstUChar(_):
+                        print("As-yet-unhandled constant character found while generating TACKY")
+                        exit(ExitCode.internalError.rawValue)
                 }
             case .Unary(let op, let exp, let tp):
                 if isIncOrDec(op) {
@@ -424,6 +428,9 @@ class Tacky {
                 let tmp1 = makeTempVariable(.Pointer(tp!), &symbolTable)
                 out.append(.AddPtr(tmp0, offset, UInt(getTypeSize(convertCTypeToCheckerType(tp!))), tmp1))
                 return .DereferencedPointer(tmp1)
+            case .String(_):
+                print("As-yet-unhandled string value found while generating TACKY")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 
@@ -686,6 +693,9 @@ class Tacky {
             case .Dereference(_, let tp): return tp!
             case .AddrOf(_, let tp): return tp!
             case .Subscript(_, _, let tp):  return tp!
+            case .String(_):
+                print("As-yet-unhandled string found while getting type in TACKY layer")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 

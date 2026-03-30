@@ -717,6 +717,11 @@ class Assembly {
                             } else {
                                 alignment = getTypeSize(convertCTypeToCheckerType(nestedType))
                             }
+                        case .Char: fallthrough
+                        case .SChar: fallthrough
+                        case .UChar:
+                            print("AS-yet-unhandled character type found while generating assembly.")
+                            exit(ExitCode.internalError.rawValue)
                     }
                     let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, alignment, initValue)
                     assemblyDecls.append(assemblyEntry)

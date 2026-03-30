@@ -76,6 +76,9 @@ class SemanticAnalyzer {
                         resolveExpression(offset, &nameMap),
                         nil
                     )
+                case .String(_):
+                    print("As-yet-unhandled .String expression found while resolving expression during analysis")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -582,6 +585,10 @@ class SemanticAnalyzer {
                         case .ConstUnsignedInt(let val): return (.Constant(.ConstUnsignedInt(val), .UnsignedInt), .UnsignedInt)
                         case .ConstUnsignedLong(let val): return (.Constant(.ConstUnsignedLong(val), .UnsignedLong), .UnsignedLong)
                         case .ConstDouble(let val): return (.Constant(.ConstDouble(val), .Double), .Double)
+                        case .ConstChar(_): fallthrough
+                        case .ConstUChar(_):
+                            print("As-yet-unhandled character constants found while type checking expression")
+                            exit(ExitCode.internalError.rawValue)
                     }
                 case .Unary(let unOp, let e, _):
                     let (checkedE, eType) = typeCheckAndConvert(e, nameMap)
@@ -733,6 +740,10 @@ class SemanticAnalyzer {
                                                 }
                                                 case .ConstDouble(_):
                                                     print("Unreachable case where a constant double was subtracted from a pointer")
+                                                    exit(ExitCode.internalError.rawValue)
+                                                case .ConstChar(_): fallthrough
+                                                case .ConstUChar(_):
+                                                    print("As-yet-unhandled character constant found while type checking binary operation")
                                                     exit(ExitCode.internalError.rawValue)
                                             }
                                         default: () // not a constant, totally fine
@@ -934,6 +945,9 @@ class SemanticAnalyzer {
                         print("Invalid operand types \(ptrType), \(offsetType) for subscript expression \(expression)")
                         exit(ExitCode.semanticError.rawValue)
                     }
+                case .String(_):
+                    print("As-yet-unhandled string expression found while type checking")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -960,6 +974,11 @@ class SemanticAnalyzer {
                             i = i + 1
                         }
                         return .CompoundInit(out)
+                    case .Char: fallthrough
+                    case .SChar: fallthrough
+                    case .UChar:
+                        print("As-yet-unhandled character initilizer type found while type checking")
+                        exit(ExitCode.internalError.rawValue)
                 }
             }
             switch initializer {
@@ -1132,6 +1151,10 @@ class SemanticAnalyzer {
                                     case .ConstLong(let i64): i = .LongInit(i64)
                                     case .ConstUnsignedLong(let u64): i = .ULongInit(u64)
                                     case .ConstDouble(let f): i = .DoubleInit(f)
+                                    case .ConstChar(_): fallthrough
+                                    case .ConstUChar(_):
+                                        print("As-yet-unhandled constant character found while initializing")
+                                        exit(ExitCode.internalError.rawValue)
                                 }
                                 return .Initial([i])
                             default:
@@ -1378,6 +1401,11 @@ func convertCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.T
         case .Pointer(let nestedType): return .Pointer(convertCTypeToCheckerType(nestedType))
         case .ArrayType(let elementType, let size):
             return .ArrayType(convertCTypeToCheckerType(elementType), size)
+        case .Char: fallthrough
+        case .SChar: fallthrough
+        case .UChar:
+            print("Found as-yet-unhandled constant type while converting types")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
@@ -1524,6 +1552,10 @@ func isNullConstant(_ e: Parser.AST.Expression) -> Bool {
                 case .ConstLong(let l): return l == 0
                 case .ConstUnsignedInt(let ui) : return ui == 0
                 case .ConstUnsignedLong(let ul) : return ul == 0
+                case .ConstChar(_): fallthrough
+                case .ConstUChar(_):
+                    print("As-yet-unhandled constant character found while checking for null constant")
+                    exit(ExitCode.internalError.rawValue)
             }
         default: return false
     }

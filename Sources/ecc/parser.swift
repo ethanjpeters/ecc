@@ -41,10 +41,13 @@ class Parser {
             case ConstLong(Int64)
             case ConstUnsignedLong(UInt64)
             case ConstDouble(Double)
+            case ConstChar(Int32)
+            case ConstUChar(Int32)
         }
 
         indirect enum Expression {
             case Constant(Constant, CType?)
+            case String(String)
             case Unary(UnaryOperator, Expression, CType?)
             case Binary(BinaryOperator, Expression, Expression, CType?)
             case Var(String /* identifier */, CType?)
@@ -99,6 +102,9 @@ class Parser {
         }
         
         indirect enum CType : Equatable {
+            case Char
+            case SChar
+            case UChar
             case Int
             case UnsignedInt
             case Long
@@ -1037,6 +1043,18 @@ class Parser {
                     case .ConstDouble(let f):
                         print("Size constant \(f) is not an integral value")
                         exit(ExitCode.parserError.rawValue)
+                    case .ConstChar(let i32):
+                        if i32 <= 0 {
+                            print("Size constant \(i32) is less than or equal to zero")
+                            exit(ExitCode.parserError.rawValue)
+                        }
+                        return UInt(i32)
+                    case .ConstUChar(let i32):
+                        if i32 <= 0 {
+                            print("Size constant \(i32) is less than or equal to zero")
+                            exit(ExitCode.parserError.rawValue)
+                        }
+                        return UInt(i32)
                 }
             default:
                 print("Unreachable case where parsing a constant resulted in a non-constant value")
