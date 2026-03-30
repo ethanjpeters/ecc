@@ -790,7 +790,7 @@ class Parser {
 
         if specifierList.contains(.keywordDouble) {
             // you are allowed no other types alongside double
-            if specifierList.contains(.keywordUnsigned) || specifierList.contains(.keywordSigned) || specifierList.contains(.keywordLong) || specifierList.contains(.keywordInt) || specifierList.contains(.keywordVoid) {
+            if specifierList.contains(.keywordUnsigned) || specifierList.contains(.keywordSigned) || specifierList.contains(.keywordLong) || specifierList.contains(.keywordInt) || specifierList.contains(.keywordVoid) || specifierList.contains(.keywordChar) {
                 print("Nonsense list of specifiers alongside 'double': \(specifierList)")
                 exit(ExitCode.parserError.rawValue)
             }
@@ -800,7 +800,7 @@ class Parser {
         // character types
         if specifierList.contains(.keywordChar) {
             // no other types allowed
-            if specifierList.contains(.keywordLong) || specifierList.contains(.keywordInt) || specifierList.contains(.keywordVoid) {
+            if specifierList.contains(.keywordLong) || specifierList.contains(.keywordInt) || specifierList.contains(.keywordVoid) || specifierList.contains(.keywordDouble) {
                 print("Nonsense list of specifiers alongside 'char': \(specifierList)")
                 exit(ExitCode.parserError.rawValue)
             }
