@@ -243,6 +243,8 @@ class Assembly {
                                 print("static declaration of a floating point constant is somehow not a constant?")
                                 exit(ExitCode.internalError.rawValue)
                         }
+                    case .ConstChar(let i32): return .Immediate(Int(i32))
+                    case .ConstUnsignedChar(let i32): return .Immediate(Int(i32))
                 }
             case .Var(let name):
                 if let _ = symbolTable[name] {
@@ -268,6 +270,8 @@ class Assembly {
                     case .ConstUnsignedLong: fallthrough
                     case .ConstLong(_) : return .Quadword
                     case .ConstDouble(_): return .Double
+                    case .ConstChar(_): fallthrough
+                    case .ConstUnsignedChar(_): return .Byte
                 }
             case .Var(let name):
                 guard let entry = symbolTable[name] else {
@@ -309,6 +313,8 @@ class Assembly {
                     case .ConstUnsignedLong: return false
                     case .ConstLong(_) : return true
                     case .ConstDouble(_): return true
+                    case .ConstChar(_): return true
+                    case .ConstUnsignedChar(_): return false
                 }
             case .Var(let name):
                 guard let entry = symbolTable[name] else {

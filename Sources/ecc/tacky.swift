@@ -36,6 +36,8 @@ class Tacky {
         }
 
         enum ConstVal {
+            case ConstChar(Int32)
+            case ConstUnsignedChar(Int32)
             case ConstInt(Int32)
             case ConstUnsignedInt(UInt32)
             case ConstLong(Int64)
@@ -111,6 +113,12 @@ class Tacky {
         return "L.switch.\(descriptor)label.inf"
     }
 
+    func makeStringLabel() -> String {
+        let out = "string.tacky.\(tempNameCounter)"
+        tempNameCounter = tempNameCounter + 1
+        return out
+    }
+
     func transformUserLabel(_ userLabel: String) -> String {
         let out = "L.user.\(userLabel).eps"
         return out
@@ -183,10 +191,10 @@ class Tacky {
                         return .PlainOperand(.Constant(.ConstUnsignedLong(val)))
                     case .ConstDouble(let val):
                         return .PlainOperand(.Constant(.ConstDouble(val)))
-                    case .ConstChar(_): fallthrough
-                    case .ConstUChar(_):
-                        print("As-yet-unhandled constant character found while generating TACKY")
-                        exit(ExitCode.internalError.rawValue)
+                    case .ConstChar(let i32):
+                        return .PlainOperand(.Constant(.ConstChar(i32)))
+                    case .ConstUChar(let i32):
+                        return .PlainOperand(.Constant(.ConstUnsignedChar(i32)))
                 }
             case .Unary(let op, let exp, let tp):
                 if isIncOrDec(op) {
@@ -428,9 +436,11 @@ class Tacky {
                 let tmp1 = makeTempVariable(.Pointer(tp!), &symbolTable)
                 out.append(.AddPtr(tmp0, offset, UInt(getTypeSize(convertCTypeToCheckerType(tp!))), tmp1))
                 return .DereferencedPointer(tmp1)
-            case .String(_):
-                print("As-yet-unhandled string value found while generating TACKY")
-                exit(ExitCode.internalError.rawValue)
+            case .String(let val, _):
+                // TODO: string interning
+                let varName = makeStringLabel()
+                symbolTable[varName] = (.ArrayType(.Char, UInt(val.count) + 1), .ConstantAttr(.StringInit(val, true)))
+                return .PlainOperand(.Var(varName))
         }
     }
 
@@ -693,9 +703,7 @@ class Tacky {
             case .Dereference(_, let tp): return tp!
             case .AddrOf(_, let tp): return tp!
             case .Subscript(_, _, let tp):  return tp!
-            case .String(_):
-                print("As-yet-unhandled string found while getting type in TACKY layer")
-                exit(ExitCode.internalError.rawValue)
+            case .String(_, let tp): return tp!
         }
     }
 
