@@ -958,9 +958,9 @@ class SemanticAnalyzer {
                         print("Invalid operand types \(ptrType), \(offsetType) for subscript expression \(expression)")
                         exit(ExitCode.semanticError.rawValue)
                     }
-                case .String(_):
-                    print("As-yet-unhandled string expression found while type checking")
-                    exit(ExitCode.internalError.rawValue)
+                case .String(let val, _):
+                    let arrType : Parser.AST.CType = .ArrayType(.Char, UInt(val.count) + 1)
+                    return (.String(val, arrType), convertCTypeToCheckerType(arrType))
             }
         }
 
