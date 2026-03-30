@@ -797,6 +797,21 @@ class Parser {
             return (.Double, storageClass)
         }
 
+        // character types
+        if specifierList.contains(.keywordChar) {
+            // no other types allowed
+            if specifierList.contains(.keywordLong) || specifierList.contains(.keywordInt) || specifierList.contains(.keywordVoid) {
+                print("Nonsense list of specifiers alongside 'char': \(specifierList)")
+                exit(ExitCode.parserError.rawValue)
+            }
+            if specifierList.contains(.keywordSigned) {
+                return (.SChar, storageClass)
+            } else {
+                // default to UChar
+                return (.UChar, storageClass)
+            }
+        }
+
         if specifierList.contains(.keywordUnsigned) && specifierList.contains(.keywordLong) {
             return (.UnsignedLong, storageClass)
         }
