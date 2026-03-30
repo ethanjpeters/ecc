@@ -622,7 +622,7 @@ class SemanticAnalyzer {
 
                     // NOTE: soon we will add pointer arithmetic and some unary
                     // operations will become legal to perform on pointers
-                    if isPointerType(eType) && unOp != .Not {
+                    if isPointerType(eType) && [.Complement, .Negate].contains(unOp) {
                         print("Can not presently perform unary operation \(unOp) on pointer type \(eType)")
                         exit(ExitCode.semanticError.rawValue)
                     }
