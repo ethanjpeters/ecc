@@ -47,7 +47,7 @@ class Parser {
 
         indirect enum Expression {
             case Constant(Constant, CType?)
-            case String(String)
+            case String(String, CType?)
             case Unary(UnaryOperator, Expression, CType?)
             case Binary(BinaryOperator, Expression, Expression, CType?)
             case Var(String /* identifier */, CType?)
@@ -234,6 +234,7 @@ class Parser {
     
     func isType(_ tokenStream: [(Lexer.Token, LexerPosition)]) -> Bool {
         switch peek(tokenStream) {
+            case .keywordChar: fallthrough
             case .keywordInt: fallthrough
             case .keywordLong: fallthrough
             case .keywordDouble: fallthrough
@@ -507,6 +508,7 @@ class Parser {
         switch next {
             // parse an integer constant
         case .constant(_): fallthrough
+        case .charLiteral(_): fallthrough
         case .floatingPointConstant(_):
             lhs = parseConstant(token: next)
             // variable
@@ -536,15 +538,16 @@ class Parser {
         // parse one or more string literals
         case .stringLiteral(_):
             var out : String = ""
-            while true {
+            var keepLooping = true
+            while keepLooping {
                 switch peek(tokenStream) {
                     case .stringLiteral(let s):
                         out = out + s
                         tokenStream.removeFirst()
-                    default: break
+                    default: keepLooping = false
                 }
             }
-            lhs = .String(out)
+            lhs = .String(out, nil) // really? nil?
             // <unop> <exp>
         case .complement:
             let child = parseFactor(tokenStream: &tokenStream)
@@ -947,6 +950,7 @@ class Parser {
                 while peek(tokenStream) != .closeParen {
                     func isNonStorageTypeSpecifier(_ tok: Lexer.Token) -> Bool {
                         switch tok {
+                            case .keywordChar: fallthrough
                             case .keywordInt: fallthrough
                             case .keywordLong: fallthrough
                             case .keywordUnsigned: fallthrough

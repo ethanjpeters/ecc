@@ -591,7 +591,7 @@ class SemanticAnalyzer {
                         case .ConstUnsignedInt(let val): return (.Constant(.ConstUnsignedInt(val), .UnsignedInt), .UnsignedInt)
                         case .ConstUnsignedLong(let val): return (.Constant(.ConstUnsignedLong(val), .UnsignedLong), .UnsignedLong)
                         case .ConstDouble(let val): return (.Constant(.ConstDouble(val), .Double), .Double)
-                        case .ConstChar(_): fallthrough
+                        case .ConstChar(let val): fallthrough
                         case .ConstUChar(_):
                             print("As-yet-unhandled character constants found while type checking expression")
                             exit(ExitCode.internalError.rawValue)
