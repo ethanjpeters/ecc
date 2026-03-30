@@ -530,7 +530,9 @@ class SemanticAnalyzer {
             case LongInit(Int64)
             case ULongInit(UInt64)
             case DoubleInit(Double)
-            case ZeroInit(/* widthInBytes */ UInt)    // no idea what this is for
+            case CharInit(Int32)
+            case UCharInit(Int32)
+            case ZeroInit(/* widthInBytes */ UInt)
         }
 
         enum InitialValue {
@@ -591,10 +593,8 @@ class SemanticAnalyzer {
                         case .ConstUnsignedInt(let val): return (.Constant(.ConstUnsignedInt(val), .UnsignedInt), .UnsignedInt)
                         case .ConstUnsignedLong(let val): return (.Constant(.ConstUnsignedLong(val), .UnsignedLong), .UnsignedLong)
                         case .ConstDouble(let val): return (.Constant(.ConstDouble(val), .Double), .Double)
-                        case .ConstChar(let val): fallthrough
-                        case .ConstUChar(_):
-                            print("As-yet-unhandled character constants found while type checking expression")
-                            exit(ExitCode.internalError.rawValue)
+                        case .ConstChar(let val): return (.Constant(.ConstChar(val), .Char), .Char)
+                        case .ConstUChar(let val): return (.Constant(.ConstChar(val), .UChar), .UChar)
                     }
                 case .Unary(let unOp, let e, _):
                     let (checkedE, eType) = typeCheckAndConvert(e, nameMap)
