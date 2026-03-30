@@ -389,6 +389,7 @@ class Tacky {
 
                     let targetCp = convertCTypeToCheckerType(targetType)
                     let innerCp = convertCTypeToCheckerType(tp!)
+                    
                     // allow an array to decay to a pointer
                     if isPointerType(targetCp) {
                         switch innerCp {
@@ -403,7 +404,12 @@ class Tacky {
                                 print("Can't cast around pointers, sorry")
                                 exit(ExitCode.semanticError.rawValue)
                         }
-                    }    
+                    }
+                    
+                    if isSubscribtableType(targetCp) {
+                        print("Can not cast \(child) of type \(innerCp) to array \(targetCp)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
 
                     if isFloatingPoint(targetCp) && !isFloatingPoint(innerCp) {
                         if isSigned(innerCp) {
