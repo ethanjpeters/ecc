@@ -823,9 +823,10 @@ class Parser {
             }
             if specifierList.contains(.keywordSigned) {
                 return (.SChar, storageClass)
-            } else {
-                // default to UChar
+            } else if specifierList.contains(.keywordUnsigned) {
                 return (.UChar, storageClass)
+            } else {
+                return (.Char, storageClass)
             }
         }
 

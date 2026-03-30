@@ -1553,9 +1553,7 @@ func isFloatingPoint(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
             print("VOID IS NEITHER FP NOR NOT FP DOES NOT COMPUTE BEEP BOOP")
             exit(ExitCode.internalError.rawValue)
         case .Double: return true
-        case .ArrayType(_, _):
-            print("ARRAY IS NEITHER FP NOR NOT FP")
-            exit(ExitCode.internalError.rawValue)
+        case .ArrayType(_, _): return false
     }
 }
 
