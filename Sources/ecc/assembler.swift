@@ -76,6 +76,7 @@ class Assembly {
         }
 
         enum AssemblyType : Equatable {
+            case Byte
             case Longword
             case Quadword
             case Double
@@ -292,6 +293,9 @@ class Assembly {
                         } else {
                             return .ByteArray(totalSize, 16)
                         }
+                    case .Char: fallthrough
+                    case .SChar: fallthrough
+                    case .UChar: return .Byte
                 }
         }
     }
@@ -324,6 +328,9 @@ class Assembly {
                     case .Double: return true
                     case .Pointer(_): return false
                     case .ArrayType(_, _): return false
+                    case .SChar: return true
+                    case .Char: fallthrough
+                    case .UChar: return false
                 }
         }
     }
@@ -749,6 +756,9 @@ class Assembly {
         for (name, entry) in typedSymbolTable {
             let (checkerType, attrs) = entry
             switch checkerType {
+                case .Char: fallthrough
+                case .SChar: fallthrough
+                case .UChar: fallthrough
                 case .Int: fallthrough
                 case .UnsignedInt: fallthrough
                 case .Long: fallthrough
@@ -815,6 +825,9 @@ class Assembly {
                         print("No comprendo; can't have a pseudo of function type (\(name))")
                         exit(ExitCode.internalError.rawValue)
                     case .Void: width = 4   // function return types can be void but they're really int
+                    case .Char: fallthrough
+                    case .SChar: fallthrough
+                    case .UChar: width = 1
                     case .Int: width = 4
                     case .UnsignedInt: width = 4
                     case .Long: width = 8

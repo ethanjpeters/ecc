@@ -9,6 +9,7 @@ enum RegisterWidth {
 
 func typeToWidth(_ tp: Assembly.Tree.AssemblyType) -> RegisterWidth {
     switch tp {
+        case .Byte: return .oneByte
         case .Longword: return .fourByte
         case .Quadword: return .eightByte
         case .Double: return .eightByte
@@ -187,6 +188,7 @@ func makeFunctionName(_ name : String) -> String {
 
 func typeToSuffix(_ tp : Assembly.Tree.AssemblyType, isPacked : Bool = false) -> String {
     switch tp {
+        case .Byte: return "b"
         case .Longword: return "l"
         case .Quadword: return "q"
         case .Double: return isPacked ? "pd" : "sd"

@@ -510,6 +510,9 @@ class SemanticAnalyzer {
 
     class TypeChecker {
         indirect enum CheckerType : Equatable {
+            case Char
+            case SChar
+            case UChar
             case Int
             case UnsignedInt
             case Long
@@ -544,6 +547,9 @@ class SemanticAnalyzer {
 
         static func deConvert(_ cType : CheckerType) -> Parser.AST.CType {
             switch cType {
+                case .Char: return .Char
+                case .UChar: return .UChar
+                case .SChar: return .SChar
                 case .Int: return .Int
                 case .UnsignedInt: return .UnsignedInt
                 case .Void: return .Void
@@ -873,6 +879,9 @@ class SemanticAnalyzer {
                                 upCastExp.append(ipExp)
                             }
                             return (.FunctionCall(lValue, upCastExp, Self.deConvert(rType)), rType)
+                        case .Char: fallthrough
+                        case .SChar: fallthrough
+                        case .UChar: fallthrough
                         case .Int: fallthrough
                         case .UnsignedInt: fallthrough
                         case .Long: fallthrough
@@ -1422,6 +1431,9 @@ func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Int {
         case .Pointer(_): return 8
         case .ArrayType(let nestedType, let length):
             return Int(length) * getTypeSize(nestedType)
+        case .Char: fallthrough
+        case .SChar: fallthrough
+        case .UChar: return 1
         case .Void:
             print("GETTING TYPE SIZE OF VOID MAKES NO SENSE")
             exit(ExitCode.internalError.rawValue)
@@ -1430,8 +1442,11 @@ func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Int {
 
 func isSigned(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
     switch tp {
+        case .SChar: fallthrough
         case .Int: fallthrough
         case .Long: return true
+        case .UChar: fallthrough
+        case .Char: fallthrough
         case .UnsignedInt: fallthrough
         case .UnsignedLong: return false
         case .Pointer(_): return false
@@ -1450,6 +1465,9 @@ func isSigned(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
 
 func isFloatingPoint(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
     switch tp {
+        case .Char: fallthrough
+        case .SChar: fallthrough
+        case .UChar: fallthrough
         case .Int: fallthrough
         case .Long: fallthrough
         case .UnsignedInt: fallthrough
@@ -1470,6 +1488,9 @@ func isFloatingPoint(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
 
 func isIntegralType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
     switch tp {
+        case .SChar: fallthrough
+        case .UChar: fallthrough
+        case .Char: fallthrough
         case .Int: fallthrough
         case .Long: fallthrough
         case .UnsignedInt: fallthrough
@@ -1484,6 +1505,9 @@ func isIntegralType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
 
 func isArithmeticType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
     switch tp {
+        case .SChar: fallthrough
+        case .UChar: fallthrough
+        case .Char: fallthrough
         case .Int: fallthrough
         case .Long: fallthrough
         case .UnsignedInt: fallthrough
@@ -1498,17 +1522,29 @@ func isArithmeticType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
 
 func getCommonType(_ left : SemanticAnalyzer.TypeChecker.CheckerType, _ right: SemanticAnalyzer.TypeChecker.CheckerType) -> SemanticAnalyzer.TypeChecker.CheckerType {
     if left == right { return left }
+    // upcast characters to ints
+    let lLeft: SemanticAnalyzer.TypeChecker.CheckerType = isCharacterType(left) ? .Int : left
+    let rRight: SemanticAnalyzer.TypeChecker.CheckerType = isCharacterType(right) ? .Int : right
     // upcast to floating point where necessary
-    if isFloatingPoint(left) { return left }
-    if isFloatingPoint(right) { return right }
-    if getTypeSize(left) == getTypeSize(right) {
-        if isSigned(left) { return right }
-        else { return left }
+    if isFloatingPoint(lLeft) { return lLeft }
+    if isFloatingPoint(rRight) { return rRight }
+    if getTypeSize(lLeft) == getTypeSize(rRight) {
+        if isSigned(lLeft) { return rRight }
+        else { return lLeft }
     }
-    if getTypeSize(left) > getTypeSize(right) {
-        return left
+    if getTypeSize(lLeft) > getTypeSize(rRight) {
+        return lLeft
     } else {
-        return right
+        return rRight
+    }
+}
+
+func isCharacterType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    switch tp {
+        case .Char: fallthrough
+        case .SChar: fallthrough
+        case .UChar: return true
+        default: return false
     }
 }
 
