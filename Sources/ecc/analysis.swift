@@ -551,6 +551,14 @@ class SemanticAnalyzer {
             case LocalAttr
         }
 
+        var stringCounter : UInt = 0
+
+        func stringConstantName() -> String {
+            let out = "string.\(stringCounter)"
+            stringCounter = stringCounter + 1
+            return out
+        }
+
         static func deConvert(_ cType : CheckerType) -> Parser.AST.CType {
             switch cType {
                 case .Char: return .Char
@@ -1172,7 +1180,7 @@ class SemanticAnalyzer {
 
         func typeCheck(_ declaration: Parser.AST.Declaration, _ fileLevel: Bool, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)]) -> Parser.AST.Declaration {
 
-            func convert(_ initializer : Parser.AST.Initializer) -> InitialValue {
+            func convert(_ initializer : Parser.AST.Initializer, _ targetType: Parser.AST.CType) -> InitialValue {
                 switch initializer {
                     case .SingleInit(let exp):
                         switch exp {
@@ -1190,14 +1198,54 @@ class SemanticAnalyzer {
                                         exit(ExitCode.internalError.rawValue)
                                 }
                                 return .Initial([i])
+                            case .String(let val, _):
+                                switch targetType {
+                                    case .ArrayType(let nestedType, let count):
+                                        if !isCharacterType(convertCTypeToCheckerType(nestedType)) {
+                                            print("Can not assign string to non-character array of type \(nestedType)")
+                                            exit(ExitCode.semanticError.rawValue)
+                                        }
+                                        if count < UInt(val.count) {
+                                            print("Tried to assign string that is too long for array")
+                                            exit(ExitCode.semanticError.rawValue)
+                                        }
+                                        if count == UInt(val.count) {
+                                            return .Initial([.StringInit(val, false)])
+                                        }
+                                        if count == UInt(val.count + 1) {
+                                            return .Initial([.StringInit(val, true)])
+                                        }
+                                        return .Initial([.StringInit(val, true), .ZeroInit(count - UInt(val.count + 1))])
+                                    case .Pointer(let pointeeType):
+                                        switch pointeeType {
+                                            case .Char: ()
+                                            default:
+                                                print("Trying to assign a string to a non-char* type \(targetType)")
+                                                exit(ExitCode.semanticError.rawValue)
+                                        }
+                                        let scName = stringConstantName()
+                                        nameMap[scName] = (.ArrayType(.Char, UInt(val.count) + 1), .ConstantAttr(.StringInit(val, true)))
+                                        return .Initial([.PointerInit(scName)])
+                                    default:
+                                        print("Tried to assign string to non-string target type \(targetType)")
+                                        exit(ExitCode.semanticError.rawValue)
+                                }
                             default:
                                 print("Non constant expression \(exp) used to initialize value")
                                 exit(ExitCode.semanticError.rawValue)
                         }
                     case .CompoundInit(let exps):
+                        let nestedType : Parser.AST.CType
+                        switch targetType {
+                            case .ArrayType(let innerType, _):
+                                nestedType = innerType
+                            default:
+                                print("Tried to initialize non-array type with compound initializer")
+                                exit(ExitCode.semanticError.rawValue)
+                        }
                         var out : [StaticInit] = []
                         for e in exps {
-                            let ce = convert(e)
+                            let ce = convert(e, nestedType)
                             switch ce {
                                 case .Initial(let ie):
                                     out = out + ie
@@ -1294,7 +1342,7 @@ class SemanticAnalyzer {
                     if fileLevel {
                         var initVal : InitialValue
                         if let ie = initExp {
-                            initVal = convert(ie)
+                            initVal = convert(ie, tp)
                         } else {
                             if storageClass == .Extern {
                                 initVal = .NoInitializer
@@ -1369,7 +1417,7 @@ class SemanticAnalyzer {
                         } else if storageClass == .Static {
                             let initValue : InitialValue
                             if let e = initExp {
-                                initValue = convert(e)
+                                initValue = convert(e, tp)
                             } else {
                                 initValue = .Initial([.IntInit(0)])
                             }
