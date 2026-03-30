@@ -29,6 +29,7 @@ class SemanticAnalyzer {
             switch exp {
                 case .Var(_, _): return true
                 case .Dereference(_, _): return true
+                case .String(_, _): return true
                 default: return false
             }
         }
