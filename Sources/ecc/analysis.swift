@@ -622,7 +622,11 @@ class SemanticAnalyzer {
                         case .Not:
                             outType = .Int
                         default:
-                            outType = Self.deConvert(eType)
+                            if isCharacterType(eType) {
+                                outType = .Int
+                            } else {
+                                outType = Self.deConvert(eType)
+                            }
                     }
                     return (.Unary(unOp, checkedE, outType), convertCTypeToCheckerType(outType))
                 case .Binary(let binOp, let left, let right, _):
