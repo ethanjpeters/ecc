@@ -59,6 +59,8 @@ class Parser {
             case Dereference(Expression, CType?)
             case AddrOf(Expression, CType?)
             case Subscript(Expression /* pointer */, Expression /* offset */, CType?)
+            case SizeOf(Expression, CType?)
+            case SizeOfT(CType, CType?)
         }
 
         indirect enum Initializer {
