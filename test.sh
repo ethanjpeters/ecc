@@ -2,6 +2,16 @@
 
 # set -exu
 
+swift run ecc TestSources/hello_world.c
+./hello_world
+if [[ $? -ne 99 ]]; then
+    echo "hello_world: Expected exit code 99 but got $?"
+    exit 1
+else
+    echo "hello_world: success"
+fi
+rm hello_world
+
 swift run ecc TestSources/pointer_basic.c
 ./pointer_basic
 if [[ $? -ne 13 ]]; then

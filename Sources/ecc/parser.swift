@@ -536,8 +536,8 @@ class Parser {
                 lhs = out
             }
         // parse one or more string literals
-        case .stringLiteral(_):
-            var out : String = ""
+        case .stringLiteral(let sl):
+            var out : String = sl
             var keepLooping = true
             while keepLooping {
                 switch peek(tokenStream) {

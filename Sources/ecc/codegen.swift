@@ -299,9 +299,9 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                     case .StringInit(let val, let zero):
                         let s = escapeString(val)
                         if zero {
-                            out.append("\t.asciz\t\(s)")
+                            out.append("\t.asciz\t\"\(s)\"")
                         } else {
-                            out.append("\t.ascii\t\(s)")
+                            out.append("\t.ascii\t\"\(s)\"")
                         }
                     case .PointerInit(let name): out.append("\t.quad\t\(name)")
                 }
@@ -335,9 +335,9 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                 case .StringInit(let val, let zero):
                         let s = escapeString(val)
                         if zero {
-                            out.append("\t.asciz\t\(s)")
+                            out.append("\t.asciz\t\"\(s)\"")
                         } else {
-                            out.append("\t.ascii\t\(s)")
+                            out.append("\t.ascii\t\"\(s)\"")
                         }
                 case .PointerInit(let label): out.append("\t.quad\t\(label)")
             }
