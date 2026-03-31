@@ -260,6 +260,7 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
             case .Cvtsi2sd(let tp, let src, let dst):
                 out.append("\tcvtsi2sd\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
             case .Lea(let src, let dst):
+                // TODO: I just feel like this is a ticking time bomb
                 out.append("\tlea\t\(convert(src, .eightByte)), \(convert(dst, .eightByte))")
         }
     }
@@ -292,22 +293,28 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                     case .UIntInit(let i): out.append("\t.long\t\(i)")
                     case .ULongInit(let i): out.append("\t.quad\t\(i)")
                     case .DoubleInit(let f): out.append("\t.double\t\(f)")
-                    case .CharInit(_): fallthrough
-                    case .UCharInit(_):
-                        print("As-yet-unhandled character initializer found while emitting static constant")
-                        exit(ExitCode.internalError.rawValue)
+                    case .CharInit(let i32): out.append("\t.byte\t\(i32)")
+                    case .UCharInit(let i32): out.append("\t.byte\t\(i32)")
                     case .ZeroInit(let w): out.append("\t.zero\t\(w)")
-                    case .StringInit(_, _): fallthrough
-                    case .PointerInit(_):
-                        print("As-yet-unhandled initializer found while emitting static constant")
-                        exit(ExitCode.internalError.rawValue)
+                    case .StringInit(let val, let zero):
+                        let s = escapeString(val)
+                        if zero {
+                            out.append("\t.asciz\t\(s)")
+                        } else {
+                            out.append("\t.ascii\t\(s)")
+                        }
+                    case .PointerInit(let name): out.append("\t.quad\t\(name)")
                 }
             }
         case .StaticConstant(let name, let alignment, let initVal):
-            if alignment == 8 {
-                out.append(".literal8")
-            } else if alignment == 16 {
-                out.append(".literal16")
+            if isStringInit(initVal) {
+                out.append(".cstring")
+            } else {
+                if alignment == 8 {
+                    out.append(".literal8")
+                } else if alignment == 16 {
+                    out.append(".literal16")
+                }
             }
             out.append("\t.balign\t\(alignment)")
             out.append("\(name):")
@@ -321,16 +328,18 @@ func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [Str
                     if f == -0.0 {
                         out.append("\t.quad\t0")
                     }
-                case .CharInit(_): fallthrough
-                case .UCharInit(_):
-                    print("As-yet-unhandled character initializer found while emitting static constant")
-                    exit(ExitCode.internalError.rawValue)
+                case .CharInit(let i32): out.append("\t.byte\t\(i32)")
+                case .UCharInit(let i32): out.append("\t.byte\t\(i32)")
                 case .ZeroInit(let w):
                     out.append("\t.zero\t\(w)")
-                case .StringInit(_, _): fallthrough
-                case .PointerInit(_):
-                    print("As-yet-unhandled initializer found while emitting static constant")
-                    exit(ExitCode.internalError.rawValue)
+                case .StringInit(let val, let zero):
+                        let s = escapeString(val)
+                        if zero {
+                            out.append("\t.asciz\t\(s)")
+                        } else {
+                            out.append("\t.ascii\t\(s)")
+                        }
+                case .PointerInit(let label): out.append("\t.quad\t\(label)")
             }
     }
 }
@@ -343,6 +352,27 @@ func emitProgram(program: Assembly.Tree.Program) -> [String] {
             for decl in declarations {
                 emitProgramLevelStatement(decl, out: &out)
             }
+    }
+
+    return out
+}
+
+func isStringInit(_ v: SemanticAnalyzer.TypeChecker.StaticInit) -> Bool {
+    switch v {
+        case .StringInit(_, _): return true
+        default: return false
+    }
+}
+
+func escapeString(_ s: String) -> String {
+    var out : String = ""
+
+    for c in s {
+        if c.isLetter || c.isNumber {
+            out = out + String(c)
+        } else {
+            out = out + "\\\(String(c.asciiValue!, radix: 8))"
+        }
     }
 
     return out
