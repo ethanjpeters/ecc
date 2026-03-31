@@ -537,6 +537,31 @@ class Parser {
                 let _ = expect(.closeParen, &tokenStream)
                 lhs = out
             }
+        // sizeof operation
+        case .keywordSizeOf:
+            if peek(tokenStream) == .openParen {
+                // complicated...
+                // could be a type, could be an expression
+                let _ = expect(.openParen, &tokenStream)
+                if isType(tokenStream) || isTypeSpecifier(tokenStream) {
+                    // it appears to be a type; carry on
+                    var (namedType, _) = parseType(&tokenStream)
+                    if peek(tokenStream) != .closeParen {
+                        let absDecl = parseAbstractDeclarator(tokenStream: &tokenStream)
+                        namedType = processAbstractDeclarator(decl: absDecl, baseType: namedType)
+                    }
+                    lhs = .SizeOfT(namedType, nil)
+                } else {
+                    // it's an expression
+                    let child = parseFactor(tokenStream: &tokenStream)
+                    lhs = .SizeOf(child, nil)
+                }
+                let _ = expect(.closeParen, &tokenStream)
+            } else {
+                // not complicated -- unary expression
+                let child = parseFactor(tokenStream: &tokenStream)
+                lhs = .SizeOf(child, nil)
+            }
         // parse one or more string literals
         case .stringLiteral(let sl):
             var out : String = sl

@@ -78,6 +78,8 @@ class SemanticAnalyzer {
                         nil
                     )
                 case .String(_, _): return exp
+                case .SizeOf(_, _): return exp
+                case .SizeOfT(_, _): return exp
             }
         }
 
@@ -975,6 +977,10 @@ class SemanticAnalyzer {
                 case .String(let val, _):
                     let arrType : Parser.AST.CType = .ArrayType(.Char, UInt(val.count) + 1)
                     return (.String(val, arrType), convertCTypeToCheckerType(arrType))
+                case .SizeOf(_, _): fallthrough
+                case .SizeOfT(_, _):
+                    print("As-yet-unhandled sizeof() operator found while typechecking")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 

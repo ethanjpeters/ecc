@@ -463,6 +463,10 @@ class Tacky {
                 let varName = makeStringLabel()
                 symbolTable[varName] = (.ArrayType(.Char, UInt(val.count) + 1), .ConstantAttr(.StringInit(val, true)))
                 return .PlainOperand(.Var(varName))
+            case .SizeOf(_, _): fallthrough
+            case .SizeOfT(_, _):
+                print("As-yet-unhandled sizeof operator found while generating TACKY expression")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 
@@ -746,6 +750,8 @@ class Tacky {
             case .AddrOf(_, let tp): return tp!
             case .Subscript(_, _, let tp):  return tp!
             case .String(_, let tp): return tp!
+            case .SizeOf(_, let tp): return tp!
+            case .SizeOfT(_, let tp): return tp!
         }
     }
 
