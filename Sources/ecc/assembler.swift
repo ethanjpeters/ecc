@@ -864,8 +864,7 @@ class Assembly {
                         case .LocalAttr:
                             isStatic = false
                         case .ConstantAttr(_):
-                            print("As-yet-unhandled constant attr found when generating TACKY")
-                            exit(ExitCode.internalError.rawValue)
+                            isStatic = true
                         case .FunAttr(_, _):
                             print("Totally meaningless function typed int/long \(name)")
                             exit(ExitCode.internalError.rawValue)
@@ -892,8 +891,7 @@ class Assembly {
                         case .LocalAttr:
                             isGlobal = false
                         case .ConstantAttr(_):
-                            print("As-yet-unhandled constant attr found when generating TACKY")
-                            exit(ExitCode.internalError.rawValue)
+                            isGlobal = true
                         case .FunAttr(_, _):
                             print("UNREACHABLE: FUN ATTR FOR ARRAY TYPE")
                             exit(ExitCode.internalError.rawValue)
@@ -961,7 +959,7 @@ class Assembly {
                 switch tp {
                     case .ArrayType(_, _): ()
                     default:
-                        print("Impossible situation reached where pseudo mem operand is not an array")
+                        print("Impossible situation reached where pseudo mem operand is not an array (\(tp), \(name))")
                         exit(ExitCode.internalError.rawValue)
                 }
 

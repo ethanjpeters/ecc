@@ -623,7 +623,24 @@ class Tacky {
         switch i {
             case .SingleInit(let exp):
                 let child = generateTACKYExpressionAndConvert(exp, out: &out, symbolTable: &symbolTable)
-                out.append(.CopyToOffset(child, dest, offset))
+                switch symbolTable[dest]!.0 {
+                    case .ArrayType(_, _): fallthrough
+                    case .Pointer(_):
+                        out.append(.CopyToOffset(child, dest, offset))
+                    case .Char: fallthrough
+                    case .SChar: fallthrough
+                    case .UChar: fallthrough
+                    case .Int: fallthrough
+                    case .UnsignedInt: fallthrough
+                    case .Long: fallthrough
+                    case .UnsignedLong: fallthrough
+                    case .Double:
+                        out.append(.Copy(child, .Var(dest)))
+                    case .Void: fallthrough
+                    case .Function(_, _):
+                        print("Unreachable invalidate type \(symbolTable[dest]!.0) found while initializing \(dest)")
+                        exit(ExitCode.internalError.rawValue)
+                }
             case .CompoundInit(let children):
                 let size : UInt
                 switch (symbolTable[dest]!.0) {
