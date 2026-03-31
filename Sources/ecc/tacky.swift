@@ -624,9 +624,9 @@ class Tacky {
             case .SingleInit(let exp):
                 let child = generateTACKYExpressionAndConvert(exp, out: &out, symbolTable: &symbolTable)
                 switch symbolTable[dest]!.0 {
-                    case .ArrayType(_, _): fallthrough
-                    case .Pointer(_):
+                    case .ArrayType(_, _):
                         out.append(.CopyToOffset(child, dest, offset))
+                    case .Pointer(_): fallthrough
                     case .Char: fallthrough
                     case .SChar: fallthrough
                     case .UChar: fallthrough
