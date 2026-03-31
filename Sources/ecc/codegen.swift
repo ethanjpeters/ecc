@@ -244,12 +244,17 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
             case .Call(let fName):
                 out.append("\tcall\t\(makeFunctionName(fName))")
             case .Movsx(let srcType, let dstType, let src, let dst):
-                print("As-yet-unhandled newly complicated .movsx instruction")
-                exit(ExitCode.internalError.rawValue)
-                out.append("\tmovslq\t\(convert(src, .fourByte)), \(convert(dst, .eightByte))")
-            case .Movzx(_, _, _, _):
-                print("Unreachable movzx survived assembly fixup")
-                exit(ExitCode.internalError.rawValue)
+                let srcSuff = typeToSuffix(srcType)
+                let dstSuff = typeToSuffix(dstType)
+                let cSrc = convert(src, typeToWidth(srcType))
+                let cDst = convert(dst, typeToWidth(dstType))
+                out.append("\tmovs\(srcSuff)\(dstSuff)\t\(cSrc), \(cDst)")
+            case .Movzx(let srcType, let dstType, let src, let dst):
+                let srcSuff = typeToSuffix(srcType)
+                let dstSuff = typeToSuffix(dstType)
+                let cSrc = convert(src, typeToWidth(srcType))
+                let cDst = convert(dst, typeToWidth(dstType))
+                out.append("\tmovz\(srcSuff)\(dstSuff)\t\(cSrc), \(cDst)")
             case .Cvttsd2si(let tp, let src, let dst):
                 out.append("\tcvttsd2si\(typeToSuffix(tp))\t\(convert(src, typeToWidth(tp))), \(convert(dst, typeToWidth(tp)))")
             case .Cvtsi2sd(let tp, let src, let dst):
