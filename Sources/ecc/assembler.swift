@@ -86,7 +86,7 @@ class Assembly {
         enum Instruction {
             case Mov(AssemblyType, Operand /* src */, Operand /* dst */)
             case Movsx(Operand /* src */, Operand /* dst */)
-            case Movzx(Operand /* src */, Operand /* dst */)
+            case Movzx(AssemblyType /* srcType */, AssemblyType /* dstType */, Operand /* src */, Operand /* dst */)
             case Cvttsd2si(AssemblyType, Operand /* src */, Operand /* dst */)
             case Cvtsi2sd(AssemblyType, Operand /* src */, Operand /* dst */ )
             case Unary(UnaryOperator, AssemblyType, Operand)
@@ -568,7 +568,11 @@ class Assembly {
                 case .Truncate(let src, let dst):
                     out.append(.Mov(.Longword, convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                 case .ZeroExtend(let src, let dst):
-                    out.append(.Movzx(convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
+                    let cSrc = convert(src, symbolTable, typedSymbolTable)
+                    let cDst = convert(dst, symbolTable, typedSymbolTable)
+                    let srcType = deduceType(src, typedSymbolTable)
+                    let dstType = deduceType(dst, typedSymbolTable)
+                    out.append(.Movzx(srcType, dstType, cSrc, cDst))
                 case .DoubleToInt(let src, let dst):
                     // straightforward case, done by one instruction
                     out.append(.Cvttsd2si(deduceType(dst, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
@@ -614,7 +618,8 @@ class Assembly {
                     // if we're dealing with a 4-byte integer
                     if deduceType(src, typedSymbolTable) == .Longword {
                         // zero extend it to a quadword
-                        out.append(.Movzx(convert(src, symbolTable, typedSymbolTable), .Register(.AX)))
+                        let cSrc = convert(src, symbolTable, typedSymbolTable)
+                        out.append(.Movzx(.Longword, .Quadword, cSrc, .Register(.AX)))
                         // then convert it
                         out.append(.Cvtsi2sd(.Quadword, .Register(.AX), convert(dst, symbolTable, typedSymbolTable)))
                     } else {
@@ -775,7 +780,27 @@ class Assembly {
                 case .UnsignedLong: fallthrough
                 case .Double: fallthrough
                 case .Pointer(_):
-                    let asmType : Tree.AssemblyType = (checkerType == .Double) ? .Double : ((checkerType == .Int || checkerType == .UnsignedInt) ? .Longword : .Quadword)    // pointers and longs both fall through to Quadword
+                    let asmType : Tree.AssemblyType
+                    switch checkerType {
+                        case .Char: fallthrough
+                        case .SChar: fallthrough
+                        case .UChar: asmType = .Byte
+                        case .Int: fallthrough
+                        case .UnsignedInt: asmType = .Longword
+                        case .Long: fallthrough
+                        case .UnsignedLong: asmType = .Quadword
+                        case .Double: asmType = .Double
+                        case .Void:
+                            print("UNREACHABLE VOID")
+                            exit(ExitCode.internalError.rawValue)
+                        case .Pointer(_): asmType = .Quadword
+                        case .Function(_, _):
+                            print("UNREACHABLE FUNC")
+                            exit(ExitCode.internalError.rawValue)
+                        case .ArrayType(_, _):
+                            print("UNREACHABLE ARRAY")
+                            exit(ExitCode.internalError.rawValue)
+                    }
                     let isStatic: Bool
                     switch attrs {
                         case .StaticAttr(_, _):
@@ -947,8 +972,10 @@ class Assembly {
                         replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
                         replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
                     ))
-                case .Movzx(let src, let dst):
+                case .Movzx(let srcType, let dstType, let src, let dst):
                     out.append(.Movzx(
+                        srcType,
+                        dstType,
                         replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
                         replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
                     ))
@@ -1190,15 +1217,41 @@ class Assembly {
                     }
                     out.append(.Movsx(realSrc, realDst))
                     if let p = postfix { out.append(p) }
-                case .Movzx(let src, let dst):
+                case .Movzx(let srcType, let dstType, let src, let dst):
                     switch dst {
                         case .Register(_):
-                            out.append(.Mov(.Longword, src, dst))
+                            switch srcType {
+                                case .Byte:
+                                    out.append(instr)
+                                case .Longword:
+                                    // can only be zero extending to a quad
+                                    out.append(.Mov(.Longword, src, dst))
+                                case .Double: fallthrough
+                                case .Quadword:
+                                    print("Can not zero extend any 8 byte values to anything bigger")
+                                    exit(ExitCode.internalError.rawValue)
+                                case .ByteArray(_, _):
+                                    print("Unreachable byte array movzx")
+                                    exit(ExitCode.internalError.rawValue)
+                            }
                         case .Stack(_): fallthrough
                         case .Memory(_, _): fallthrough
                         case .Data(_):
-                            out.append(.Mov(.Longword, src, .Register(.R11)))
-                            out.append(.Mov(.Quadword, .Register(.R11), dst))
+                            switch srcType {
+                                case .Byte:
+                                    out.append(.Movzx(srcType, dstType, src, .Register(.R11)))
+                                    out.append(.Mov(dstType, .Register(.R11), dst))
+                                case .Longword:
+                                    out.append(.Mov(.Longword, src, .Register(.R11)))
+                                    out.append(.Mov(.Quadword, .Register(.R11), dst))
+                                case .Double: fallthrough
+                                case .Quadword:
+                                    print("Can not zero extend any 8 byte values to anything bigger")
+                                    exit(ExitCode.internalError.rawValue)
+                                case .ByteArray(_, _):
+                                    print("Unreachable byte array movzx")
+                                    exit(ExitCode.internalError.rawValue)
+                            }
                         case .Pseudo(_): fallthrough
                         case .PseudoMem(_, _):
                             print("Unreachable: psuedo slot survived past pseudo replacement")
@@ -1418,7 +1471,7 @@ class Assembly {
                                     case .DeallocateStack(_): fallthrough
                                     case .Push(_): fallthrough
                                     case .Call(_): fallthrough
-                                    case .Movzx(_, _): fallthrough
+                                    case .Movzx(_, _, _, _): fallthrough
                                     case .Div(_, _): fallthrough
                                     case .Ret: fallthrough
                                     case .Lea(_, _): fallthrough

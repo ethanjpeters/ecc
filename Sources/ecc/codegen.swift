@@ -245,7 +245,7 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
                 out.append("\tcall\t\(makeFunctionName(fName))")
             case .Movsx(let src, let dst):
                 out.append("\tmovslq\t\(convert(src, .fourByte)), \(convert(dst, .eightByte))")
-            case .Movzx(_, _):
+            case .Movzx(_, _, _, _):
                 print("Unreachable movzx survived assembly fixup")
                 exit(ExitCode.internalError.rawValue)
             case .Cvttsd2si(let tp, let src, let dst):
