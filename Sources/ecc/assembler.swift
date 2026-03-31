@@ -85,7 +85,7 @@ class Assembly {
 
         enum Instruction {
             case Mov(AssemblyType, Operand /* src */, Operand /* dst */)
-            case Movsx(Operand /* src */, Operand /* dst */)
+            case Movsx(AssemblyType /* src */, AssemblyType /* dst */, Operand /* src */, Operand /* dst */)
             case Movzx(AssemblyType /* srcType */, AssemblyType /* dstType */, Operand /* src */, Operand /* dst */)
             case Cvttsd2si(AssemblyType, Operand /* src */, Operand /* dst */)
             case Cvtsi2sd(AssemblyType, Operand /* src */, Operand /* dst */ )
@@ -564,9 +564,17 @@ class Assembly {
                     // move the result
                     out.append(.Mov(deduceType(result, typedSymbolTable), .Register(.AX), convert(result, symbolTable, typedSymbolTable)))
                 case .SignExtend(let src, let dst):
-                    out.append(.Movsx(convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
+                    let cSrc = convert(src, symbolTable, typedSymbolTable)
+                    let cDst = convert(dst, symbolTable, typedSymbolTable)
+                    let srcType = deduceType(src, typedSymbolTable)
+                    let dstType = deduceType(dst, typedSymbolTable)
+                    out.append(.Movsx(srcType, dstType, cSrc, cDst))
                 case .Truncate(let src, let dst):
-                    out.append(.Mov(.Longword, convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
+                    out.append(.Mov(
+                        deduceType(dst, typedSymbolTable),
+                        convert(src, symbolTable, typedSymbolTable),
+                        convert(dst, symbolTable, typedSymbolTable)
+                    ))
                 case .ZeroExtend(let src, let dst):
                     let cSrc = convert(src, symbolTable, typedSymbolTable)
                     let cDst = convert(dst, symbolTable, typedSymbolTable)
@@ -967,8 +975,10 @@ class Assembly {
                 case .DeallocateStack(_): out.append(instr)
                 case .Push(let op):
                     out.append(.Push(replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
-                case .Movsx(let src, let dst):
+                case .Movsx(let srcType, let dstType, let src, let dst):
                     out.append(.Movsx(
+                        srcType,
+                        dstType,
                         replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
                         replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
                     ))
@@ -1194,12 +1204,12 @@ class Assembly {
                 case .Call(_): out.append(instr)
                 case .DeallocateStack(_): out.append(instr)
                 case .Push(_): out.append(instr)
-                case .Movsx(let src, let dst):
+                case .Movsx(let srcType, let dstType, let src, let dst):
                     let realSrc : Tree.Operand
                     switch src {
                         case .Immediate(_):
                             realSrc = .Register(.R10)
-                            out.append(.Mov(.Longword, src, realSrc))
+                            out.append(.Mov(srcType, src, realSrc))
                         default:
                             realSrc = src
                     }
@@ -1210,12 +1220,12 @@ class Assembly {
                         case .Memory(_, _): fallthrough
                         case .Stack(_):
                             realDst = .Register(.R11)
-                            postfix = .Mov(.Quadword, realDst, dst)
+                            postfix = .Mov(dstType, realDst, dst)
                         default:
                             postfix = nil
                             realDst = dst
                     }
-                    out.append(.Movsx(realSrc, realDst))
+                    out.append(.Movsx(srcType, dstType, realSrc, realDst))
                     if let p = postfix { out.append(p) }
                 case .Movzx(let srcType, let dstType, let src, let dst):
                     switch dst {
@@ -1406,7 +1416,7 @@ class Assembly {
                                                 }
                                             default: fixedBody.append(instr)
                                         }
-                                    case .Movsx(_, _): fixedBody.append(instr)
+                                    case .Movsx(_, _, _, _): fixedBody.append(instr)
                                     case .Unary(_, _, _): fixedBody.append(instr)
                                     case .Binary(let op, let tp, let src, let dst):
                                         if tp == .Quadword {
