@@ -771,14 +771,40 @@ class Assembly {
                             }
                         case .Char: fallthrough
                         case .SChar: fallthrough
-                        case .UChar:
-                            print("AS-yet-unhandled character type found while generating assembly.")
-                            exit(ExitCode.internalError.rawValue)
+                        case .UChar: alignment = 1
                     }
                     let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, alignment, initValue)
                     assemblyDecls.append(assemblyEntry)
                     internalSymbolTable[name] = assemblyEntry
-                default: ()
+                case .StaticConstant(let name, let tp, let initVal):
+                    var alignment: Int = 0
+                    switch tp {
+                        case .Int: alignment = 4
+                        case .UnsignedInt: alignment = 4
+                        case .Long: alignment = 8
+                        case .UnsignedLong: alignment = 8
+                        case .Void:
+                            print("UNREACHABLE VOID VARIABLE TYPE")
+                            exit(ExitCode.internalError.rawValue)
+                        case .Double: alignment = 8
+                        case .Pointer(_): alignment = 8
+                        case .FunType(_, _):
+                            print("UNREACHABLE FUN TYPE VARIABLE TYPE")
+                            exit(ExitCode.internalError.rawValue)
+                        case .ArrayType(let nestedType, let size):
+                            if UInt(getTypeSize(convertCTypeToCheckerType(nestedType))) * size >= 16 {
+                                alignment = 16
+                            } else {
+                                alignment = getTypeSize(convertCTypeToCheckerType(nestedType))
+                            }
+                        case .Char: fallthrough
+                        case .SChar: fallthrough
+                        case .UChar: alignment = 1
+                    }
+                    let asmEntry : Tree.Declaration = .StaticConstant(name, alignment, initVal)
+                    assemblyDecls.append(asmEntry)
+                    internalSymbolTable[name] = asmEntry
+                case .Function(_, _, _, _): ()
             }
         }
         self.extractedDoubles = DoubleConstantExtractor().extract(program)
