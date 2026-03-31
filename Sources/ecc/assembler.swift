@@ -582,15 +582,27 @@ class Assembly {
                     let dstType = deduceType(dst, typedSymbolTable)
                     out.append(.Movzx(srcType, dstType, cSrc, cDst))
                 case .DoubleToInt(let src, let dst):
-                    // straightforward case, done by one instruction
-                    out.append(.Cvttsd2si(deduceType(dst, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
+                    let dType = deduceType(dst, typedSymbolTable)
+                    let cSrc = convert(src, symbolTable, typedSymbolTable)
+                    let cDst = convert(dst, symbolTable, typedSymbolTable)
+                    if dType == .Byte {
+                        out.append(.Cvttsd2si(.Longword, cSrc, .Register(.AX)))
+                        out.append(.Mov(.Byte, .Register(.AX), cDst))
+                    } else {
+                        out.append(.Cvttsd2si(dType, cSrc, cDst))
+                    }
                 case .DoubleToUInt(let src, let dst):
                     // not straightforward
+                    let dType = deduceType(dst, typedSymbolTable)
                     // if we're dealing with one of those 4-byte integers, then we...
-                    if deduceType(dst, typedSymbolTable) == .Longword {
+                    if dType == .Longword {
                         // convert to a quadword, then truncate
                         out.append(.Cvttsd2si(.Quadword, convert(src, symbolTable, typedSymbolTable), .Register(.AX)))
                         out.append(.Mov(.Longword, .Register(.AX), convert(dst, symbolTable, typedSymbolTable)))
+                    } else if dType == .Byte {
+                        // convert to a quadword, then truncate
+                        out.append(.Cvttsd2si(.Quadword, convert(src, symbolTable, typedSymbolTable), .Register(.AX)))
+                        out.append(.Mov(.Byte, .Register(.AX), convert(dst, symbolTable, typedSymbolTable)))
                     } else {
                         // otherwise, oh my god...
                         // check if our value fits into a quadword
@@ -619,17 +631,27 @@ class Assembly {
                         out.append(.Label(endLabel))
                     }
                 case .IntToDouble(let src, let dst):
-                    // straightforward case, done by one instruction
-                    out.append(.Cvtsi2sd(deduceType(dst, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
+                    let sType = deduceType(src, typedSymbolTable)
+                    if sType == .Byte {
+                        out.append(.Movsx(.Byte, .Longword, convert(src, symbolTable, typedSymbolTable), .Register(.AX)))
+                        out.append(.Cvtsi2sd(.Longword, .Register(.AX), convert(dst, symbolTable, typedSymbolTable)))
+                    } else {
+                        // straightforward case, done by one instruction
+                        out.append(.Cvtsi2sd(deduceType(dst, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
+                    }
                 case .UIntToDouble(let src, let dst):
                     // not straightforward
                     // if we're dealing with a 4-byte integer
-                    if deduceType(src, typedSymbolTable) == .Longword {
+                    let sType = deduceType(src, typedSymbolTable)
+                    let cSrc = convert(src, symbolTable, typedSymbolTable)
+                    if sType == .Longword {
                         // zero extend it to a quadword
-                        let cSrc = convert(src, symbolTable, typedSymbolTable)
                         out.append(.Movzx(.Longword, .Quadword, cSrc, .Register(.AX)))
                         // then convert it
                         out.append(.Cvtsi2sd(.Quadword, .Register(.AX), convert(dst, symbolTable, typedSymbolTable)))
+                    } else if sType == .Byte {
+                        out.append(.Movzx(.Byte, .Longword, cSrc, .Register(.AX)))
+                        out.append(.Cvtsi2sd(.Longword, .Register(.AX), convert(dst, symbolTable, typedSymbolTable)))
                     } else {
                         // check if the value is positive (fits into an unsigned value)
                         out.append(.Cmp(.Quadword, .Immediate(0), convert(src, symbolTable, typedSymbolTable)))
