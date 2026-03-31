@@ -75,6 +75,8 @@ class Lexer {
         // three chracter operators
         case shiftLeftEqual
         case shiftRightEqual
+        // whole word operator
+        case keywordSizeOf
         // tokens bearing data
         case identifier(String)
         case constant(String)
@@ -556,6 +558,7 @@ class Lexer {
             case "switch": return .keywordSwitch
             case "case": return .keywordCase
             case "default" : return .keywordDefault
+            case "sizeof" : return .keywordSizeOf
             default: return nil
         }
     }
