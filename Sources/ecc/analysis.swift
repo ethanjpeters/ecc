@@ -887,9 +887,17 @@ class SemanticAnalyzer {
                     let (checkedCond, condType) = typeCheckAndConvert(cond, nameMap)
                     let (checkedLeft, leftType) = typeCheckAndConvert(left, nameMap)
                     let (checkedRight, rightType) = typeCheckAndConvert(right, nameMap)
+
+                    if !isTypeScalar(condType) {
+                        print("Conditional in conditional expression must be a scalar type, not \(condType)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+
                     let outType : SemanticAnalyzer.TypeChecker.CheckerType
                     if isPointerType(leftType) || isPointerType(rightType) {
                         outType = getCommonPointerType((checkedLeft, leftType), (checkedRight, rightType))
+                    } else if leftType == .Void && rightType == .Void {
+                        outType = .Void
                     } else {
                         outType = getCommonType(leftType, rightType)
                     }
@@ -1767,4 +1775,13 @@ func isTypeComplete(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
 
 func isPointerToCompleteType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
     return isPointerType(tp) && isTypeComplete(getPointeeType(tp))
+}
+
+func isTypeScalar(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    switch tp {
+        case .Void: return false
+        case .ArrayType(_, _): return false
+        case .Function(_, _): return false
+        default: return true
+    }
 }
