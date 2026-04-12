@@ -660,6 +660,16 @@ class SemanticAnalyzer {
                         default: ()
                     }
 
+                    if binOp == .Equal {
+                        if isPointerType(leftType) || isPointerType(rightType) {
+                            // 👍
+                        } else if isArithmeticType(leftType) && isArithmeticType(rightType) {
+                            // 👍
+                        } else {
+                            print("Can not compare expressions of incompatible types \(leftType) and \(rightType)")
+                        }
+                    }
+
                     if isFloatingPoint(leftType) || isFloatingPoint(rightType) {
                         if binOp == .Remainder {
                             print("Remainder operator does not apply to floating point types")
