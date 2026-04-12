@@ -853,6 +853,14 @@ class SemanticAnalyzer {
                     if isNullConstant(checkedExp) && isPointerType(lT) {
                         return (.Assignment(lV, typeConvert(checkedExp, ofType: expType, toType: lT), Self.deConvert(lT)), lT)
                     }
+                    if isPointerType(lT) && isPointerType(expType) {
+                        if getPointeeType(lT) == .Void || getPointeeType(expType) == .Void {
+                            return (.Assignment(lV, typeConvert(checkedExp, ofType: expType, toType: lT), Self.deConvert(lT)), lT)
+                        } else {
+                            print("Incompatible implicit pointer conversion found during assignment to \(lV)")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
+                    }
 
                     print("Cannot convert type \(expType) to \(lT) for assignment \(expression)")
                     exit(ExitCode.semanticError.rawValue)
@@ -863,7 +871,12 @@ class SemanticAnalyzer {
                     let (checkedCond, condType) = typeCheckAndConvert(cond, nameMap)
                     let (checkedLeft, leftType) = typeCheckAndConvert(left, nameMap)
                     let (checkedRight, rightType) = typeCheckAndConvert(right, nameMap)
-                    let outType = getCommonType(leftType, rightType)
+                    let outType : SemanticAnalyzer.TypeChecker.CheckerType
+                    if isPointerType(leftType) || isPointerType(rightType) {
+                        outType = getCommonPointerType((checkedLeft, leftType), (checkedRight, rightType))
+                    } else {
+                        outType = getCommonType(leftType, rightType)
+                    }
                     return (.Conditional(
                         typeConvert(checkedCond, ofType: condType, toType: .Int),
                         typeConvert(checkedLeft, ofType: leftType, toType: outType),
@@ -894,9 +907,21 @@ class SemanticAnalyzer {
                             }
                             var upCastExp : [Parser.AST.Expression] = []
                             for (incomingParam, expectedParam) in zip(checkedParams, pType) {
-                                let commonType = getCommonType(incomingParam.1, expectedParam)
-                                let ipExp = typeConvert(incomingParam.0, ofType: incomingParam.1, toType: commonType)
-                                upCastExp.append(ipExp)
+                                let commonType : SemanticAnalyzer.TypeChecker.CheckerType
+                                if isPointerType(incomingParam.1) && isPointerType(expectedParam) {
+                                    if getPointeeType(incomingParam.1) == getPointeeType(expectedParam) {
+                                        upCastExp.append(incomingParam.0)
+                                    } else if getPointeeType(incomingParam.1) == .Void || getPointeeType(expectedParam) == .Void {
+                                        upCastExp.append(typeConvert(incomingParam.0, ofType: incomingParam.1, toType: expectedParam))
+                                    } else {
+                                        print("Can not implicitly convert function parameter of poitner type \(incomingParam.1) to \(expectedParam)")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
+                                } else {
+                                    commonType = getCommonType(incomingParam.1, expectedParam)
+                                    let ipExp = typeConvert(incomingParam.0, ofType: incomingParam.1, toType: commonType)
+                                    upCastExp.append(ipExp)
+                                }
                             }
                             return (.FunctionCall(lValue, upCastExp, Self.deConvert(rType)), rType)
                         case .Char: fallthrough
@@ -1686,6 +1711,14 @@ func getCommonPointerType(_ left: (Parser.AST.Expression, SemanticAnalyzer.TypeC
 
     if isNullConstant(leftExp) { return rightType }
     if isNullConstant(rightExp) { return rightType }
+
+    if getPointeeType(leftType) == .Void && isPointerType(rightType) {
+        return leftType
+    }
+
+    if getPointeeType(rightType) == .Void && isPointerType(leftType) {
+        return rightType
+    }
 
     print("Alleged pointers \(leftExp) and \(rightExp) have incompatible types \(leftType) and \(rightType)")
     exit(ExitCode.semanticError.rawValue)

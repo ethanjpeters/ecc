@@ -400,15 +400,20 @@ class Tacky {
                                 }
                                 out.append(.GetAddress(unCastedValue, dst))
                                 return .PlainOperand(dst)
-                            default:
-                                print("Can't cast around pointers, sorry")
-                                exit(ExitCode.semanticError.rawValue)
+                            // allow a pointer to be explicitly cast to another pointer
+                            case .Pointer(_):
+                                // is this even necessary?
+                                out.append(.Copy(unCastedValue, dst))
+                                return .PlainOperand(dst)
+                            default: ()
                         }
                     }
                     
-                    if isSubscribtableType(targetCp) {
-                        print("Can not cast \(child) of type \(innerCp) to array \(targetCp)")
-                        exit(ExitCode.semanticError.rawValue)
+                    switch targetCp {
+                        case .ArrayType(_, _):
+                            print("Can not cast \(child) of type \(innerCp) to array \(targetCp)")
+                            exit(ExitCode.semanticError.rawValue)
+                        default: ()
                     }
 
                     if isFloatingPoint(targetCp) && !isFloatingPoint(innerCp) {
