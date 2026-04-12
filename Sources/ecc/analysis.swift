@@ -689,6 +689,10 @@ class SemanticAnalyzer {
                                     exit(ExitCode.semanticError.rawValue)
                                 }
                                 if isPointerType(leftType) {
+                                    if !isPointerToCompleteType(leftType) {
+                                        print("Attempted to add pointer of incomplete type \(leftType)")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
                                     // add/subtract only integers
                                     if !isIntegralType(rightType) {
                                         print("Tried to add non-integral value \(checkedRight) of type \(rightType) to pointer")
@@ -702,6 +706,10 @@ class SemanticAnalyzer {
                                         Self.deConvert(leftType)
                                     ), leftType)
                                 } else {
+                                    if !isPointerToCompleteType(rightType) {
+                                        print("Attempted to add pointer of incomplete type \(rightType)")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
                                     // add/subtract only integers
                                     if !isIntegralType(leftType) {
                                         print("Tried to add non-integral value \(checkedLeft) of type \(leftType) to pointer")
@@ -721,6 +729,10 @@ class SemanticAnalyzer {
                                     // signed integer; we'll choose "long"
                                     return (.Binary(binOp, checkedLeft, checkedRight, .Long), .Long)
                                 } else if isPointerType(leftType) {
+                                    if !isPointerToCompleteType(leftType) {
+                                        print("Attempted to subtract pointer of incomplete type \(leftType)")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
                                     // add/subtract only integers
                                     if !isIntegralType(rightType) {
                                         print("Tried to add non-integral value \(checkedRight) of type \(rightType) to pointer")
@@ -735,6 +747,10 @@ class SemanticAnalyzer {
                                     ), leftType)
                                 // } else if isPointerType(rightType) {    // redundant, but helps my head 🤕
                                 } else {    // ok, I'd love to the above, but the compiler is being less-than-helpful
+                                    if !isPointerToCompleteType(rightType) {
+                                        print("Tried to subtract pointer of incomplete type \(rightType)")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
                                     // add/subtract only integers
                                     if !isIntegralType(leftType) {
                                         print("Tried to add non-integral value \(checkedLeft) of type \(leftType) to pointer")
@@ -976,6 +992,10 @@ class SemanticAnalyzer {
                     let (checkedOffset, offsetType) = typeCheckAndConvert(offset, nameMap)
                     if isSubscribtableType(ptrType) && isIntegralType(offsetType) {
                         let innerType = getPointeeType(ptrType, permitArrays: true)
+                        if !isTypeComplete(innerType) {
+                            print("Tried to subscript \(ptr) with incomplete type")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
                         return (.Subscript(
                             checkedPtr,
                             typeConvert(checkedOffset, ofType: offsetType, toType: .Long),
@@ -984,6 +1004,10 @@ class SemanticAnalyzer {
                     } else if isSubscribtableType(offsetType) && isIntegralType(ptrType) {
                         // .... what? Yes, this is legal.
                         let innerType = getPointeeType(offsetType, permitArrays: true)
+                        if !isTypeComplete(innerType) {
+                            print("Tried to subscript \(offset) with incomplete type")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
                         // return (.Subscript(
                         //     typeConvert(checkedPtr, ofType: ptrType, toType: .Long),
                         //     checkedOffset,
@@ -1002,10 +1026,19 @@ class SemanticAnalyzer {
                 case .String(let val, _):
                     let arrType : Parser.AST.CType = .ArrayType(.Char, UInt(val.count) + 1)
                     return (.String(val, arrType), convertCTypeToCheckerType(arrType))
-                case .SizeOf(_, _): fallthrough
-                case .SizeOfT(_, _):
-                    print("As-yet-unhandled sizeof() operator found while typechecking")
-                    exit(ExitCode.internalError.rawValue)
+                case .SizeOf(let exp, _):
+                    let (checkedExp, checkedType) = typeCheckAndConvert(exp, nameMap)
+                    if !isTypeComplete(checkedType) {
+                        print("Can not get size of expression \(exp) of incomplete type")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                    return (.SizeOf(checkedExp, .UnsignedLong), .UnsignedLong)
+                case .SizeOfT(let namedType, _):
+                    if !isTypeComplete(convertCTypeToCheckerType(namedType)) {
+                        print("Can not get size of incomplete type \(namedType)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                    return (.SizeOfT(namedType, .UnsignedLong), .UnsignedLong)
             }
         }
 
@@ -1722,4 +1755,12 @@ func getCommonPointerType(_ left: (Parser.AST.Expression, SemanticAnalyzer.TypeC
 
     print("Alleged pointers \(leftExp) and \(rightExp) have incompatible types \(leftType) and \(rightType)")
     exit(ExitCode.semanticError.rawValue)
+}
+
+func isTypeComplete(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    return tp != .Void
+}
+
+func isPointerToCompleteType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    return isPointerType(tp) && isTypeComplete(getPointeeType(tp))
 }

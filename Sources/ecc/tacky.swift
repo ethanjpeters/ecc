@@ -416,7 +416,10 @@ class Tacky {
                         default: ()
                     }
 
-                    if isFloatingPoint(targetCp) && !isFloatingPoint(innerCp) {
+                    if targetCp == .Void {
+                        // dont' try to get the size or signedness of "Void", it's meaningless
+                        out.append(.Copy(unCastedValue, dst))
+                    } else if isFloatingPoint(targetCp) && !isFloatingPoint(innerCp) {
                         if isSigned(innerCp) {
                             out.append(.IntToDouble(unCastedValue, dst))
                         } else {
