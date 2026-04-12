@@ -1042,10 +1042,7 @@ class SemanticAnalyzer {
                     }
                     return (.SizeOf(checkedExp, .UnsignedLong), .UnsignedLong)
                 case .SizeOfT(let namedType, _):
-                    if !isTypeComplete(convertCTypeToCheckerType(namedType)) {
-                        print("Can not get size of incomplete type \(namedType)")
-                        exit(ExitCode.semanticError.rawValue)
-                    }
+                    validateTypeSpecifier(convertCTypeToCheckerType(namedType))
                     return (.SizeOfT(namedType, .UnsignedLong), .UnsignedLong)
             }
         }
@@ -1783,5 +1780,24 @@ func isTypeScalar(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
         case .ArrayType(_, _): return false
         case .Function(_, _): return false
         default: return true
+    }
+}
+
+func validateTypeSpecifier(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) {
+    switch tp {
+        case .ArrayType(let innerType, _):
+            if !isTypeComplete(innerType) {
+                print("Illegal array of incomplete type")
+                exit(ExitCode.semanticError.rawValue)
+            }
+            validateTypeSpecifier(innerType)
+        case .Pointer(let nestedType):
+            validateTypeSpecifier(nestedType)
+        case .Function(let retType, let pTypes):
+            for p in pTypes {
+                validateTypeSpecifier(p)
+            }
+            validateTypeSpecifier(retType)
+        default: ()
     }
 }
