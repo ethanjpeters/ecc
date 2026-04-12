@@ -1510,6 +1510,10 @@ class SemanticAnalyzer {
 
             switch expressionType {
                 case .ArrayType(let elementType, _):
+                    if !isTypeComplete(elementType) {
+                        print("Can not have an array of incomplete type \(elementType)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
                     let addrOfType : CheckerType = .Pointer(elementType)
                     return (.AddrOf(typedExpression, Self.deConvert(addrOfType)), addrOfType)
                 default: return (typedExpression, expressionType)
