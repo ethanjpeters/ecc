@@ -46,8 +46,13 @@ class Assembly {
             case XMM15
         }
 
+        enum Imm {
+            case SignedImmediate(Int)
+            case UnsignedImmediate(UInt)
+        }
+
         enum Operand {
-            case Immediate(Int)
+            case Immediate(Imm)
             case Register(Register)
             case Pseudo(String)
             case Stack(Int)
@@ -228,10 +233,10 @@ class Assembly {
         switch val {
             case .Constant(let c):
                 switch c {
-                    case .ConstInt(let i): return .Immediate(Int(i))
-                    case .ConstLong(let i): return .Immediate(Int(i))
-                    case .ConstUnsignedInt(let i): return .Immediate(Int(i))
-                    case .ConstUnsignedLong(let i): return .Immediate(Int(i))
+                    case .ConstInt(let i): return .Immediate(.SignedImmediate(Int(i)))
+                    case .ConstLong(let i): return .Immediate(.SignedImmediate(Int(i)))
+                    case .ConstUnsignedInt(let i): return .Immediate(.UnsignedImmediate(UInt(i)))
+                    case .ConstUnsignedLong(let i): return .Immediate(.UnsignedImmediate(UInt(i)))
                     case .ConstDouble(let f):
                         guard let staticVar = self.extractedDoubles[f] else {
                             print("Somehow got a constant double that has not been extracted")
@@ -244,8 +249,8 @@ class Assembly {
                                 print("static declaration of a floating point constant is somehow not a constant?")
                                 exit(ExitCode.internalError.rawValue)
                         }
-                    case .ConstChar(let i32): return .Immediate(Int(i32))
-                    case .ConstUnsignedChar(let i32): return .Immediate(Int(i32))
+                    case .ConstChar(let i32): return .Immediate(.SignedImmediate(Int(i32)))
+                    case .ConstUnsignedChar(let i32): return .Immediate(.SignedImmediate(Int(i32)))
                 }
             case .Var(let name):
                 if let _ = symbolTable[name] {
@@ -355,6 +360,8 @@ class Assembly {
     }
 
     func generate(_ instructions: [Tacky.IR.Instruction], _ symbolTable: [String : Assembly.Tree.Declaration], _ out: inout [Tree.Instruction], _ typedSymbolTable: SymbolTable) {
+        let zero : Assembly.Tree.Operand = .Immediate(.UnsignedImmediate(0))
+
         for instr in instructions {
             switch instr {
                 case .Return(let val):
@@ -371,9 +378,9 @@ class Assembly {
                             out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
                             out.append(.Cmp(.Double, .Register(.XMM0), convert(src, symbolTable, typedSymbolTable)))
                         } else {
-                            out.append(.Cmp(srcType, .Immediate(0), convert(src, symbolTable, typedSymbolTable)))
+                            out.append(.Cmp(srcType, .Immediate(.UnsignedImmediate(0)), convert(src, symbolTable, typedSymbolTable)))
                         }
-                        out.append(.Mov(srcType, .Immediate(0), convert(dst, symbolTable, typedSymbolTable)))
+                        out.append(.Mov(srcType, .Immediate(.UnsignedImmediate(0)), convert(dst, symbolTable, typedSymbolTable)))
                         out.append(.SetCC(.E, convert(dst, symbolTable, typedSymbolTable)))
                     } else {
                         if isFlop && op == .Negate {
@@ -413,7 +420,7 @@ class Assembly {
                                     out.append(.Mov(srcType, .Register(.AX), dstConv))
                                 } else {
                                     out.append(.Mov(srcType, src1Conv, .Register(.AX)))
-                                    out.append(.Mov(srcType, .Immediate(0), .Register(.DX)))
+                                    out.append(.Mov(srcType, .Immediate(.UnsignedImmediate(0)), .Register(.DX)))
                                     out.append(.Div(srcType, src2Conv))
                                     out.append(.Mov(srcType, .Register(.AX), dstConv))
                                 }
@@ -431,33 +438,33 @@ class Assembly {
                                 out.append(.Mov(srcType, .Register(.DX), dstConv))
                             } else {
                                 out.append(.Mov(srcType, src1Conv, .Register(.AX)))
-                                out.append(.Mov(srcType, .Immediate(0), .Register(.DX)))
+                                out.append(.Mov(srcType, zero, .Register(.DX)))
                                 out.append(.Div(srcType, src2Conv))
                                 out.append(.Mov(srcType, .Register(.DX), dstConv))
                             }
                         case .Equal:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, zero, dstConv))
                             out.append(.SetCC(.E, dstConv))
                         case .NotEqual:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, zero, dstConv))
                             out.append(.SetCC(.NE, dstConv))
                         case .LessThan:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, zero, dstConv))
                             out.append(.SetCC(isFlop ? .B : (signedOp ? .L : .B), dstConv))
                         case .LessOrEqual:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, zero, dstConv))
                             out.append(.SetCC(isFlop ? .BE : signedOp ? .LE : .BE, dstConv))
                         case .GreaterThan: 
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, zero, dstConv))
                             out.append(.SetCC(isFlop ? .A : signedOp ? .G : .A, dstConv))
                         case .GreaterOrEqual:
                             out.append(.Cmp(srcType, src2Conv, src1Conv))
-                            out.append(.Mov(isFlop ? .Longword : srcType, .Immediate(0), dstConv))
+                            out.append(.Mov(isFlop ? .Longword : srcType, zero, dstConv))
                             out.append(.SetCC(isFlop ? .AE : signedOp ? .GE : .AE, dstConv))
                         case .BitwiseAnd:
                             out.append(.Mov(srcType, src1Conv, dstConv))
@@ -490,7 +497,7 @@ class Assembly {
                         out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
                         out.append(.Cmp(valType, convert(val, symbolTable, typedSymbolTable), .Register(.XMM0)))
                     } else {
-                        out.append(.Cmp(valType, .Immediate(0), convert(val, symbolTable, typedSymbolTable)))
+                        out.append(.Cmp(valType, zero, convert(val, symbolTable, typedSymbolTable)))
                     }
                     out.append(.JmpCC(.E, label))
                 case .JumpIfNotZero(let val, let label):
@@ -500,7 +507,7 @@ class Assembly {
                         out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
                         out.append(.Cmp(valType, convert(val, symbolTable, typedSymbolTable), .Register(.XMM0)))
                     } else {
-                        out.append(.Cmp(valType, .Immediate(0), convert(val, symbolTable, typedSymbolTable)))
+                        out.append(.Cmp(valType, zero, convert(val, symbolTable, typedSymbolTable)))
                     }
                     out.append(.JmpCC(.NE, label))
                 case .Label(let name):
@@ -628,13 +635,7 @@ class Assembly {
                         // then convert to a signed long
                         out.append(.Cvttsd2si(.Quadword, .Register(.XMM1), convert(dst, symbolTable, typedSymbolTable)))
                         // then add LONG_MAX + 1 back
-                        // ok, we have to do a weird thing here because we *kind of* messed up; we assigned
-                        // an Int value to the .Immediate data type, which technically needs an unsigned
-                        // range of values, but also to be able to be signed, it's sort of a mess. To deal
-                        // with this, we'll cheat by adding half the value we want to add, twice.
-                        out.append(.Mov(.Quadword, .Immediate(Int(longMaxPlusOne/2)), .Register(.DX)))
-                        out.append(.Binary(.Add, .Quadword, .Register(.DX), convert(dst, symbolTable, typedSymbolTable)))
-                        out.append(.Binary(.Add, .Quadword, .Register(.DX), convert(dst, symbolTable, typedSymbolTable)))
+                        out.append(.Binary(.Add, .Quadword, .Immediate(.UnsignedImmediate(UInt(longMaxPlusOne))), convert(dst, symbolTable, typedSymbolTable)))
                         out.append(.Label(endLabel))
                     }
                 case .IntToDouble(let src, let dst):
@@ -661,7 +662,7 @@ class Assembly {
                         out.append(.Cvtsi2sd(.Longword, .Register(.AX), convert(dst, symbolTable, typedSymbolTable)))
                     } else {
                         // check if the value is positive (fits into an unsigned value)
-                        out.append(.Cmp(.Quadword, .Immediate(0), convert(src, symbolTable, typedSymbolTable)))
+                        out.append(.Cmp(.Quadword, zero, convert(src, symbolTable, typedSymbolTable)))
                         let outOfRangeLabel = makeLabel()
                         out.append(.JmpCC(.L, outOfRangeLabel))
                         // if the value is positive, go ahead and use the native instruction
@@ -674,7 +675,7 @@ class Assembly {
                         out.append(.Mov(.Quadword, convert(src, symbolTable, typedSymbolTable), .Register(.AX)))
                         out.append(.Mov(.Quadword, .Register(.AX), .Register(.DX)))
                         out.append(.Unary(.Shr, .Quadword, .Register(.DX)))
-                        out.append(.Binary(.And, .Quadword, .Immediate(1), .Register(.AX)))
+                        out.append(.Binary(.And, .Quadword, .Immediate(.UnsignedImmediate(1)), .Register(.AX)))
                         out.append(.Binary(.Or, .Quadword, .Register(.AX), .Register(.DX)))
                         // convert
                         out.append(.Cvtsi2sd(.Quadword, .Register(.DX), convert(dst, symbolTable, typedSymbolTable)))
@@ -698,7 +699,7 @@ class Assembly {
                     } else {
                         out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
                         out.append(.Mov(.Quadword, convert(index, symbolTable, typedSymbolTable), .Register(.DX)))
-                        out.append(.Binary(.Mult, .Quadword, .Immediate(Int(scale)), .Register(.DX)))
+                        out.append(.Binary(.Mult, .Quadword, .Immediate(.UnsignedImmediate(scale)), .Register(.DX)))
                         out.append(.Lea(.Indexed(.AX, .DX, 1), convert(dst, symbolTable, typedSymbolTable)))
                     }
                     // TODO: we could technically save an instruction if we determined that index was constant; heck it,
@@ -1439,34 +1440,67 @@ class Assembly {
                                     case .Mov(let tp, let src, let dst):
                                         switch src {
                                             case .Immediate(let val):
-                                                if tp == .Quadword {
-                                                    switch dst {
-                                                        case .Register(_):
-                                                            fixedBody.append(instr)
-                                                        default:
-                                                            if val > Int32.max {
-                                                                fixedBody.append(.Mov(
-                                                                    tp,
-                                                                    src,
-                                                                    .Register(.R10)
-                                                                ))
-                                                                fixedBody.append(.Mov(
-                                                                    tp,
-                                                                    .Register(.R10),
-                                                                    dst
-                                                                ))
-                                                            } else {
-                                                                fixedBody.append(instr)
+                                                switch val {
+                                                    case .SignedImmediate(let i64):
+                                                        if tp == .Quadword {
+                                                            switch dst {
+                                                                case .Register(_):
+                                                                    fixedBody.append(instr)
+                                                                default:
+                                                                    if i64 > Int32.max {
+                                                                        fixedBody.append(.Mov(
+                                                                            tp,
+                                                                            src,
+                                                                            .Register(.R10)
+                                                                        ))
+                                                                        fixedBody.append(.Mov(
+                                                                            tp,
+                                                                            .Register(.R10),
+                                                                            dst
+                                                                        ))
+                                                                    } else {
+                                                                        fixedBody.append(instr)
+                                                                    }
                                                             }
-                                                    }
-                                                } else {
-                                                    // truncate
-                                                    fixedBody.append(.Mov(
-                                                        tp,
-                                                        .Immediate(val % Int(Int32.max)),
-                                                        dst
-                                                    ))
+                                                        } else {
+                                                            // truncate
+                                                            fixedBody.append(.Mov(
+                                                                tp,
+                                                                .Immediate(.SignedImmediate(i64 % Int(Int32.max))),
+                                                                dst
+                                                            ))
+                                                        }
+                                                    case .UnsignedImmediate(let u64):
+                                                        if tp == .Quadword {
+                                                            switch dst {
+                                                                case .Register(_):
+                                                                    fixedBody.append(instr)
+                                                                default:
+                                                                    if u64 > Int32.max {
+                                                                        fixedBody.append(.Mov(
+                                                                            tp,
+                                                                            src,
+                                                                            .Register(.R10)
+                                                                        ))
+                                                                        fixedBody.append(.Mov(
+                                                                            tp,
+                                                                            .Register(.R10),
+                                                                            dst
+                                                                        ))
+                                                                    } else {
+                                                                        fixedBody.append(instr)
+                                                                    }
+                                                            }
+                                                        } else {
+                                                            // truncate
+                                                            fixedBody.append(.Mov(
+                                                                tp,
+                                                                .Immediate(.UnsignedImmediate(u64 % UInt(Int32.max))),
+                                                                dst
+                                                            ))
+                                                        }
                                                 }
+
                                             default: fixedBody.append(instr)
                                         }
                                     case .Movsx(_, _, _, _): fixedBody.append(instr)
@@ -1479,20 +1513,39 @@ class Assembly {
                                                 case .Sub:
                                                     switch src {
                                                         case .Immediate(let val):
-                                                            if val > Int32.max {
-                                                                fixedBody.append(.Mov(
-                                                                    tp,
-                                                                    src,
-                                                                    .Register(.R10)
-                                                                ))
-                                                                fixedBody.append(.Binary(
-                                                                    op,
-                                                                    tp,
-                                                                    .Register(.R10),
-                                                                    dst
-                                                                ))
-                                                            } else {
-                                                                fixedBody.append(instr)
+                                                            switch val {
+                                                                case .SignedImmediate(let i64):
+                                                                    if i64 > Int32.max {
+                                                                        fixedBody.append(.Mov(
+                                                                            tp,
+                                                                            src,
+                                                                            .Register(.R10)
+                                                                        ))
+                                                                        fixedBody.append(.Binary(
+                                                                            op,
+                                                                            tp,
+                                                                            .Register(.R10),
+                                                                            dst
+                                                                        ))
+                                                                    } else {
+                                                                        fixedBody.append(instr)
+                                                                    }
+                                                                case .UnsignedImmediate(let u64):
+                                                                    if u64 > Int32.max {
+                                                                        fixedBody.append(.Mov(
+                                                                            tp,
+                                                                            src,
+                                                                            .Register(.R10)
+                                                                        ))
+                                                                        fixedBody.append(.Binary(
+                                                                            op,
+                                                                            tp,
+                                                                            .Register(.R10),
+                                                                            dst
+                                                                        ))
+                                                                    } else {
+                                                                        fixedBody.append(instr)
+                                                                    }
                                                             }
                                                         default: fixedBody.append(instr)
                                                     }
@@ -1505,19 +1558,37 @@ class Assembly {
                                         if tp == .Quadword {
                                             switch src {
                                                 case .Immediate(let val):
-                                                    if val > Int32.max {
-                                                        fixedBody.append(.Mov(
-                                                            tp,
-                                                            src,
-                                                            .Register(.R10)
-                                                        ))
-                                                        fixedBody.append(.Cmp(
-                                                            tp,
-                                                            .Register(.R10),
-                                                            dst
-                                                        ))
-                                                    } else {
-                                                        fixedBody.append(instr)
+                                                    switch val {
+                                                        case .SignedImmediate(let i64):
+                                                            if i64 > Int32.max {
+                                                                fixedBody.append(.Mov(
+                                                                    tp,
+                                                                    src,
+                                                                    .Register(.R10)
+                                                                ))
+                                                                fixedBody.append(.Cmp(
+                                                                    tp,
+                                                                    .Register(.R10),
+                                                                    dst
+                                                                ))
+                                                            } else {
+                                                                fixedBody.append(instr)
+                                                            }
+                                                        case .UnsignedImmediate(let u64):
+                                                            if u64 > Int32.max {
+                                                                fixedBody.append(.Mov(
+                                                                    tp,
+                                                                    src,
+                                                                    .Register(.R10)
+                                                                ))
+                                                                fixedBody.append(.Cmp(
+                                                                    tp,
+                                                                    .Register(.R10),
+                                                                    dst
+                                                                ))
+                                                            } else {
+                                                                fixedBody.append(instr)
+                                                            }
                                                     }
                                                 default: fixedBody.append(instr)
                                             }

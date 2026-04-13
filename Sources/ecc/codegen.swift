@@ -22,7 +22,10 @@ func typeToWidth(_ tp: Assembly.Tree.AssemblyType) -> RegisterWidth {
 func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByte) -> String {
     switch operand {
         case .Immediate(let val):
-            return "$\(val)"
+            switch val {
+                case .SignedImmediate(let i64): return "$\(i64)"
+                case .UnsignedImmediate(let u64): return "$\(u64)"
+            }
         case .Pseudo(let name):
             print("Encountered Pseudo way late in the pipeline: \(name)")
             exit(ExitCode.internalError.rawValue)
