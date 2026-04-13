@@ -562,7 +562,13 @@ class Assembly {
                     }
 
                     // move the result
-                    out.append(.Mov(deduceType(result, typedSymbolTable), .Register(.AX), convert(result, symbolTable, typedSymbolTable)))
+                    if let rslt = result {
+                        out.append(.Mov(
+                            deduceType(rslt, typedSymbolTable),
+                            .Register(.AX),
+                            convert(rslt, symbolTable, typedSymbolTable)
+                        ))
+                    }
                 case .SignExtend(let src, let dst):
                     let cSrc = convert(src, symbolTable, typedSymbolTable)
                     let cDst = convert(dst, symbolTable, typedSymbolTable)

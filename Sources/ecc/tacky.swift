@@ -59,7 +59,7 @@ class Tacky {
             case JumpIfZero(Value /* condition */, String /* identifier target */)
             case JumpIfNotZero(Value /* condition */, String /* identifier target */)
             case Label(String /* identifier */)
-            case Call(String /* function name */, [Value] /* parameters */, Value /* result */)
+            case Call(String /* function name */, [Value] /* parameters */, Value? /* result */)
             case SignExtend(Value /* src */, Value /* dst */)
             case ZeroExtend(Value /* src */, Value /* dst */)
             case Truncate(Value /* src */, Value /* dst */)
