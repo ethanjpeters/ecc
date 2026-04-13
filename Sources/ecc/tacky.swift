@@ -692,7 +692,9 @@ class Tacky {
                                         let _ = generateTACKYDeclaration(decl: decl, out: &instrs, symbolTable: &symbolTable)
                                 }
                             }
-                            instrs.append(.Return(.Constant(returnType == .Long ? .ConstLong(0) : .ConstInt(0))))
+                            if returnType != .Void {
+                                instrs.append(.Return(.Constant(returnType == .Long ? .ConstLong(0) : .ConstInt(0))))
+                            }
                             var tackyIds : [String] = []
                             for name in parameters {
                                 tackyIds.append(name)
