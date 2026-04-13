@@ -353,18 +353,27 @@ class Tacky {
                 exit(ExitCode.internalError.rawValue)
             case .Conditional(let cond, let left, let right, let tp):
                 let condValue = generateTACKYExpressionAndConvert(cond, out: &out, symbolTable: &symbolTable)
-                let dst = makeTempVariable(tp!, &symbolTable)
                 let e2Label = makeLabel("right")
                 let endLabel = makeLabel("end")
                 out.append(.JumpIfZero(condValue, e2Label))
-                let e1Value = generateTACKYExpressionAndConvert(left, out: &out, symbolTable: &symbolTable)
-                out.append(.Copy(e1Value, dst))
-                out.append(.Jump(endLabel))
-                out.append(.Label(e2Label))
-                let e2Value = generateTACKYExpressionAndConvert(right, out: &out, symbolTable: &symbolTable)
-                out.append(.Copy(e2Value, dst))
-                out.append(.Label(endLabel))
-                return .PlainOperand(dst)
+                if tp == .Void {
+                    let _ = generateTACKYExpressionAndConvert(left, out: &out, symbolTable: &symbolTable)
+                    out.append(.Jump(endLabel))
+                    out.append(.Label(e2Label))
+                    let _ = generateTACKYExpressionAndConvert(right, out: &out, symbolTable: &symbolTable)
+                    out.append(.Label(endLabel))
+                    return .PlainOperand(.Var("DUMMY"))
+                } else {
+                    let e1Value = generateTACKYExpressionAndConvert(left, out: &out, symbolTable: &symbolTable)
+                    let dst = makeTempVariable(tp!, &symbolTable)
+                    out.append(.Copy(e1Value, dst))
+                    out.append(.Jump(endLabel))
+                    out.append(.Label(e2Label))
+                    let e2Value = generateTACKYExpressionAndConvert(right, out: &out, symbolTable: &symbolTable)
+                    out.append(.Copy(e2Value, dst))
+                    out.append(.Label(endLabel))
+                    return .PlainOperand(dst)
+                }
             case .FunctionCall(let fun, let params, let tp):
                 // fun has already been constrained to an lValue, currently just a name
                 let funName : String
@@ -418,7 +427,7 @@ class Tacky {
 
                     if targetCp == .Void {
                         // dont' try to get the size or signedness of "Void", it's meaningless
-                        out.append(.Copy(unCastedValue, dst))
+                        return .PlainOperand(.Var("DUMMY"))
                     } else if isFloatingPoint(targetCp) && !isFloatingPoint(innerCp) {
                         if isSigned(innerCp) {
                             out.append(.IntToDouble(unCastedValue, dst))
