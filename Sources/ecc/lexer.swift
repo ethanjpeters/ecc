@@ -12,6 +12,7 @@ class Lexer {
         case keywordSigned
         case keywordDouble
         case keywordChar
+        case keywordStruct
         // storage specifiers
         case keywordStatic
         case keywordExtern
@@ -53,6 +54,7 @@ class Lexer {
         case question
         case colon
         case comma
+        case dot
         // two character operators
         case decrement
         case increment
@@ -72,6 +74,7 @@ class Lexer {
         case ampersandEqual
         case pipeEqual
         case carrotEqual
+        case arrow
         // three chracter operators
         case shiftLeftEqual
         case shiftRightEqual
@@ -401,6 +404,9 @@ class Lexer {
                 if sourceFileCharacters[startingIndex + 1] == "=" {
                     return .minusEqual
                 }
+                if sourceFileCharacters[startingIndex + 1] == ">" {
+                    return .arrow
+                }
             }
         }
         if c == "+" {
@@ -518,6 +524,7 @@ class Lexer {
             case ":": return .colon
             case "?": return .question
             case ",": return .comma
+            case ".": return .dot
             default: return nil
         }
     }
@@ -559,6 +566,7 @@ class Lexer {
             case "case": return .keywordCase
             case "default" : return .keywordDefault
             case "sizeof" : return .keywordSizeOf
+            case "struct" : return .keywordStruct
             default: return nil
         }
     }
