@@ -780,6 +780,9 @@ class Assembly {
                         case .Char: fallthrough
                         case .SChar: fallthrough
                         case .UChar: alignment = 1
+                        case .Structure(let tag):
+                            print("As-yet-unhandled structure type found while generating assembly")
+                            exit(ExitCode.internalError.rawValue)
                     }
                     let assemblyEntry : Tree.Declaration = .StaticVariable(name, isGlobal, alignment, initValue)
                     assemblyDecls.append(assemblyEntry)
@@ -808,6 +811,9 @@ class Assembly {
                         case .Char: fallthrough
                         case .SChar: fallthrough
                         case .UChar: alignment = 1
+                        case .Structure(let tag):
+                            print("As-yet-unhandled structure type found while generating assembly")
+                            exit(ExitCode.internalError.rawValue)
                     }
                     let asmEntry : Tree.Declaration = .StaticConstant(name, alignment, initVal)
                     assemblyDecls.append(asmEntry)

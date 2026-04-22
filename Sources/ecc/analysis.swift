@@ -1091,6 +1091,9 @@ class SemanticAnalyzer {
                     case .Char: return .SingleInit(.Constant(.ConstUChar(0), .Char))
                     case .SChar: return .SingleInit(.Constant(.ConstChar(0), .SChar))
                     case .UChar: return .SingleInit(.Constant(.ConstUChar(0), .UChar))
+                    case .Structure(let tag):
+                        print("As-yet-unhandled structure type found while generating zero initializer")
+                        exit(ExitCode.internalError.rawValue)
                 }
             }
             switch initializer {
@@ -1588,6 +1591,9 @@ func convertCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.T
         case .Char: return .Char
         case .SChar: return .SChar
         case .UChar: return .UChar
+        case .Structure(let tag):
+            print("As-yet-unhandled structure type found while converting C type to checker type")
+            exit(ExitCode.internalError.rawValue)
     }
 }
 
