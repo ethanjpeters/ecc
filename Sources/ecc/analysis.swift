@@ -186,6 +186,9 @@ class SemanticAnalyzer {
                     } else {
                         return .FunctionDeclaration(returnType, name, mangledPNames, nil, storageClass)
                     }
+                case .StructDeclaration(let tag, let members):
+                    print("As-yet-unhandled struct declaration found while generating TACKY")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -358,6 +361,9 @@ class SemanticAnalyzer {
                         outBody = nil
                     }
                     return .FunctionDeclaration(returnType, name, params, outBody, storageClass)
+                case .StructDeclaration(_, _):
+                    // nothing to do here
+                    return declaration
             }
         }
 
@@ -482,6 +488,8 @@ class SemanticAnalyzer {
                     return .FunctionDeclaration(returnType, name, params, body == nil ? nil : placeCases(body!, isInSwitch: false), storageClass)
                 case .VariableDeclaration(let tp, let name, let exp, let storageClass):
                     return .VariableDeclaration(tp, name, exp == nil ? nil : placeCases(exp!, isInSwitch: isInSwitch), storageClass)
+                case .StructDeclaration(_, _):
+                    return declaration
             }
         }
 
@@ -1192,6 +1200,9 @@ class SemanticAnalyzer {
                                     exit(ExitCode.internalError.rawValue)
                                 case .VariableDeclaration(_, _ , _, _):
                                     checkedInit = .InitDecl(typeCheck(decl, false, &nameMap))
+                                case .StructDeclaration(let tag, _):
+                                    print("Unsupported struct declaration (\(tag)) found while parsing for loop header")
+                                    exit(ExitCode.semanticError.rawValue)
                             }
                         case .InitExp(let exp):
                             if let e = exp {
@@ -1250,6 +1261,9 @@ class SemanticAnalyzer {
                                         }
                                     case .VariableDeclaration(_, _, _, _):
                                         typeCheckedItems.append(.D(typeCheck(decl, false, &nameMap)))
+                                    case .StructDeclaration(_, _):
+                                        print("As-yet-unhandled struct declaration found while type checking")
+                                        exit(ExitCode.internalError.rawValue)
                                 }
                             case .S(let stmt):
                                 typeCheckedItems.append(.S(typeCheck(stmt, &nameMap, enclosingFuncReturnType)))
@@ -1506,6 +1520,9 @@ class SemanticAnalyzer {
                         }
                     }
                     return .VariableDeclaration(tp, name, typeCheckedInit, storageClass)
+                case .StructDeclaration(_, _):
+                    print("As-yet-unhandled struct declaration found while type checking")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 

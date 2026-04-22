@@ -714,6 +714,9 @@ class Tacky {
                     // no code for undefined functions
                     return nil
                 }
+            case .StructDeclaration(let tag, let members):
+                print("As-yet-unhandled struct declaration found while generating TACKY")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 

@@ -131,6 +131,7 @@ class Parser {
         enum Declaration {
             case VariableDeclaration(CType /* type */, String /* identifier name */, Initializer?, StorageClass?)
             case FunctionDeclaration(CType /* type signature */, String /* name */, [String] /* param names */, Block? /* body */, StorageClass?)
+            case StructDeclaration(String /* tag */, [(String /* member name */, CType /* member type */)] /* members */)
         }
 
         enum Program {
@@ -1315,6 +1316,8 @@ class Parser {
                 } else {
                     return .VariableDeclaration(tp, name, nil, storageClass)
                 }
+            case .StructDeclaration(_, _):
+                return decl
         }
     }
 
