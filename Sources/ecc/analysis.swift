@@ -80,6 +80,10 @@ class SemanticAnalyzer {
                 case .String(_, _): return exp
                 case .SizeOf(_, _): return exp
                 case .SizeOfT(_, _): return exp
+                case .Dot(let exp, let memberName, _):
+                    return .Dot(resolveExpression(exp, &nameMap), memberName, nil)
+                case .Arrow(let exp, let memberName, _):
+                    return .Arrow(resolveExpression(exp, &nameMap), memberName, nil)
             }
         }
 
@@ -1062,6 +1066,12 @@ class SemanticAnalyzer {
                 case .SizeOfT(let namedType, _):
                     validateTypeSpecifier(convertCTypeToCheckerType(namedType))
                     return (.SizeOfT(namedType, .UnsignedLong), .UnsignedLong)
+                case .Dot(let exp, let memberName, _):
+                    print("As-yet-unhandled dot expression found while type checking")
+                    exit(ExitCode.internalError.rawValue)
+                case .Arrow(let exp, let memberName, _):
+                    print("As-yet-unhandled arrow expression found while type checking")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 

@@ -484,6 +484,12 @@ class Tacky {
                 return .PlainOperand(.Constant(.ConstUnsignedLong(UInt64(getTypeSize(convertCTypeToCheckerType(getType(inner)))))))
             case .SizeOfT(let namedType, _):
                 return .PlainOperand(.Constant(.ConstUnsignedLong(UInt64(getTypeSize(convertCTypeToCheckerType(namedType))))))
+            case .Dot(let exp, let memberName, _):
+                print("As-yet-unhandled dot expression found while generating TACKY")
+                exit(ExitCode.internalError.rawValue)
+            case .Arrow(let exp, let memberName, _):
+                print("As-yet-unhandled arrow expression found while generating TACKY")
+                exit(ExitCode.internalError.rawValue)
         }
     }
 
@@ -774,6 +780,8 @@ class Tacky {
             case .String(_, let tp): return tp!
             case .SizeOf(_, let tp): return tp!
             case .SizeOfT(_, let tp): return tp!
+            case .Dot(_, _, let tp): return tp!
+            case .Arrow(_, _, let tp): return tp!
         }
     }
 

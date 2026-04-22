@@ -61,6 +61,8 @@ class Parser {
             case Subscript(Expression /* pointer */, Expression /* offset */, CType?)
             case SizeOf(Expression, CType?)
             case SizeOfT(CType, CType?)
+            case Dot(Expression /* structure */, String /* member */, CType?)
+            case Arrow(Expression /* pointer */, String /* member */, CType?)
         }
 
         indirect enum Initializer {
