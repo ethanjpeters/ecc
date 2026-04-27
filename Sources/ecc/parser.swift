@@ -902,6 +902,34 @@ class Parser {
     }
 
     func parseDeclaration(tokenStream: inout [(Lexer.Token, LexerPosition)]) -> Parser.AST.Declaration {
+        // before looking for a specifier list, look for "struct"
+        if peek(tokenStream) == .keywordStruct {
+            let _ = expect(.keywordStruct, &tokenStream)
+            let structTag : String
+            switch peek(tokenStream) {
+                case .identifier(let tagName):
+                    structTag = tagName
+                default:
+                    print("Unexpected token \(peek(tokenStream)) found while expecting structure tag")
+                    exit(ExitCode.internalError.rawValue)
+            }
+            var memberList : [(String /* member name */, Parser.AST.CType /* member type */)] = []
+            if peek(tokenStream) == .openBrace {
+                // there is a member list, with at least one member
+                let _ = expect(.openBrace, &tokenStream)
+                while peek(tokenStream) != .closeBrace {
+                    if !isType(tokenStream) {
+                        print("Expected type in member list in declaration of struct \(structTag), found \(tokenStream[0])")
+                        exit(ExitCode.lexerError.rawValue)
+                    }
+                    let (namedType, _) = parseType(&tokenStream)    // known to not include a storage class
+                    let memberName = expectIdentifier(&tokenStream)
+                    memberList.append((memberName, namedType))
+                }
+                let _ = expect(.closeBrace, &tokenStream)
+            }
+            return .StructDeclaration(structTag, memberList)
+        }
         // parse the specifier list
         let (declaredType, storageClass) = parseType(&tokenStream)
         let declarator = parseDeclarator(tokenStream: &tokenStream)
