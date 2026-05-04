@@ -244,6 +244,7 @@ class Parser {
             case .keywordInt: fallthrough
             case .keywordLong: fallthrough
             case .keywordDouble: fallthrough
+            case .keywordStruct: fallthrough
             case .keywordVoid: return true
             default: return false
         }
@@ -624,6 +625,14 @@ class Parser {
                 let sizeExp = parseExpression(tokenStream: &tokenStream, minimumPrecedence: 0)
                 let _ = expect(.closeBracket, &tokenStream)
                 lhs = .Subscript(lhs, sizeExp, nil)
+            case .dot:
+                let _ = expect(.dot, &tokenStream)
+                let memberName = expectIdentifier(&tokenStream)
+                lhs = .Dot(lhs, memberName, nil)
+            case .arrow:
+                let _ = expect(.arrow, &tokenStream)
+                let memberName = expectIdentifier(&tokenStream)
+                lhs = .Arrow(lhs, memberName, nil)
             default:
                 break
         }
@@ -876,6 +885,12 @@ class Parser {
         if specifierList.contains(.keywordVoid) {
             // probably all kinds of wrong, break elsewhere
             return (.Void, storageClass)
+        }
+
+        // handle structs that have a tag
+        if specifierList.contains(.keywordStruct) {
+            let tag = expectIdentifier(&tokenStream)
+            return (.Structure(tag), storageClass)
         }
 
         // nothing specified, must be signed int
