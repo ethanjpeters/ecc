@@ -1054,7 +1054,19 @@ class SemanticAnalyzer {
                     } else if leftType == .Void && rightType == .Void {
                         outType = .Void
                     } else {
-                        outType = getCommonType(leftType, rightType)
+                        if (isStructureType(leftType) && !isStructureType(rightType)) || (!isStructureType(leftType) && isStructureType(rightType)) {
+                            print("Conditional expression where only one side was a structure type")
+                            exit(ExitCode.semanticError.rawValue)
+                        }
+                        if isStructureType(leftType) && isStructureType(rightType) {
+                            if leftType != rightType {
+                                print("Mismatched structure types in conditional expression")
+                                exit(ExitCode.semanticError.rawValue)
+                            }
+                            outType = leftType
+                        } else {
+                            outType = getCommonType(leftType, rightType)
+                        }
                     }
                     return (.Conditional(
                         typeConvert(checkedCond, ofType: condType, toType: .Int),
@@ -1975,6 +1987,13 @@ func isSubscribtableType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool
     switch tp {
         case .Pointer(_): return true
         case .ArrayType(_, _): return true
+        default: return false
+    }
+}
+
+func isStructureType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
+    switch tp {
+        case .Structure(_): return true
         default: return false
     }
 }
