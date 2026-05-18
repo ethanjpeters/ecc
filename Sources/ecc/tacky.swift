@@ -72,7 +72,7 @@ class Tacky {
             case Store(Value /* src */, Value /* dst_ptr */)
             case AddPtr(Value /* ptr */, Value /* index */, UInt /* scale */, Value /* dst */)
             case CopyToOffset(Value /* src */, String /* identifier dst */, UInt /* offset */)
-            // case CopyFromOffset(String /* src */, Int /* offset */, Value /* dst */)
+            case CopyFromOffset(String /* src */, Int /* offset */, Value /* dst */)
         }
 
         enum Declaration {
@@ -154,6 +154,7 @@ class Tacky {
     enum ExpResult {
         case PlainOperand(IR.Value)
         case DereferencedPointer(IR.Value)
+        case SubObject(String /* base */, Int /* offset */)
     }
 
     func generateTACKYExpression(_ exp: Parser.AST.Expression, out: inout [Tacky.IR.Instruction], symbolTable: inout SymbolTable, typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> ExpResult {
@@ -216,6 +217,13 @@ class Tacky {
                                     out.append(.Binary(.Add, one, tmp, dst))
                                     out.append(.Store(dst, ptr))
                                     return .PlainOperand(dst)
+                                case .SubObject(let base, let offset):
+                                    // NOTE: earlier passes should have already verified this is a valid lvalue
+                                    let tmp = makeTempVariable(tp!, &symbolTable)
+                                    out.append(.CopyFromOffset(base, offset, tmp))
+                                    out.append(.Binary(.Add, one, tmp, tmp))
+                                    out.append(.CopyToOffset(tmp, base, UInt(offset)))
+                                    return .SubObject(base, offset)
                             }
                         case .PreDecrement:
                             switch src {
@@ -229,6 +237,13 @@ class Tacky {
                                     out.append(.Binary(.Subtract, tmp, one, dst))
                                     out.append(.Store(dst, ptr))
                                     return .PlainOperand(dst)
+                                case .SubObject(let base, let offset):
+                                    // NOTE: earlier passes should have already verified this is a valid lvalue
+                                    let tmp = makeTempVariable(tp!, &symbolTable)
+                                    out.append(.CopyFromOffset(base, offset, tmp))
+                                    out.append(.Binary(.Subtract, tmp, one, tmp))
+                                    out.append(.CopyToOffset(tmp, base, UInt(offset)))
+                                    return .SubObject(base, offset)
                             }
                         case .PostIncrement:
                             switch src {
@@ -244,6 +259,12 @@ class Tacky {
                                     out.append(.Binary(.Add, tmp, one, dst))
                                     out.append(.Store(dst, ptr))
                                     return .PlainOperand(tmp)
+                                case .SubObject(let base, let offset):
+                                    let tmp = makeTempVariable(tp!, &symbolTable)
+                                    out.append(.CopyFromOffset(base, offset, tmp))
+                                    out.append(.Binary(.Add, one, tmp, dst))
+                                    out.append(.CopyToOffset(dst, base, UInt(offset)))
+                                    return .PlainOperand(tmp)
                             }
                         case .PostDecrement:
                             switch src {
@@ -258,6 +279,12 @@ class Tacky {
                                     out.append(.Load(ptr, tmp))
                                     out.append(.Binary(.Subtract, tmp, one, dst))
                                     out.append(.Store(dst, ptr))
+                                    return .PlainOperand(tmp)
+                                case .SubObject(let base, let offset):
+                                    let tmp = makeTempVariable(tp!, &symbolTable)
+                                    out.append(.CopyFromOffset(base, offset, tmp))
+                                    out.append(.Binary(.Subtract, tmp, one, dst))
+                                    out.append(.CopyToOffset(dst, base, UInt(offset)))
                                     return .PlainOperand(tmp)
                             }
                         default:
@@ -347,6 +374,9 @@ class Tacky {
                         return left
                     case .DereferencedPointer(let ptr):
                         out.append(.Store(right, ptr))
+                        return .PlainOperand(right)
+                    case .SubObject(let base, let offset):
+                        out.append(.CopyToOffset(right, base, UInt(offset)))
                         return .PlainOperand(right)
                 }
             case .CompoundAssignment(_,_,_,_):
@@ -467,6 +497,11 @@ class Tacky {
                         return .PlainOperand(dst)
                     case .DereferencedPointer(let ptr):
                         return .PlainOperand(ptr)
+                    case .SubObject(let base, let offset):
+                        let dst = makeTempVariable(getType(exp), &symbolTable)
+                        out.append(.GetAddress(.Var(base), dst))
+                        out.append(.AddPtr(dst, .Constant(.ConstLong(Int64(offset))), 1, dst))
+                        return .PlainOperand(dst)
                 }
             case .Subscript(let ptr, let off, let tp):
                 let arrayValue = generateTACKYExpressionAndConvert(ptr, out: &out, symbolTable: &symbolTable, typeTable: typeTable)
@@ -500,6 +535,10 @@ class Tacky {
             case .DereferencedPointer(let ptr):
                 let dst = makeTempVariable(getType(exp), &symbolTable)
                 out.append(.Load(ptr, dst))
+                return dst
+            case .SubObject(let base, let offset):
+                let dst = makeTempVariable(getType(exp), &symbolTable)
+                out.append(.CopyFromOffset(base, offset, dst))
                 return dst
         }
     }
@@ -725,8 +764,7 @@ class Tacky {
                     return nil
                 }
             case .StructDeclaration(let tag, let members):
-                print("As-yet-unhandled struct declaration found while generating TACKY")
-                exit(ExitCode.internalError.rawValue)
+                return nil
         }
     }
 

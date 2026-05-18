@@ -208,6 +208,8 @@ class Assembly {
                                             extract(index, &out)
                                         case .CopyToOffset(let src, _, _):
                                             extract(src, &out)
+                                        case .CopyFromOffset(let base, let offset, let dst):
+                                            extract(dst, &out)
                                     }
                                 }
                             case .StaticVariable(_, _, _, _): ()
@@ -710,6 +712,9 @@ class Assembly {
                     // make the machine work
                 case .CopyToOffset(let src, let identifier, let offset):
                     out.append(.Mov(deduceType(src, typedSymbolTable, typeTable), convert(src, symbolTable, typedSymbolTable), .PseudoMem(identifier, offset)))
+                case .CopyFromOffset(let base, let offset, let dst):
+                    print("As-yet-unhandled .CopyFromOffset instruction found while generating assembly")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
     }
