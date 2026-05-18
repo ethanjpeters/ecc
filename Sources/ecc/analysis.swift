@@ -1722,6 +1722,13 @@ class SemanticAnalyzer {
                     }
                     let addrOfType : CheckerType = .Pointer(elementType)
                     return (.AddrOf(typedExpression, Self.deConvert(addrOfType)), addrOfType)
+                case .Structure(let tag):
+                    if let _ = typeTable[tag] {
+                        return (typedExpression, expressionType)
+                    } else {
+                        print("Invalid use of incomplete structure type \(tag)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
                 default: return (typedExpression, expressionType)
             }
         }
