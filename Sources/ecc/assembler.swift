@@ -863,10 +863,29 @@ class Assembly {
                     // TODO: we could technically save an instruction if we determined that index was constant; heck it,
                     // make the machine work
                 case .CopyToOffset(let src, let identifier, let offset):
-                    out.append(.Mov(deduceType(src, typedSymbolTable, typeTable), convert(src, symbolTable, typedSymbolTable), .PseudoMem(identifier, offset)))
+                    let srcType = deduceType(src, typedSymbolTable, typeTable)
+                    let s = convert(src, symbolTable, typedSymbolTable)
+                    switch srcType {
+                        case .Byte: fallthrough
+                        case .Longword: fallthrough
+                        case .Quadword: fallthrough
+                        case .Double:
+                            out.append(.Mov(srcType, s, .PseudoMem(identifier, offset)))
+                        case .ByteArray(let size, _):
+                            copyBytes(size, s, .PseudoMem(identifier, offset))
+                    }
                 case .CopyFromOffset(let base, let offset, let dst):
-                    print("As-yet-unhandled .CopyFromOffset instruction found while generating assembly")
-                    exit(ExitCode.internalError.rawValue)
+                    let dstType = deduceType(dst, typedSymbolTable, typeTable)
+                    let d = convert(dst, symbolTable, typedSymbolTable)
+                    switch dstType {
+                        case .Byte: fallthrough
+                        case .Longword: fallthrough
+                        case .Quadword: fallthrough
+                        case .Double:
+                            out.append(.Mov(dstType, .PseudoMem(base, UInt(offset)), d))
+                        case .ByteArray(let size, _):
+                            copyBytes(size, .PseudoMem(base, UInt(offset)), d)
+                    }
             }
         }
     }
