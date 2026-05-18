@@ -521,8 +521,42 @@ class Tacky {
             case .SizeOfT(let namedType, _):
                 return .PlainOperand(.Constant(.ConstUnsignedLong(UInt64(getTypeSize(convertCTypeToCheckerType(namedType), typeTable)))))
             case .Dot(let exp, let memberName, _):
-                print("As-yet-unhandled dot expression found while generating TACKY")
-                exit(ExitCode.internalError.rawValue)
+                let structType = getType(exp)
+                let tg: String
+                switch structType {
+                    case .Structure(let tag):
+                        tg = tag
+                    default:
+                        print("Unreachable no-type's land where dot operator was used on non-structure")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                if let structDef = typeTable[tg] {
+                    for m in structDef.memebers {
+                        if m.identifier == memberName {
+                            let memberOffset = m.offset
+                            let innerObject = generateTACKYExpression(exp, out: &out, symbolTable: &symbolTable, typeTable: typeTable)
+                            switch innerObject {
+                                case .PlainOperand(let val):
+                                    switch val {
+                                        case .Var(let valName): return .SubObject(valName, memberOffset)
+                                        case .Constant(_):
+                                            print("Tried to do dot operation on constant \(val)")
+                                            exit(ExitCode.internalError.rawValue)
+                                    }
+                                case .SubObject(let base, let offset): return .SubObject(base, offset + memberOffset)
+                                case .DereferencedPointer(let ptr):
+                                    let dstPtr = makeTempVariable(.Pointer(getType(exp)), &symbolTable)
+                                    out.append(.AddPtr(ptr, .Constant(.ConstLong(Int64(memberOffset))), 1, dstPtr))
+                                    return .DereferencedPointer(dstPtr)
+                            }
+                        }
+                    }
+                    print("Unreachable point where struct member name is not valid")
+                    exit(ExitCode.internalError.rawValue)
+                } else {
+                    print("Unreachable point where struct is not defined but we're generating TACKY out of its dot operation")
+                    exit(ExitCode.internalError.rawValue)
+                }
             case .Arrow(let exp, let memberName, _):
                 print("As-yet-unhandled arrow expression found while generating TACKY")
                 exit(ExitCode.internalError.rawValue)
