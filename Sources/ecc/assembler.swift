@@ -306,6 +306,9 @@ class Assembly {
                     case .Char: fallthrough
                     case .SChar: fallthrough
                     case .UChar: return .Byte
+                    case .Structure(_):
+                        print("As-yet-unhandled tyep deduction attempted for structure")
+                        exit(ExitCode.internalError.rawValue)
                 }
         }
     }
@@ -343,6 +346,7 @@ class Assembly {
                     case .SChar: return true
                     case .Char: fallthrough
                     case .UChar: return false
+                    case .Structure(_): return false
                 }
         }
     }
@@ -870,6 +874,9 @@ class Assembly {
                         case .ArrayType(_, _):
                             print("UNREACHABLE ARRAY")
                             exit(ExitCode.internalError.rawValue)
+                        case .Structure(_):
+                            print("Unreachable STRUCTURE")
+                            exit(ExitCode.internalError.rawValue)
                     }
                     let isStatic: Bool
                     switch attrs {
@@ -911,6 +918,9 @@ class Assembly {
                             exit(ExitCode.internalError.rawValue)
                     }
                     asmSymTab[name] = .ObjEntry(.ByteArray(UInt(getTypeSize(nestedType)) * count, alignment), isGlobal)
+                case .Structure(let tag):
+                    print("As-yet-unhandled structure found while generating assembly")
+                    exit(ExitCode.internalError.rawValue)
             }
         }
 
@@ -943,6 +953,9 @@ class Assembly {
                     case .UnsignedLong: width = 8
                     case .Double: width = 8
                     case .Pointer(_): width = 8
+                    case .Structure(_):
+                        print("As-yet-unhandled attempt to get width of structure when replacing pseudo registers")
+                        exit(ExitCode.internalError.rawValue)
                     case .ArrayType(_, _):
                         print("Unreachable case getting the width of an array in the assembler")
                         exit(ExitCode.internalError.rawValue)

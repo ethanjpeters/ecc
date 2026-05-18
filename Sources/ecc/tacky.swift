@@ -667,6 +667,9 @@ class Tacky {
                     case .Function(_, _):
                         print("Unreachable invalidate type \(symbolTable[dest]!.0) found while initializing \(dest)")
                         exit(ExitCode.internalError.rawValue)
+                    case .Structure(_):
+                        print("As-yet-unhandled structure found while generating TACKY init")
+                        exit(ExitCode.internalError.rawValue)
                 }
             case .CompoundInit(let children):
                 let size : UInt

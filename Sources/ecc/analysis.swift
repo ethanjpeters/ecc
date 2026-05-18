@@ -588,6 +588,7 @@ class SemanticAnalyzer {
             case Pointer(CheckerType /* pointee type */)
             case Function(CheckerType /* return */, [CheckerType] /* params */)
             case ArrayType(CheckerType /* element */, UInt /* size */)
+            case Structure(String /* tag */)
         }
 
         enum StaticInit {
@@ -714,6 +715,7 @@ class SemanticAnalyzer {
                 case .Function(_, _):
                     print("UNREACHABLE FUNC")
                     exit(ExitCode.internalError.rawValue)
+                case .Structure(let tag): return .Structure(tag)
             }
         }
 
@@ -1107,6 +1109,7 @@ class SemanticAnalyzer {
                         case .Double: fallthrough
                         case .Pointer(_): fallthrough
                         case .Void: fallthrough
+                        case .Structure(_): fallthrough
                         case .ArrayType(_, _):
                             print("Can not call value \(lValue) of type \(fType)")
                             exit(ExitCode.semanticError.rawValue)
@@ -1779,6 +1782,9 @@ func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Int {
         case .Char: fallthrough
         case .SChar: fallthrough
         case .UChar: return 1
+        case .Structure(_):
+            print("as-yet-unhandled .Structure construct when calling getTypeSize()")
+            exit(ExitCode.internalError.rawValue)
         case .Void:
             print("GETTING TYPE SIZE OF VOID MAKES NO SENSE")
             exit(ExitCode.internalError.rawValue)
@@ -1805,6 +1811,7 @@ func isSigned(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
         case .ArrayType(_, _):
             print("ARRAY IS NEITHER SIGNED NOR UNSIGNED")
             exit(ExitCode.internalError.rawValue)
+        case .Structure(_): return false
     }
 }
 
@@ -1826,6 +1833,7 @@ func isFloatingPoint(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
             exit(ExitCode.internalError.rawValue)
         case .Double: return true
         case .ArrayType(_, _): return false
+        case .Structure(_): return false
     }
 }
 
@@ -1843,6 +1851,7 @@ func isIntegralType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
         case .Pointer(_): return false
         case .ArrayType(_, _): return false
         case .Void: return false
+        case .Structure(_): return false
     }
 }
 
@@ -1860,6 +1869,7 @@ func isArithmeticType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
         case .Pointer(_): fallthrough
         case .ArrayType(_, _): fallthrough
         case .Void: return false
+        case .Structure(_): return false
     }
 }
 
