@@ -267,7 +267,7 @@ class Assembly {
         }
     }
 
-    func deduceType(_ val: Tacky.IR.Value, _ symbolTable: SymbolTable) -> Tree.AssemblyType {
+    func deduceType(_ val: Tacky.IR.Value, _ symbolTable: SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> Tree.AssemblyType {
         switch val {
             case .Constant(let c):
                 switch c {
@@ -297,9 +297,9 @@ class Assembly {
                     case .Double: return .Double
                     case .Pointer(_): return .Quadword
                     case .ArrayType(let tp, let count):
-                        let totalSize = UInt(getTypeSize(tp)) * count
+                        let totalSize = UInt(getTypeSize(tp, typeTable)) * count
                         if totalSize < 16 {
-                            return .ByteArray(totalSize, UInt(getTypeSize(tp)))
+                            return .ByteArray(totalSize, UInt(getTypeSize(tp, typeTable)))
                         } else {
                             return .ByteArray(totalSize, 16)
                         }
@@ -363,19 +363,19 @@ class Assembly {
         }
     }
 
-    func generate(_ instructions: [Tacky.IR.Instruction], _ symbolTable: [String : Assembly.Tree.Declaration], _ out: inout [Tree.Instruction], _ typedSymbolTable: SymbolTable) {
+    func generate(_ instructions: [Tacky.IR.Instruction], _ symbolTable: [String : Assembly.Tree.Declaration], _ out: inout [Tree.Instruction], _ typedSymbolTable: SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) {
         let zero : Assembly.Tree.Operand = .Immediate(.UnsignedImmediate(0))
 
         for instr in instructions {
             switch instr {
                 case .Return(let val):
                     if let v = val {
-                        let tp = deduceType(v, typedSymbolTable)
+                        let tp = deduceType(v, typedSymbolTable, typeTable)
                         out.append(.Mov(tp, convert(v, symbolTable, typedSymbolTable), tp == .Double ? .Register(.XMM0) : .Register(.AX)))
                     }
                     out.append(.Ret)
                 case .Unary(let op, let src, let dst):
-                    let srcType = deduceType(src, typedSymbolTable)
+                    let srcType = deduceType(src, typedSymbolTable, typeTable)
                     let isFlop = (srcType == .Double)
                     if op == .Not {
                         if isFlop {
@@ -399,7 +399,7 @@ class Assembly {
                     let src1Conv = convert(src1, symbolTable, typedSymbolTable)
                     let src2Conv = convert(src2, symbolTable, typedSymbolTable)
                     let dstConv = convert(dst, symbolTable, typedSymbolTable)
-                    let srcType = deduceType(src1, typedSymbolTable)
+                    let srcType = deduceType(src1, typedSymbolTable, typeTable)
                     let signedOp = deduceIsSigned(src1, typedSymbolTable)
                     let isFlop = (srcType == .Double)
                     switch op {
@@ -488,14 +488,14 @@ class Assembly {
                     }
                 case .Copy(let src, let dst):
                     out.append(.Mov(
-                        deduceType(src, typedSymbolTable),
+                        deduceType(src, typedSymbolTable, typeTable),
                         convert(src, symbolTable, typedSymbolTable),
                         convert(dst, symbolTable, typedSymbolTable)
                     ))
                 case .Jump(let label):
                     out.append(.Jmp(label))
                 case .JumpIfZero(let val, let label):
-                    let valType = deduceType(val, typedSymbolTable)
+                    let valType = deduceType(val, typedSymbolTable, typeTable)
                     let isFlop = (valType == .Double)
                     if isFlop {
                         out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
@@ -505,7 +505,7 @@ class Assembly {
                     }
                     out.append(.JmpCC(.E, label))
                 case .JumpIfNotZero(let val, let label):
-                    let valType = deduceType(val, typedSymbolTable)
+                    let valType = deduceType(val, typedSymbolTable, typeTable)
                     let isFlop = (valType == .Double)
                     if isFlop {
                         out.append(.Binary(.Xor, .Double, .Register(.XMM0), .Register(.XMM0)))
@@ -525,7 +525,7 @@ class Assembly {
                     var intRegisterTargets : [Tree.Register] = [.DI, .SI, .DX, .CX, .R8, .R9]
                     var stackParams : [Tacky.IR.Value] = []
                     for p in params {
-                        let tp = deduceType(p, typedSymbolTable)
+                        let tp = deduceType(p, typedSymbolTable, typeTable)
                         // if we're looking at a floating point value AND we have floating point registers left unallocated
                         if tp == .Double && !fpRegisterTargets.isEmpty {
                             let target = fpRegisterTargets.removeFirst()
@@ -551,7 +551,7 @@ class Assembly {
                     stackParams.reverse()
                     for p in stackParams {
                         let src = convert(p, symbolTable, typedSymbolTable)
-                        var shouldPushStraight : Bool = deduceType(p, typedSymbolTable) == .Quadword
+                        var shouldPushStraight : Bool = deduceType(p, typedSymbolTable, typeTable) == .Quadword
                         switch src {
                             case .Register(_): fallthrough
                             case .Immediate(_):
@@ -576,7 +576,7 @@ class Assembly {
                     // move the result
                     if let rslt = result {
                         out.append(.Mov(
-                            deduceType(rslt, typedSymbolTable),
+                            deduceType(rslt, typedSymbolTable, typeTable),
                             .Register(.AX),
                             convert(rslt, symbolTable, typedSymbolTable)
                         ))
@@ -584,23 +584,23 @@ class Assembly {
                 case .SignExtend(let src, let dst):
                     let cSrc = convert(src, symbolTable, typedSymbolTable)
                     let cDst = convert(dst, symbolTable, typedSymbolTable)
-                    let srcType = deduceType(src, typedSymbolTable)
-                    let dstType = deduceType(dst, typedSymbolTable)
+                    let srcType = deduceType(src, typedSymbolTable, typeTable)
+                    let dstType = deduceType(dst, typedSymbolTable, typeTable)
                     out.append(.Movsx(srcType, dstType, cSrc, cDst))
                 case .Truncate(let src, let dst):
                     out.append(.Mov(
-                        deduceType(dst, typedSymbolTable),
+                        deduceType(dst, typedSymbolTable, typeTable),
                         convert(src, symbolTable, typedSymbolTable),
                         convert(dst, symbolTable, typedSymbolTable)
                     ))
                 case .ZeroExtend(let src, let dst):
                     let cSrc = convert(src, symbolTable, typedSymbolTable)
                     let cDst = convert(dst, symbolTable, typedSymbolTable)
-                    let srcType = deduceType(src, typedSymbolTable)
-                    let dstType = deduceType(dst, typedSymbolTable)
+                    let srcType = deduceType(src, typedSymbolTable, typeTable)
+                    let dstType = deduceType(dst, typedSymbolTable, typeTable)
                     out.append(.Movzx(srcType, dstType, cSrc, cDst))
                 case .DoubleToInt(let src, let dst):
-                    let dType = deduceType(dst, typedSymbolTable)
+                    let dType = deduceType(dst, typedSymbolTable, typeTable)
                     let cSrc = convert(src, symbolTable, typedSymbolTable)
                     let cDst = convert(dst, symbolTable, typedSymbolTable)
                     if dType == .Byte {
@@ -611,7 +611,7 @@ class Assembly {
                     }
                 case .DoubleToUInt(let src, let dst):
                     // not straightforward
-                    let dType = deduceType(dst, typedSymbolTable)
+                    let dType = deduceType(dst, typedSymbolTable, typeTable)
                     // if we're dealing with one of those 4-byte integers, then we...
                     if dType == .Longword {
                         // convert to a quadword, then truncate
@@ -643,18 +643,18 @@ class Assembly {
                         out.append(.Label(endLabel))
                     }
                 case .IntToDouble(let src, let dst):
-                    let sType = deduceType(src, typedSymbolTable)
+                    let sType = deduceType(src, typedSymbolTable, typeTable)
                     if sType == .Byte {
                         out.append(.Movsx(.Byte, .Longword, convert(src, symbolTable, typedSymbolTable), .Register(.AX)))
                         out.append(.Cvtsi2sd(.Longword, .Register(.AX), convert(dst, symbolTable, typedSymbolTable)))
                     } else {
                         // straightforward case, done by one instruction
-                        out.append(.Cvtsi2sd(deduceType(dst, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
+                        out.append(.Cvtsi2sd(deduceType(dst, typedSymbolTable, typeTable), convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                     }
                 case .UIntToDouble(let src, let dst):
                     // not straightforward
                     // if we're dealing with a 4-byte integer
-                    let sType = deduceType(src, typedSymbolTable)
+                    let sType = deduceType(src, typedSymbolTable, typeTable)
                     let cSrc = convert(src, symbolTable, typedSymbolTable)
                     if sType == .Longword {
                         // zero extend it to a quadword
@@ -691,10 +691,10 @@ class Assembly {
                     out.append(.Lea(convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                 case .Load(let ptr, let dst):
                     out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
-                    out.append(.Mov(deduceType(dst, typedSymbolTable), .Memory(.AX, 0), convert(dst, symbolTable, typedSymbolTable)))
+                    out.append(.Mov(deduceType(dst, typedSymbolTable, typeTable), .Memory(.AX, 0), convert(dst, symbolTable, typedSymbolTable)))
                 case .Store(let src, let ptr):
                     out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
-                    out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), .Memory(.AX, 0)))
+                    out.append(.Mov(deduceType(src, typedSymbolTable, typeTable), convert(src, symbolTable, typedSymbolTable), .Memory(.AX, 0)))
                 case .AddPtr(let ptr, let index, let scale, let dst):
                     if [1, 2, 4, 8].contains(scale) {
                         out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
@@ -709,12 +709,12 @@ class Assembly {
                     // TODO: we could technically save an instruction if we determined that index was constant; heck it,
                     // make the machine work
                 case .CopyToOffset(let src, let identifier, let offset):
-                    out.append(.Mov(deduceType(src, typedSymbolTable), convert(src, symbolTable, typedSymbolTable), .PseudoMem(identifier, offset)))
+                    out.append(.Mov(deduceType(src, typedSymbolTable, typeTable), convert(src, symbolTable, typedSymbolTable), .PseudoMem(identifier, offset)))
             }
         }
     }
 
-    func generate(_ pls: Tacky.IR.Declaration, _ symbolTable: [String : Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable) -> Tree.Declaration {
+    func generate(_ pls: Tacky.IR.Declaration, _ symbolTable: [String : Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> Tree.Declaration {
         switch pls {
             case .Function(let name, let isGlobal, let params, let instrs):
                 var out : [Tree.Instruction] = []
@@ -723,7 +723,7 @@ class Assembly {
                 var intRegisterTargets : [Tree.Register] = [.DI, .SI, .DX, .CX, .R8, .R9]
                 var stackParams : [String] = []
                 for p in params {
-                    let tp = deduceType(.Var(p), typedSymbolTable)
+                    let tp = deduceType(.Var(p), typedSymbolTable, typeTable)
                     // if we're looking at a floating point value AND we have floating point registers left unallocated
                     if tp == .Double && !fpRegisterTargets.isEmpty {
                         let source = fpRegisterTargets.removeFirst()
@@ -741,10 +741,10 @@ class Assembly {
                 stackParams.reverse()
                 var counter = 0
                 for p in stackParams {
-                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable), .Stack(16 + counter), .Pseudo(p)))
+                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable, typeTable), .Stack(16 + counter), .Pseudo(p)))
                     counter = counter + 8
                 }
-                generate(instrs, symbolTable, &out, typedSymbolTable)
+                generate(instrs, symbolTable, &out, typedSymbolTable, typeTable)
                 return .Function(name, isGlobal, out)
             case .StaticVariable(_, _, _, _):
                 print("As yet unhandled global variable caught while generating assembly")
@@ -755,7 +755,7 @@ class Assembly {
         }
     }
 
-    func generate(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration], typedSymbolTable: SymbolTable) -> (Tree.Program, BackendSymbolTable) {
+    func generate(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration], typedSymbolTable: SymbolTable, typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> (Tree.Program, BackendSymbolTable) {
         var assemblyDecls : [Assembly.Tree.Declaration] = []
         var internalSymbolTable : [String : Assembly.Tree.Declaration] = [:]
         for tackyDef in symbolTable {
@@ -776,10 +776,10 @@ class Assembly {
                             print("UNREACHABLE FUN TYPE VARIABLE TYPE")
                             exit(ExitCode.internalError.rawValue)
                         case .ArrayType(let nestedType, let size):
-                            if UInt(getTypeSize(convertCTypeToCheckerType(nestedType))) * size >= 16 {
+                            if UInt(getTypeSize(convertCTypeToCheckerType(nestedType), typeTable)) * size >= 16 {
                                 alignment = 16
                             } else {
-                                alignment = getTypeSize(convertCTypeToCheckerType(nestedType))
+                                alignment = getTypeSize(convertCTypeToCheckerType(nestedType), typeTable)
                             }
                         case .Char: fallthrough
                         case .SChar: fallthrough
@@ -807,10 +807,10 @@ class Assembly {
                             print("UNREACHABLE FUN TYPE VARIABLE TYPE")
                             exit(ExitCode.internalError.rawValue)
                         case .ArrayType(let nestedType, let size):
-                            if UInt(getTypeSize(convertCTypeToCheckerType(nestedType))) * size >= 16 {
+                            if UInt(getTypeSize(convertCTypeToCheckerType(nestedType), typeTable)) * size >= 16 {
                                 alignment = 16
                             } else {
-                                alignment = getTypeSize(convertCTypeToCheckerType(nestedType))
+                                alignment = getTypeSize(convertCTypeToCheckerType(nestedType), typeTable)
                             }
                         case .Char: fallthrough
                         case .SChar: fallthrough
@@ -836,7 +836,7 @@ class Assembly {
         switch program {
             case .Statement(let declarations):
                 for d in declarations {
-                    assemblyDecls.append(generate(d, internalSymbolTable, typedSymbolTable))
+                    assemblyDecls.append(generate(d, internalSymbolTable, typedSymbolTable, typeTable))
                 }
                 out = .Statement(assemblyDecls)
         }
@@ -902,7 +902,7 @@ class Assembly {
                             exit(ExitCode.internalError.rawValue)
                     }
                 case .ArrayType(let nestedType, let count):
-                    let tSize = UInt(getTypeSize(nestedType))
+                    let tSize = UInt(getTypeSize(nestedType, typeTable))
                     let aSize = UInt(tSize) * count
                     let alignment: UInt = aSize >= 16 ? 16 : tSize
                     var isGlobal = false
@@ -917,7 +917,7 @@ class Assembly {
                             print("UNREACHABLE: FUN ATTR FOR ARRAY TYPE")
                             exit(ExitCode.internalError.rawValue)
                     }
-                    asmSymTab[name] = .ObjEntry(.ByteArray(UInt(getTypeSize(nestedType)) * count, alignment), isGlobal)
+                    asmSymTab[name] = .ObjEntry(.ByteArray(UInt(getTypeSize(nestedType, typeTable)) * count, alignment), isGlobal)
                 case .Structure(let tag):
                     print("As-yet-unhandled structure found while generating assembly")
                     exit(ExitCode.internalError.rawValue)
@@ -927,7 +927,7 @@ class Assembly {
         return (out, asmSymTab)
     }
 
-    func replacePseudoRegisters(_ op: Tree.Operand, _ stackSlotCounter: inout Int, _ nameStackMapping: inout [String: Int], _ symbolTable : SymbolTable) -> Tree.Operand {
+    func replacePseudoRegisters(_ op: Tree.Operand, _ stackSlotCounter: inout Int, _ nameStackMapping: inout [String: Int], _ symbolTable : SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> Tree.Operand {
         switch op {
             case .Immediate(_):
                 return op
@@ -999,7 +999,7 @@ class Assembly {
                     return .Stack(-slot + Int(offset))
                 }
 
-                let width = getTypeSize(tp)
+                let width = getTypeSize(tp, typeTable)
 
                 var tmp = stackSlotCounter + width
                 if tmp % width != 0 {
@@ -1014,7 +1014,7 @@ class Assembly {
         }
     }
 
-    func replacePseudoRegisters(_ instructions: [Tree.Instruction], _ symbolTable : SymbolTable) -> [Tree.Instruction] {
+    func replacePseudoRegisters(_ instructions: [Tree.Instruction], _ symbolTable : SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> [Tree.Instruction] {
         var out : [Tree.Instruction] = []
 
         var stackSlotCounter : Int = 0
@@ -1025,59 +1025,59 @@ class Assembly {
                 case .AllocateStack(_):
                     out.append(instr)
                 case .Mov(let tp, let op1, let op2):
-                    out.append(.Mov(tp, replacePseudoRegisters(op1, &stackSlotCounter, &nameStackMapping, symbolTable),
-                                    replacePseudoRegisters(op2, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                    out.append(.Mov(tp, replacePseudoRegisters(op1, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable),
+                                    replacePseudoRegisters(op2, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)))
                 case .Ret:
                     out.append(instr)
                 case .Unary(let unOp, let tp, let op):
-                    out.append(.Unary(unOp, tp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                    out.append(.Unary(unOp, tp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)))
                 case .Binary(let binOp, let tp, let left, let right):
-                    out.append(.Binary(binOp, tp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping, symbolTable), replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                    out.append(.Binary(binOp, tp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable), replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)))
                 case .Cdq(let tp): out.append(.Cdq(tp))
-                case .Idiv(let tp, let op): out.append(.Idiv(tp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
-                case .Div(let tp, let op): out.append(.Div(tp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                case .Idiv(let tp, let op): out.append(.Idiv(tp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)))
+                case .Div(let tp, let op): out.append(.Div(tp, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)))
                 case .Cmp(let tp, let left, let right):
-                    out.append(.Cmp(tp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping, symbolTable),
-                                    replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                    out.append(.Cmp(tp, replacePseudoRegisters(left, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable),
+                                    replacePseudoRegisters(right, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)))
                 case .Jmp(_): out.append(instr)
                 case .JmpCC(_, _): out.append(instr)
                 case .SetCC(let cc, let op):
-                    out.append(.SetCC(cc, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                    out.append(.SetCC(cc, replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)))
                 case .Label(_): out.append(instr)
                 case .Call(_): out.append(instr)
                 case .DeallocateStack(_): out.append(instr)
                 case .Push(let op):
-                    out.append(.Push(replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable)))
+                    out.append(.Push(replacePseudoRegisters(op, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)))
                 case .Movsx(let srcType, let dstType, let src, let dst):
                     out.append(.Movsx(
                         srcType,
                         dstType,
-                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
-                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
+                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable),
+                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)
                     ))
                 case .Movzx(let srcType, let dstType, let src, let dst):
                     out.append(.Movzx(
                         srcType,
                         dstType,
-                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
-                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
+                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable),
+                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)
                     ))
                 case .Cvttsd2si(let tp, let src, let dst):
                     out.append(.Cvttsd2si(
                         tp,
-                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
-                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
+                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable),
+                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)
                     ))
                 case .Cvtsi2sd(let tp, let src, let dst):
                     out.append(.Cvtsi2sd(
                         tp,
-                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
-                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
+                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable),
+                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)
                     ))
                 case .Lea(let src, let dst):
                     out.append(.Lea(
-                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable),
-                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable)
+                        replacePseudoRegisters(src, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable),
+                        replacePseudoRegisters(dst, &stackSlotCounter, &nameStackMapping, symbolTable, typeTable)
                     ))
             }
         }
@@ -1087,10 +1087,10 @@ class Assembly {
         return out
     }
 
-    func replacePseudoRegisters(_ pls: Tree.Declaration, _ symbolTable : SymbolTable) -> Tree.Declaration {
+    func replacePseudoRegisters(_ pls: Tree.Declaration, _ symbolTable : SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> Tree.Declaration {
         switch pls {
             case .Function(let name, let isGlobal, let instrs):
-                return .Function(name, isGlobal, replacePseudoRegisters(instrs, symbolTable))
+                return .Function(name, isGlobal, replacePseudoRegisters(instrs, symbolTable, typeTable))
             case .StaticVariable(let name, let isGlobal, let alignment, let initVal):
                 return .StaticVariable(name, isGlobal, alignment, initVal)
             case .StaticConstant(let name, let alignment, let initVal):
@@ -1098,10 +1098,10 @@ class Assembly {
         }
     }
 
-    func replacePseudoRegisters(program: Tree.Program, _ symbolTable : SymbolTable) -> Tree.Program {
+    func replacePseudoRegisters(program: Tree.Program, _ symbolTable : SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> Tree.Program {
         switch program {
             case .Statement(let declarations):
-                return .Statement(declarations.map{ replacePseudoRegisters($0, symbolTable) })
+                return .Statement(declarations.map{ replacePseudoRegisters($0, symbolTable, typeTable) })
         }
     }
 
@@ -1643,9 +1643,9 @@ class Assembly {
         }
     }
 
-    func assemble(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration], typedSymbolTable: SymbolTable) -> (Tree.Program, BackendSymbolTable) {
-        let (assembly, backendSymbolTable) = generate(program: program, symbolTable: symbolTable, typedSymbolTable: typedSymbolTable)
-        let dePseudoed = replacePseudoRegisters(program: assembly, typedSymbolTable)
+    func assemble(program: Tacky.IR.Program, symbolTable: [Tacky.IR.Declaration], typedSymbolTable: SymbolTable, typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> (Tree.Program, BackendSymbolTable) {
+        let (assembly, backendSymbolTable) = generate(program: program, symbolTable: symbolTable, typedSymbolTable: typedSymbolTable, typeTable: typeTable)
+        let dePseudoed = replacePseudoRegisters(program: assembly, typedSymbolTable, typeTable)
         let fixedUp = fixUpMoves(program: dePseudoed)
         let noBigImms = fixUpImmediates(program: fixedUp)
         return (noBigImms, backendSymbolTable)

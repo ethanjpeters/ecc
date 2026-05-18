@@ -954,7 +954,7 @@ class SemanticAnalyzer {
                                 return (.Binary(binOp, checkedLeft, checkedRight, .Int), .Int)
                             default: ()
                         }
-                        let outType = getCommonType(leftType, rightType)
+                        let outType = getCommonType(leftType, rightType, typeTable)
                         let binExp : Parser.AST.Expression = .Binary(
                             binOp,
                             typeConvert(checkedLeft, ofType: leftType, toType: outType),
@@ -1043,7 +1043,7 @@ class SemanticAnalyzer {
                             }
                             outType = leftType
                         } else {
-                            outType = getCommonType(leftType, rightType)
+                            outType = getCommonType(leftType, rightType, typeTable)
                         }
                     }
                     return (.Conditional(
@@ -1087,7 +1087,7 @@ class SemanticAnalyzer {
                                         exit(ExitCode.semanticError.rawValue)
                                     }
                                 } else {
-                                    commonType = getCommonType(incomingParam.1, expectedParam)
+                                    commonType = getCommonType(incomingParam.1, expectedParam, typeTable)
                                     let ipExp = typeConvert(incomingParam.0, ofType: incomingParam.1, toType: commonType)
                                     upCastExp.append(ipExp)
                                 }
@@ -1800,7 +1800,7 @@ class SemanticAnalyzer {
         }
     }
 
-    func analyze(_ program: Parser.AST.Program) -> (Parser.AST.Program, [String : (TypeChecker.CheckerType, TypeChecker.IdentifierAttributes)]) {
+    func analyze(_ program: Parser.AST.Program) -> (Parser.AST.Program, [String : (TypeChecker.CheckerType, TypeChecker.IdentifierAttributes)], SemanticAnalyzer.TypeChecker.TypeTable) {
         // currently our only semantic analysis step
         let resolvedProgram = VariableResolver().resolveVariables(program)
         let labeledProgram = LoopLabeler().labelLoops(resolvedProgram)
@@ -1814,7 +1814,7 @@ class SemanticAnalyzer {
         var typeTable : TypeChecker.TypeTable = [:]
 
         let typeCheckedProgram = TypeChecker().typeCheck(casedProgram, &overallNameMap, &typeTable)
-        return (typeCheckedProgram, overallNameMap)
+        return (typeCheckedProgram, overallNameMap, typeTable)
     }
 }
 
@@ -1841,7 +1841,7 @@ func convertCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.T
     }
 }
 
-func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Int {
+func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> Int {
     switch tp {
         case .Function(_, _):
             print("GETTING TYPE SIZE OF FUNCTION MAKES NO SENSE")
@@ -1853,13 +1853,17 @@ func getTypeSize(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Int {
         case .Double: return 8
         case .Pointer(_): return 8
         case .ArrayType(let nestedType, let length):
-            return Int(length) * getTypeSize(nestedType)
+            return Int(length) * getTypeSize(nestedType, typeTable)
         case .Char: fallthrough
         case .SChar: fallthrough
         case .UChar: return 1
-        case .Structure(_):
-            print("as-yet-unhandled .Structure construct when calling getTypeSize()")
-            exit(ExitCode.internalError.rawValue)
+        case .Structure(let tag):
+            if let sDef = typeTable[tag] {
+                return sDef.size
+            } else {
+                print("Tried to get type of undefined struct \(tag)")
+                exit(ExitCode.semanticError.rawValue)
+            }
         case .Void:
             print("GETTING TYPE SIZE OF VOID MAKES NO SENSE")
             exit(ExitCode.internalError.rawValue)
@@ -1948,7 +1952,7 @@ func isArithmeticType(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) -> Bool {
     }
 }
 
-func getCommonType(_ left : SemanticAnalyzer.TypeChecker.CheckerType, _ right: SemanticAnalyzer.TypeChecker.CheckerType) -> SemanticAnalyzer.TypeChecker.CheckerType {
+func getCommonType(_ left : SemanticAnalyzer.TypeChecker.CheckerType, _ right: SemanticAnalyzer.TypeChecker.CheckerType, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> SemanticAnalyzer.TypeChecker.CheckerType {
     if left == right { return left }
     if isSubscribtableType(left) || isSubscribtableType(right) {
         print("Can not cast arrays/pointers")
@@ -1960,11 +1964,11 @@ func getCommonType(_ left : SemanticAnalyzer.TypeChecker.CheckerType, _ right: S
     // upcast to floating point where necessary
     if isFloatingPoint(lLeft) { return lLeft }
     if isFloatingPoint(rRight) { return rRight }
-    if getTypeSize(lLeft) == getTypeSize(rRight) {
+    if getTypeSize(lLeft, typeTable) == getTypeSize(rRight, typeTable) {
         if isSigned(lLeft) { return rRight }
         else { return lLeft }
     }
-    if getTypeSize(lLeft) > getTypeSize(rRight) {
+    if getTypeSize(lLeft, typeTable) > getTypeSize(rRight, typeTable) {
         return lLeft
     } else {
         return rRight
