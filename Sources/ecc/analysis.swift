@@ -48,6 +48,25 @@ class SemanticAnalyzer {
             }
         }
 
+        func resolveType(_ typeSpec: Parser.AST.CType, _ structMap: StructTable) -> Parser.AST.CType {
+            switch typeSpec {
+                case .Structure(let tag):
+                    if let sm = structMap[tag] {
+                        return .Structure(sm.newName)
+                    } else {
+                        print("Specified an undeclared struct type")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+                case .Pointer(let nestedType):
+                    return .Pointer(resolveType(nestedType, structMap))
+                case .ArrayType(let elemType, let sz):
+                    return .ArrayType(resolveType(elemType, structMap), sz)
+                case .FunType(let pTypes, let retType):
+                    return .FunType(pTypes.map{ resolveType($0, structMap) }, resolveType(retType, structMap))
+                default: return typeSpec
+            }
+        }
+
         func resolveExpression(_ exp : Parser.AST.Expression, _ nameMap: inout [String : NameMapEntry], _ structMap: inout StructTable) -> Parser.AST.Expression {
             switch exp {
                 case .Assignment(let lValue, let rValue, _):
@@ -210,8 +229,22 @@ class SemanticAnalyzer {
                         return .FunctionDeclaration(returnType, name, mangledPNames, nil, storageClass)
                     }
                 case .StructDeclaration(let tag, let members):
-                    print("As-yet-unhandled struct declaration found while generating TACKY")
-                    exit(ExitCode.internalError.rawValue)
+                    // look up the struct by tag in the struct map
+                    let prevEntry = structMap[tag]
+                    let uniqueTag : String
+                    if prevEntry == nil || !prevEntry!.currentScope {
+                        // no such struct in the map; construct a new entry with a new tag
+                        uniqueTag = makeTemp("struct.\(tag)")
+                        structMap[tag] = .init(newName: uniqueTag, currentScope: true)
+                    } else {
+                        // found it! grab the old tag
+                        uniqueTag = prevEntry!.newName
+                    }
+                    // now, process the members using our new resolveType() method
+                    let processedMembers = members.map { (name, typeSpec) in
+                        return (name, resolveType(typeSpec, structMap))
+                    }
+                    return .StructDeclaration(uniqueTag, processedMembers)
             }
         }
 
