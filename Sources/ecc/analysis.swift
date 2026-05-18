@@ -43,7 +43,9 @@ class SemanticAnalyzer {
             switch exp {
                 case .Var(_, _): return true
                 case .Dereference(_, _): return true
-                case .String(_, _): return true
+                case .Subscript(_, _, _): return true
+                case .Dot(_, _, _): return true
+                case .Arrow(_, _, _): return true
                 default: return false
             }
         }
@@ -724,6 +726,8 @@ class SemanticAnalyzer {
                 case .Var(_, _): return true
                 case .Dereference(_, _): return true
                 case .Subscript(_, _, _): return true
+                case .Dot(_, _, _): return true
+                case .Arrow(_, _, _): return true
                 default: return false
             }
         }
