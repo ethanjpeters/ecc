@@ -56,7 +56,7 @@ class Assembly {
             case Register(Register)
             case Pseudo(String)
             case Stack(Int)
-            case Data(String /* identifier */)
+            case Data(String /* identifier */, Int /* constant offset */)
             case Memory(Register, Int)
             case PseudoMem(String /* identifier */, UInt /* offset */)
             case Indexed(Register /* base */, Register /* index */, UInt /* scale */)
@@ -246,7 +246,7 @@ class Assembly {
                         }
                         switch staticVar {
                             case .StaticConstant(let name, _, _):
-                                return .Data(name)
+                                return .Data(name, 0)
                             default:
                                 print("static declaration of a floating point constant is somehow not a constant?")
                                 exit(ExitCode.internalError.rawValue)
@@ -256,7 +256,7 @@ class Assembly {
                 }
             case .Var(let name):
                 if let _ = symbolTable[name] {
-                    return .Data(name)
+                    return .Data(name, 0)
                 }
                 if let x = typedSymbolTable[name] {
                     switch x.0 {
@@ -391,7 +391,7 @@ class Assembly {
                     } else {
                         if isFlop && op == .Negate {
                             out.append(.Mov(srcType, convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
-                            out.append(.Binary(.Xor, srcType, .Data(negativeZeroLabel), convert(dst, symbolTable, typedSymbolTable)))
+                            out.append(.Binary(.Xor, srcType, .Data(negativeZeroLabel, 0), convert(dst, symbolTable, typedSymbolTable)))
                         } else {
                             out.append(.Mov(srcType, convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                             out.append(.Unary(convert(op), srcType, convert(dst, symbolTable, typedSymbolTable)))
@@ -626,7 +626,7 @@ class Assembly {
                     } else {
                         // otherwise, oh my god...
                         // check if our value fits into a quadword
-                        out.append(.Cmp(.Double, .Data(biggestQuadwordLabel), convert(src, symbolTable, typedSymbolTable)))
+                        out.append(.Cmp(.Double, .Data(biggestQuadwordLabel, 0), convert(src, symbolTable, typedSymbolTable)))
                         let outOfRangeLabel = makeLabel()
                         out.append(.JmpCC(.AE, outOfRangeLabel))
                         // if it fits into a signed quadword, convert to a signed quadword
@@ -637,7 +637,7 @@ class Assembly {
                         out.append(.Label(outOfRangeLabel))
                         // subtract LONG_MAX + 1
                         out.append(.Mov(.Double, convert(src, symbolTable, typedSymbolTable), .Register(.XMM1)))
-                        out.append(.Binary(.Sub, .Double, .Data(biggestQuadwordLabel), .Register(.XMM1)))
+                        out.append(.Binary(.Sub, .Double, .Data(biggestQuadwordLabel, 0), .Register(.XMM1)))
                         // then convert to a signed long
                         out.append(.Cvttsd2si(.Quadword, .Register(.XMM1), convert(dst, symbolTable, typedSymbolTable)))
                         // then add LONG_MAX + 1 back
@@ -996,7 +996,7 @@ class Assembly {
                 }
 
                 switch attr {
-                    case .StaticAttr(_, _): return .Data(name)
+                    case .StaticAttr(_, _): return .Data(name, 0)
                     default: ()
                 }
 
