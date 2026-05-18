@@ -1302,6 +1302,35 @@ class SemanticAnalyzer {
                     let tType = convertCTypeToCheckerType(targetType)
                     return (.SingleInit(typeConvert(typecheckedExp, ofType: expType, toType: tType)), tType)
                 case .CompoundInit(let subInits):
+
+                    switch targetType {
+                        case .Structure(let tag):
+                            if let sDef = typeTable[tag] {
+                                if subInits.count > sDef.memebers.count {
+                                    print("Too many elements in struct initializer")
+                                    exit(ExitCode.semanticError.rawValue)
+                                }
+                                var i = 0
+                                var tCheckLst: [Parser.AST.Initializer] = []
+                                for initElm in subInits {
+                                    let t = sDef.memebers[i].typeSpec
+                                    let tCheckElm = typeCheck(t, initElm, nameMap, typeTable)
+                                    tCheckLst.append(tCheckElm.0)
+                                    i = i + 1
+                                }
+                                while i < sDef.memebers.count {
+                                    let t = sDef.memebers[i].typeSpec
+                                    tCheckLst.append(zeroInitializer(t))
+                                    i = i + 1
+                                }
+                                return (.CompoundInit(tCheckLst), convertCTypeToCheckerType(targetType))
+                            } else {
+                                print("Tried to initialize incomplete struct type \(tag)")
+                                exit(ExitCode.semanticError.rawValue)
+                            }
+                        default: ()
+                    }
+
                     let extractedInnerType : Parser.AST.CType
                     let extractedSize : UInt
                     switch targetType {
