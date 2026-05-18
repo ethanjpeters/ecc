@@ -759,8 +759,19 @@ class Assembly {
                             copyBytes(size, .Memory(.AX, 0), d)
                     }
                 case .Store(let src, let ptr):
-                    out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
-                    out.append(.Mov(deduceType(src, typedSymbolTable, typeTable), convert(src, symbolTable, typedSymbolTable), .Memory(.AX, 0)))
+                    let srcType = deduceType(src, typedSymbolTable, typeTable)
+                    let s = convert(src, symbolTable, typedSymbolTable)
+                    let p = convert(ptr, symbolTable, typedSymbolTable)
+                    out.append(.Mov(.Quadword, p, .Register(.AX)))
+                    switch srcType {
+                        case .Byte: fallthrough
+                        case .Longword: fallthrough
+                        case .Quadword: fallthrough
+                        case .Double:
+                            out.append(.Mov(srcType, s, .Memory(.AX, 0)))
+                        case .ByteArray(let size, _):
+                            copyBytes(size, s, .Memory(.AX, 0))
+                    }
                 case .AddPtr(let ptr, let index, let scale, let dst):
                     if [1, 2, 4, 8].contains(scale) {
                         out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
