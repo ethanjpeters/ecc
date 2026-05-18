@@ -309,9 +309,13 @@ class Assembly {
                     case .Char: fallthrough
                     case .SChar: fallthrough
                     case .UChar: return .Byte
-                    case .Structure(_):
-                        print("As-yet-unhandled tyep deduction attempted for structure")
-                        exit(ExitCode.internalError.rawValue)
+                    case .Structure(let tag):
+                        if let structDef = typeTable[tag] {
+                            return .ByteArray(UInt(structDef.size), UInt(structDef.alignment))
+                        } else {
+                            print("Unreachable case where we failed to deduce type because a struct was not defined")
+                            exit(ExitCode.internalError.rawValue)
+                        }
                 }
         }
     }
