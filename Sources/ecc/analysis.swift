@@ -8,6 +8,12 @@ class SemanticAnalyzer {
             public let hasLinkage : Bool
         }
 
+        struct StructMapEntry {
+            public let newName: String
+            public let currentScope: Bool
+        }
+
+        typealias StructTable = [String: StructMapEntry]
 
         private var tempNameCounter : Int = 0
 
@@ -25,6 +31,14 @@ class SemanticAnalyzer {
             return out
         }
 
+        func copyStructMap(_ structMap: StructTable) -> StructTable {
+            var out : StructTable = [:]
+            for (name, entry) in structMap {
+                out[name] = .init(newName: entry.newName, currentScope: entry.currentScope)
+            }
+            return out
+        }
+
         func isValidLValue(_ exp: Parser.AST.Expression) -> Bool {
             switch exp {
                 case .Var(_, _): return true
@@ -34,22 +48,22 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveExpression(_ exp : Parser.AST.Expression, _ nameMap: inout [String : NameMapEntry]) -> Parser.AST.Expression {
+        func resolveExpression(_ exp : Parser.AST.Expression, _ nameMap: inout [String : NameMapEntry], _ structMap: inout StructTable) -> Parser.AST.Expression {
             switch exp {
                 case .Assignment(let lValue, let rValue, _):
                     if !isValidLValue(lValue) {
                         print("Invalid lvalue in assignment \(exp)")
                         exit(ExitCode.semanticError.rawValue)
                     }
-                    return .Assignment(resolveExpression(lValue, &nameMap), resolveExpression(rValue, &nameMap), nil)
+                    return .Assignment(resolveExpression(lValue, &nameMap, &structMap), resolveExpression(rValue, &nameMap, &structMap), nil)
                 case .CompoundAssignment(_,_,_,_):
                     print("Unreachable: Unsupported compound assignment found while analyzing")
                     exit(ExitCode.internalError.rawValue)
                 case .Binary(let op, let left, let right, _):
-                    return .Binary(op, resolveExpression(left, &nameMap), resolveExpression(right, &nameMap), nil)
+                    return .Binary(op, resolveExpression(left, &nameMap, &structMap), resolveExpression(right, &nameMap, &structMap), nil)
                 case .Constant(_, _): return exp
                 case .Unary(let op, let child, _):
-                    return .Unary(op, resolveExpression(child, &nameMap), nil)
+                    return .Unary(op, resolveExpression(child, &nameMap, &structMap), nil)
                 case .Var(let name, _):
                     if let uniqueName = nameMap[name] {
                         return .Var(uniqueName.newName, nil)
@@ -58,94 +72,98 @@ class SemanticAnalyzer {
                         exit(ExitCode.semanticError.rawValue)
                     }
                 case .Conditional(let cond, let left, let right, _):
-                    return .Conditional(resolveExpression(cond, &nameMap), resolveExpression(left, &nameMap), resolveExpression(right, &nameMap), nil)
+                    return .Conditional(resolveExpression(cond, &nameMap, &structMap), resolveExpression(left, &nameMap, &structMap), resolveExpression(right, &nameMap, &structMap), nil)
                 case .FunctionCall(let fun, let parameters, _):
                     if !isValidLValue(fun) {    // TODO: is this actually all we need for something to be callable?
                         print("Function \(fun) could not be resolved to valid lvalue")
                         exit(ExitCode.semanticError.rawValue)
                     }
-                    return .FunctionCall(resolveExpression(fun, &nameMap), parameters.map { resolveExpression($0, &nameMap) }, nil)
+                    return .FunctionCall(resolveExpression(fun, &nameMap, &structMap), parameters.map { resolveExpression($0, &nameMap, &structMap) }, nil)
                 case .Cast(let targetType, let child, _):
-                    return .Cast(targetType, resolveExpression(child, &nameMap), nil)
+                    return .Cast(targetType, resolveExpression(child, &nameMap, &structMap), nil)
                 case .Dereference(let exp, _):
-                    return .Dereference(resolveExpression(exp, &nameMap), nil)
+                    return .Dereference(resolveExpression(exp, &nameMap, &structMap), nil)
                 case .AddrOf(let exp, _):
-                    return .AddrOf(resolveExpression(exp, &nameMap), nil)
+                    return .AddrOf(resolveExpression(exp, &nameMap, &structMap), nil)
                 case .Subscript(let ptr, let offset, _):
                     return .Subscript(
-                        resolveExpression(ptr, &nameMap),
-                        resolveExpression(offset, &nameMap),
+                        resolveExpression(ptr, &nameMap, &structMap),
+                        resolveExpression(offset, &nameMap, &structMap),
                         nil
                     )
                 case .String(_, _): return exp
                 case .SizeOf(_, _): return exp
                 case .SizeOfT(_, _): return exp
                 case .Dot(let exp, let memberName, _):
-                    return .Dot(resolveExpression(exp, &nameMap), memberName, nil)
+                    return .Dot(resolveExpression(exp, &nameMap, &structMap), memberName, nil)
                 case .Arrow(let exp, let memberName, _):
-                    return .Arrow(resolveExpression(exp, &nameMap), memberName, nil)
+                    return .Arrow(resolveExpression(exp, &nameMap, &structMap), memberName, nil)
             }
         }
 
-        func resolveStatement(_ stmt : Parser.AST.Statement, _ nameMap: inout [String : NameMapEntry]) -> Parser.AST.Statement {
+        func resolveStatement(_ stmt : Parser.AST.Statement, _ nameMap: inout [String : NameMapEntry], _ structMap: inout StructTable) -> Parser.AST.Statement {
             switch stmt {
-                case .Expression(let exp): return .Expression(resolveExpression(exp, &nameMap))
-                case .Return(let exp): return .Return(exp == nil ? nil : resolveExpression(exp!, &nameMap))
+                case .Expression(let exp): return .Expression(resolveExpression(exp, &nameMap, &structMap))
+                case .Return(let exp): return .Return(exp == nil ? nil : resolveExpression(exp!, &nameMap, &structMap))
                 case .Null: return .Null
                 case .If(let cond, let thenStatement, let elseStatement):
-                    return .If(resolveExpression(cond, &nameMap), resolveStatement(thenStatement, &nameMap),
-                               elseStatement == nil ? nil : resolveStatement(elseStatement!, &nameMap))
+                    return .If(resolveExpression(cond, &nameMap, &structMap), resolveStatement(thenStatement, &nameMap, &structMap),
+                               elseStatement == nil ? nil : resolveStatement(elseStatement!, &nameMap, &structMap))
                 case .Compound(let block):
                     switch block {
                         case .Block(let items):
                             var copiedNameMap = copyNameMap(nameMap)
+                            var copiedStructMap = copyStructMap(structMap)
                             return .Compound(.Block(items.map { itm in
-                                return resolveBlockItem(itm, &copiedNameMap)
+                                return resolveBlockItem(itm, &copiedNameMap, &copiedStructMap)
                             }))
                     }
                 case .Break(_): return stmt
                 case .Continue(_): return stmt
                 case .While(let condition, let body, _):
                     var copiedNameMap = copyNameMap(nameMap)
-                    return .While(resolveExpression(condition, &nameMap), resolveStatement(body, &copiedNameMap), "")
+                    var copiedStructMap = copyStructMap(structMap)
+                    return .While(resolveExpression(condition, &nameMap, &structMap), resolveStatement(body, &copiedNameMap, &copiedStructMap), "")
                 case .DoWhile(let body, let condition, _):
                     var copiedNameMap = copyNameMap(nameMap)
-                    return .DoWhile(resolveStatement(body, &copiedNameMap), resolveExpression(condition, &nameMap), "")
+                    var copiedStructMap = copyStructMap(structMap)
+                    return .DoWhile(resolveStatement(body, &copiedNameMap, &copiedStructMap), resolveExpression(condition, &nameMap, &structMap), "")
                 case .For(let forInit, let condition, let inc, let body, _):
                     var copiedNameMap = copyNameMap(nameMap)
+                    var copiedStructMap = copyStructMap(structMap)
                     let resolvedForInit : Parser.AST.ForInit
                     switch forInit {
                         case .InitDecl(let decl):
-                            resolvedForInit = .InitDecl(resolveDeclaration(decl, false, &copiedNameMap))
+                            resolvedForInit = .InitDecl(resolveDeclaration(decl, false, &copiedNameMap, &copiedStructMap))
                         case .InitExp(let exp):
-                            resolvedForInit = .InitExp(exp == nil ? nil : resolveExpression(exp!, &copiedNameMap))
+                            resolvedForInit = .InitExp(exp == nil ? nil : resolveExpression(exp!, &copiedNameMap, &copiedStructMap))
                     }
-                    let resolvedCondition = condition == nil ? nil : resolveExpression(condition!, &copiedNameMap)
-                    let resolvedInc = inc == nil ? nil : resolveExpression(inc!, &copiedNameMap)
-                    let resolvedBody = resolveStatement(body, &copiedNameMap)
+                    let resolvedCondition = condition == nil ? nil : resolveExpression(condition!, &copiedNameMap, &copiedStructMap)
+                    let resolvedInc = inc == nil ? nil : resolveExpression(inc!, &copiedNameMap, &copiedStructMap)
+                    let resolvedBody = resolveStatement(body, &copiedNameMap, &copiedStructMap)
                     return .For(resolvedForInit, resolvedCondition, resolvedInc, resolvedBody, "")
                 case .Switch(let toggle, let body, let label):
-                    return .Switch(resolveExpression(toggle, &nameMap), resolveStatement(body, &nameMap), label)
+                    return .Switch(resolveExpression(toggle, &nameMap, &structMap), resolveStatement(body, &nameMap, &structMap), label)
                 case .Labeled(let ls):
                     switch ls {
                         case .CaseStatement(let val, let exe):
-                            return .Labeled(.CaseStatement(resolveExpression(val, &nameMap), resolveStatement(exe, &nameMap)))
+                            return .Labeled(.CaseStatement(resolveExpression(val, &nameMap, &structMap), resolveStatement(exe, &nameMap, &structMap)))
                         case .DefaultStatement(let exe):
-                            return .Labeled(.DefaultStatement(resolveStatement(exe, &nameMap)))
+                            return .Labeled(.DefaultStatement(resolveStatement(exe, &nameMap, &structMap)))
                         case .IdentifiedLine(let name, let st):
-                            return .Labeled(.IdentifiedLine(name, resolveStatement(st, &nameMap)))
+                            return .Labeled(.IdentifiedLine(name, resolveStatement(st, &nameMap, &structMap)))
                     }
             }
         }
 
-        func resolveInitializer(_ initializer: Parser.AST.Initializer, _ nameMap: inout [String: NameMapEntry]) -> Parser.AST.Initializer {
+        func resolveInitializer(_ initializer: Parser.AST.Initializer, _ nameMap: inout [String: NameMapEntry], _ structMap: inout StructTable) -> Parser.AST.Initializer {
             switch initializer {
-                case .SingleInit(let exp): return .SingleInit(resolveExpression(exp, &nameMap))
-                case .CompoundInit(let exps): return .CompoundInit(exps.map { resolveInitializer($0, &nameMap) })
+                case .SingleInit(let exp): return .SingleInit(resolveExpression(exp, &nameMap, &structMap))
+                case .CompoundInit(let exps): return .CompoundInit(exps.map { resolveInitializer($0, &nameMap, &structMap) })
             }
         }
 
-        func resolveDeclaration(_ decl: Parser.AST.Declaration, _ fileScope: Bool, _ nameMap: inout [String : NameMapEntry]) -> Parser.AST.Declaration {
+        func resolveDeclaration(_ decl: Parser.AST.Declaration, _ fileScope: Bool, _ nameMap: inout [String : NameMapEntry], _ structMap: inout StructTable) -> Parser.AST.Declaration {
             switch decl {
                 case .VariableDeclaration(let tp, let name, let exp, let storageClass):
                     if fileScope {
@@ -168,7 +186,7 @@ class SemanticAnalyzer {
                             nameMap[name] = .init(newName: uniqueName, currentScope: true, hasLinkage: false)
                             var outInit : Parser.AST.Initializer? = nil
                             if let initializer = exp {
-                                outInit = resolveInitializer(initializer, &nameMap)
+                                outInit = resolveInitializer(initializer, &nameMap, &structMap)
                             }
                             return .VariableDeclaration(tp, uniqueName, outInit, storageClass)
                         }
@@ -185,7 +203,7 @@ class SemanticAnalyzer {
                     if let b = body {
                         switch b {
                             case .Block(let items):
-                                return .FunctionDeclaration(returnType, name, mangledPNames, .Block(items.map { resolveBlockItem($0, &copiedNameMap) }), storageClass)
+                                return .FunctionDeclaration(returnType, name, mangledPNames, .Block(items.map { resolveBlockItem($0, &copiedNameMap, &structMap) }), storageClass)
                         }
                     } else {
                         return .FunctionDeclaration(returnType, name, mangledPNames, nil, storageClass)
@@ -196,22 +214,23 @@ class SemanticAnalyzer {
             }
         }
 
-        func resolveBlockItem(_ blockItem: Parser.AST.BlockItem, _ nameMap: inout [String : NameMapEntry]) -> Parser.AST.BlockItem {
+        func resolveBlockItem(_ blockItem: Parser.AST.BlockItem, _ nameMap: inout [String : NameMapEntry], _ structMap: inout StructTable) -> Parser.AST.BlockItem {
             switch blockItem {
                 case .D(let decl):
-                    return .D(resolveDeclaration(decl, false, &nameMap))
+                    return .D(resolveDeclaration(decl, false, &nameMap, &structMap))
                 case .S(let stmt):
-                    return .S(resolveStatement(stmt, &nameMap))
+                    return .S(resolveStatement(stmt, &nameMap, &structMap))
             }
         }
 
         func resolveVariables(_ program: Parser.AST.Program) -> Parser.AST.Program {
             var variableNameMapping : [String : NameMapEntry] = [:]
+            var structMapping : StructTable = [:]
             switch program {
                 case .Statement(let declarations):
                     var resolvedDecls : [Parser.AST.Declaration] = []
                     for decl in declarations {
-                        resolvedDecls.append(resolveDeclaration(decl, true, &variableNameMapping))
+                        resolvedDecls.append(resolveDeclaration(decl, true, &variableNameMapping, &structMapping))
                     }
                     return .Statement(resolvedDecls)
             }
