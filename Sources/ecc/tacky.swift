@@ -72,6 +72,7 @@ class Tacky {
             case Store(Value /* src */, Value /* dst_ptr */)
             case AddPtr(Value /* ptr */, Value /* index */, UInt /* scale */, Value /* dst */)
             case CopyToOffset(Value /* src */, String /* identifier dst */, UInt /* offset */)
+            // case CopyFromOffset(String /* src */, Int /* offset */, Value /* dst */)
         }
 
         enum Declaration {

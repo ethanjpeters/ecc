@@ -1274,7 +1274,7 @@ class SemanticAnalyzer {
                     case .SChar: return .SingleInit(.Constant(.ConstChar(0), .SChar))
                     case .UChar: return .SingleInit(.Constant(.ConstUChar(0), .UChar))
                     case .Structure(let tag):
-                        print("As-yet-unhandled structure type found while generating zero initializer")
+                        print("Unreachable attempt to create zero initializer for struct")
                         exit(ExitCode.internalError.rawValue)
                 }
             }
@@ -1475,9 +1475,8 @@ class SemanticAnalyzer {
                                         }
                                     case .VariableDeclaration(_, _, _, _):
                                         typeCheckedItems.append(.D(typeCheck(decl, false, &nameMap, &typeTable)))
-                                    case .StructDeclaration(_, _):
-                                        print("As-yet-unhandled struct declaration found while type checking")
-                                        exit(ExitCode.internalError.rawValue)
+                                    case .StructDeclaration(let tag, let members):
+                                        typeCheckedItems.append(.D(typeCheck(decl, false, &nameMap, &typeTable)))
                                 }
                             case .S(let stmt):
                                 typeCheckedItems.append(.S(typeCheck(stmt, &nameMap, enclosingFuncReturnType, &typeTable)))
@@ -1838,9 +1837,7 @@ func convertCTypeToCheckerType(_ pType : Parser.AST.CType) -> SemanticAnalyzer.T
         case .Char: return .Char
         case .SChar: return .SChar
         case .UChar: return .UChar
-        case .Structure(let tag):
-            print("As-yet-unhandled structure type found while converting C type to checker type")
-            exit(ExitCode.internalError.rawValue)
+        case .Structure(let tag): return .Structure(tag)
     }
 }
 
