@@ -618,7 +618,7 @@ class SemanticAnalyzer {
             public struct StructEntry {
                 public let alignment: Int
                 public let size: Int
-                public let memebers: [MemberEntry]
+                public let members: [MemberEntry]
             }
         }
 
@@ -1207,7 +1207,7 @@ class SemanticAnalyzer {
                             print("Tried to apply dot operation to non-record type \(checkedType)")
                             exit(ExitCode.semanticError.rawValue)
                     }
-                    for m in sType.memebers {
+                    for m in sType.members {
                         if m.identifier == memberName {
                             return (.Dot(checkedExp, memberName, m.typeSpec), convertCTypeToCheckerType(m.typeSpec))
                         }
@@ -1237,7 +1237,7 @@ class SemanticAnalyzer {
                             print("Tried to use arrow operator on non-pointer type \(checkedType)")
                             exit(ExitCode.semanticError.rawValue)
                     }
-                    for m in sType.memebers {
+                    for m in sType.members {
                         if m.identifier == memberName {
                             return (.Arrow(checkedExp, memberName, m.typeSpec), convertCTypeToCheckerType(m.typeSpec))
                         }
@@ -1306,20 +1306,20 @@ class SemanticAnalyzer {
                     switch targetType {
                         case .Structure(let tag):
                             if let sDef = typeTable[tag] {
-                                if subInits.count > sDef.memebers.count {
+                                if subInits.count > sDef.members.count {
                                     print("Too many elements in struct initializer")
                                     exit(ExitCode.semanticError.rawValue)
                                 }
                                 var i = 0
                                 var tCheckLst: [Parser.AST.Initializer] = []
                                 for initElm in subInits {
-                                    let t = sDef.memebers[i].typeSpec
+                                    let t = sDef.members[i].typeSpec
                                     let tCheckElm = typeCheck(t, initElm, nameMap, typeTable)
                                     tCheckLst.append(tCheckElm.0)
                                     i = i + 1
                                 }
-                                while i < sDef.memebers.count {
-                                    let t = sDef.memebers[i].typeSpec
+                                while i < sDef.members.count {
+                                    let t = sDef.members[i].typeSpec
                                     tCheckLst.append(zeroInitializer(t))
                                     i = i + 1
                                 }
@@ -1758,7 +1758,7 @@ class SemanticAnalyzer {
                     }
                     // figure out size/alignment
                     structSize = roundUp(structSize, structAlignment)
-                    let structDef = TypeTableEntry.StructEntry(alignment: structAlignment, size: structSize, memebers: memberEntries)
+                    let structDef = TypeTableEntry.StructEntry(alignment: structAlignment, size: structSize, members: memberEntries)
                     // update the type table
                     typeTable[tag] = structDef
                     // bounce (to the ounce)

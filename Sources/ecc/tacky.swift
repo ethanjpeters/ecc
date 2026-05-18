@@ -531,7 +531,7 @@ class Tacky {
                         exit(ExitCode.internalError.rawValue)
                 }
                 if let structDef = typeTable[tg] {
-                    for m in structDef.memebers {
+                    for m in structDef.members {
                         if m.identifier == memberName {
                             let memberOffset = m.offset
                             let innerObject = generateTACKYExpression(exp, out: &out, symbolTable: &symbolTable, typeTable: typeTable)
@@ -576,7 +576,7 @@ class Tacky {
                         exit(ExitCode.internalError.rawValue)
                 }
                 if let structDef = typeTable[tg] {
-                    for m in structDef.memebers {
+                    for m in structDef.members {
                         if m.identifier == memberName {
                             let memberOffset = m.offset
                             let innerObject = generateTACKYExpressionAndConvert(exp, out: &out, symbolTable: &symbolTable, typeTable: typeTable)
@@ -766,31 +766,39 @@ class Tacky {
                     case .UnsignedInt: fallthrough
                     case .Long: fallthrough
                     case .UnsignedLong: fallthrough
+                    case .Structure(_): fallthrough
                     case .Double:
                         out.append(.Copy(child, .Var(dest)))
                     case .Void: fallthrough
                     case .Function(_, _):
-                        print("Unreachable invalidate type \(symbolTable[dest]!.0) found while initializing \(dest)")
-                        exit(ExitCode.internalError.rawValue)
-                    case .Structure(_):
-                        print("As-yet-unhandled structure found while generating TACKY init")
+                        print("Unreachable invalid type \(symbolTable[dest]!.0) found while initializing \(dest)")
                         exit(ExitCode.internalError.rawValue)
                 }
             case .CompoundInit(let children):
-                let size : UInt
                 switch (symbolTable[dest]!.0) {
                     // we don't need the length here because we added zero initializers to pad the compound initializer
                     case .ArrayType(let innerType, _):
-                        size = UInt(getTypeSize(innerType, typeTable))
+                        let size = UInt(getTypeSize(innerType, typeTable))
+                        var off = offset
+                        for c in children {
+                            generateTACKYInit(c, dest: dest, offset: off, out: &out, symbolTable: &symbolTable, typeTable: typeTable)
+                            off = off + size
+                        }
+                    case .Structure(let tag):
+                        if let structDef = typeTable[tag] {
+                            for (memInit, member) in zip(children, structDef.members) {
+                                let memOffset = Int(offset) + member.offset
+                                generateTACKYInit(memInit, dest: dest, offset: UInt(memOffset), out: &out, symbolTable: &symbolTable, typeTable: typeTable)
+                            }
+                        } else {
+                            print("Unreachable case where structure was initialized but never defined")
+                            exit(ExitCode.internalError.rawValue)
+                        }
                     default:
-                        print("UNREACHABLE: tried to assign compound initializer to non-array type value \(dest)")
+                        print("UNREACHABLE: tried to assign compound initializer to non-array/non-struct type value \(dest)")
                         exit(ExitCode.internalError.rawValue)
                 }
-                var off = offset
-                for c in children {
-                    generateTACKYInit(c, dest: dest, offset: off, out: &out, symbolTable: &symbolTable, typeTable: typeTable)
-                    off = off + size
-                }
+
         }
     }
 
