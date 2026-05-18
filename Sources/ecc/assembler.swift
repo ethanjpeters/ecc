@@ -376,7 +376,9 @@ class Assembly {
         let zero : Assembly.Tree.Operand = .Immediate(.UnsignedImmediate(0))
 
         func copyBytes(_ count: UInt, _ s: Tree.Operand, _ d: Tree.Operand) {
-            for i in 0..<count {
+            var sz = count
+            var i: UInt = 0
+            while sz >= 8 {
                 let ss : Tree.Operand
                 switch s {
                     case .PseudoMem(let sName, let sOff):
@@ -407,7 +409,82 @@ class Assembly {
                         print("Unexpected operand type \(d) found while processing ByteArray")
                         exit(ExitCode.internalError.rawValue)
                 }
-                out.append(.Mov(.Byte, ss, dd)) // TODO: this more efficiently
+                out.append(.Mov(.Quadword, ss, dd))
+
+                sz = sz - 8
+                i = i + 8
+            }
+            while sz >= 4 {
+                let ss : Tree.Operand
+                switch s {
+                    case .PseudoMem(let sName, let sOff):
+                        ss = .PseudoMem(sName, sOff + i)
+                    case .Memory(let reg, let off):
+                        ss = .Memory(reg, off + Int(i))
+                    case .Immediate(_): fallthrough
+                    case .Register(_): fallthrough
+                    case .Pseudo(_): fallthrough
+                    case .Stack(_): fallthrough
+                    case .Data(_, _): fallthrough
+                    case .Indexed(_, _, _):
+                        print("Unexpected operand type \(s) found while processing ByteArray")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                let dd : Tree.Operand
+                switch d {
+                    case .PseudoMem(let sName, let sOff):
+                        dd = .PseudoMem(sName, sOff + i)
+                    case .Memory(let reg, let off):
+                        dd = .Memory(reg, off + Int(i))
+                    case .Immediate(_): fallthrough
+                    case .Register(_): fallthrough
+                    case .Pseudo(_): fallthrough
+                    case .Stack(_): fallthrough
+                    case .Data(_, _): fallthrough
+                    case .Indexed(_, _, _):
+                        print("Unexpected operand type \(d) found while processing ByteArray")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                out.append(.Mov(.Longword, ss, dd))
+
+                sz = sz - 4
+                i = i + 4
+            }
+            while sz >= 1 {
+                let ss : Tree.Operand
+                switch s {
+                    case .PseudoMem(let sName, let sOff):
+                        ss = .PseudoMem(sName, sOff + i)
+                    case .Memory(let reg, let off):
+                        ss = .Memory(reg, off + Int(i))
+                    case .Immediate(_): fallthrough
+                    case .Register(_): fallthrough
+                    case .Pseudo(_): fallthrough
+                    case .Stack(_): fallthrough
+                    case .Data(_, _): fallthrough
+                    case .Indexed(_, _, _):
+                        print("Unexpected operand type \(s) found while processing ByteArray")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                let dd : Tree.Operand
+                switch d {
+                    case .PseudoMem(let sName, let sOff):
+                        dd = .PseudoMem(sName, sOff + i)
+                    case .Memory(let reg, let off):
+                        dd = .Memory(reg, off + Int(i))
+                    case .Immediate(_): fallthrough
+                    case .Register(_): fallthrough
+                    case .Pseudo(_): fallthrough
+                    case .Stack(_): fallthrough
+                    case .Data(_, _): fallthrough
+                    case .Indexed(_, _, _):
+                        print("Unexpected operand type \(d) found while processing ByteArray")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                out.append(.Mov(.Byte, ss, dd))
+
+                sz = sz - 1
+                i = i + 1
             }
         }
 
