@@ -263,6 +263,8 @@ class Assembly {
                     switch x.0 {
                         case .ArrayType(_, _):
                             return .PseudoMem(name, 0)
+                        case .Structure(_):
+                            return .PseudoMem(name, 0)
                         default: ()
                     }
                 }
