@@ -39,17 +39,6 @@ class SemanticAnalyzer {
             return out
         }
 
-        func isValidLValue(_ exp: Parser.AST.Expression) -> Bool {
-            switch exp {
-                case .Var(_, _): return true
-                case .Dereference(_, _): return true
-                case .Subscript(_, _, _): return true
-                case .Dot(_, _, _): return true
-                case .Arrow(_, _, _): return true
-                default: return false
-            }
-        }
-
         func resolveType(_ typeSpec: Parser.AST.CType, _ structMap: StructTable) -> Parser.AST.CType {
             switch typeSpec {
                 case .Structure(let tag):
@@ -718,17 +707,6 @@ class SemanticAnalyzer {
                     print("UNREACHABLE FUNC")
                     exit(ExitCode.internalError.rawValue)
                 case .Structure(let tag): return .Structure(tag)
-            }
-        }
-
-        func isValidLValue(_ exp: Parser.AST.Expression) -> Bool {
-            switch exp {
-                case .Var(_, _): return true
-                case .Dereference(_, _): return true
-                case .Subscript(_, _, _): return true
-                case .Dot(_, _, _): return true
-                case .Arrow(_, _, _): return true
-                default: return false
             }
         }
 
@@ -2086,5 +2064,16 @@ func validateTypeSpecifier(_ tp: SemanticAnalyzer.TypeChecker.CheckerType) {
             }
             validateTypeSpecifier(retType)
         default: ()
+    }
+}
+
+func isValidLValue(_ exp: Parser.AST.Expression) -> Bool {
+    switch exp {
+        case .Var(_, _): return true
+        case .Dereference(_, _): return true
+        case .Subscript(_, _, _): return true
+        case .Dot(let e, _, _): return isValidLValue(e)
+        case .Arrow(_, _, _): return true
+        default: return false
     }
 }
