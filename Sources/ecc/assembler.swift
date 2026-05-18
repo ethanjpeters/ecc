@@ -375,6 +375,42 @@ class Assembly {
     func generate(_ instructions: [Tacky.IR.Instruction], _ symbolTable: [String : Assembly.Tree.Declaration], _ out: inout [Tree.Instruction], _ typedSymbolTable: SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) {
         let zero : Assembly.Tree.Operand = .Immediate(.UnsignedImmediate(0))
 
+        func copyBytes(_ count: UInt, _ s: Tree.Operand, _ d: Tree.Operand) {
+            for i in 0..<count {
+                let ss : Tree.Operand
+                switch s {
+                    case .PseudoMem(let sName, let sOff):
+                        ss = .PseudoMem(sName, sOff + i)
+                    case .Memory(let reg, let off):
+                        ss = .Memory(reg, off + Int(i))
+                    case .Immediate(_): fallthrough
+                    case .Register(_): fallthrough
+                    case .Pseudo(_): fallthrough
+                    case .Stack(_): fallthrough
+                    case .Data(_, _): fallthrough
+                    case .Indexed(_, _, _):
+                        print("Unexpected operand type \(s) found while processing ByteArray")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                let dd : Tree.Operand
+                switch d {
+                    case .PseudoMem(let sName, let sOff):
+                        dd = .PseudoMem(sName, sOff + i)
+                    case .Memory(let reg, let off):
+                        dd = .Memory(reg, off + Int(i))
+                    case .Immediate(_): fallthrough
+                    case .Register(_): fallthrough
+                    case .Pseudo(_): fallthrough
+                    case .Stack(_): fallthrough
+                    case .Data(_, _): fallthrough
+                    case .Indexed(_, _, _):
+                        print("Unexpected operand type \(d) found while processing ByteArray")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                out.append(.Mov(.Byte, ss, dd)) // TODO: this more efficiently
+            }
+        }
+
         for instr in instructions {
             switch instr {
                 case .Return(let val):
@@ -509,39 +545,7 @@ class Assembly {
                             out.append(.Mov(srcType, s, d))
                         case .ByteArray(let size, _):
                             // potentially a lot, do it cleverly
-                            for i in 0..<size {
-                                let ss : Tree.Operand
-                                switch s {
-                                    case .PseudoMem(let sName, let sOff):
-                                        ss = .PseudoMem(sName, sOff + i)
-                                    case .Memory(let reg, let off):
-                                        ss = .Memory(reg, off + Int(i))
-                                    case .Immediate(_): fallthrough
-                                    case .Register(_): fallthrough
-                                    case .Pseudo(_): fallthrough
-                                    case .Stack(_): fallthrough
-                                    case .Data(_, _): fallthrough
-                                    case .Indexed(_, _, _):
-                                        print("Unexpected operand type \(s) found while processing ByteArray")
-                                        exit(ExitCode.internalError.rawValue)
-                                }
-                                let dd : Tree.Operand
-                                switch d {
-                                    case .PseudoMem(let sName, let sOff):
-                                        dd = .PseudoMem(sName, sOff + i)
-                                    case .Memory(let reg, let off):
-                                        dd = .Memory(reg, off + Int(i))
-                                    case .Immediate(_): fallthrough
-                                    case .Register(_): fallthrough
-                                    case .Pseudo(_): fallthrough
-                                    case .Stack(_): fallthrough
-                                    case .Data(_, _): fallthrough
-                                    case .Indexed(_, _, _):
-                                        print("Unexpected operand type \(d) found while processing ByteArray")
-                                        exit(ExitCode.internalError.rawValue)
-                                }
-                                out.append(.Mov(.Byte, ss, dd)) // TODO: this more efficiently
-                            }
+                            copyBytes(size, s, d)
                     }
                 case .Jump(let label):
                     out.append(.Jmp(label))
@@ -752,24 +756,7 @@ class Assembly {
                         case .Double:
                             out.append(.Mov(dstType, .Memory(.AX, 0), d))
                         case .ByteArray(let size, _):
-                            for i in 0..<size {
-                                let dd : Tree.Operand
-                                switch d {
-                                    case .PseudoMem(let sName, let sOff):
-                                        dd = .PseudoMem(sName, sOff + i)
-                                    case .Memory(let reg, let off):
-                                        dd = .Memory(reg, off + Int(i))
-                                    case .Immediate(_): fallthrough
-                                    case .Register(_): fallthrough
-                                    case .Pseudo(_): fallthrough
-                                    case .Stack(_): fallthrough
-                                    case .Data(_, _): fallthrough
-                                    case .Indexed(_, _, _):
-                                        print("Unexpected operand type \(d) found while processing ByteArray")
-                                        exit(ExitCode.internalError.rawValue)
-                                }
-                                out.append(.Mov(.Byte, .Memory(.AX, Int(i)), dd)) // TODO: this more efficiently
-                            }
+                            copyBytes(size, .Memory(.AX, 0), d)
                     }
                 case .Store(let src, let ptr):
                     out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
