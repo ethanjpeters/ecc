@@ -630,6 +630,66 @@ class SemanticAnalyzer {
             }
         }
 
+        typealias TypeTable = [String: TypeTableEntry.StructEntry]
+
+        func alignment(_ tp: Parser.AST.CType, _ table: TypeTable) -> Int {
+            switch tp {                
+                case .Char: fallthrough
+                case .SChar: fallthrough
+                case .UChar: return 1
+                case .Int: fallthrough
+                case .UnsignedInt: return 4
+                case .Long: fallthrough
+                case .UnsignedLong: return 8
+                case .Void:
+                    print("Invalid operation: getting alignment of void type")
+                    exit(ExitCode.internalError.rawValue)
+                case .Double: return 8
+                case .Pointer(_): return 8
+                case .FunType(_, _):
+                    print("Invalid operation getting the alignment of a function type")
+                    exit(ExitCode.internalError.rawValue)
+                case .ArrayType(let nestedType, let sz):
+                    return alignment(nestedType, table)
+                case .Structure(let tag):
+                    if let definedStruct = table[tag] {
+                        return definedStruct.alignment
+                    } else {
+                        print("Tried to use undefined structure type \(tag)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+            }
+        }
+
+        func size(_ tp: Parser.AST.CType, _ table: TypeTable) -> Int {
+            switch tp {                
+                case .Char: fallthrough
+                case .SChar: fallthrough
+                case .UChar: return 1
+                case .Int: fallthrough
+                case .UnsignedInt: return 4
+                case .Long: fallthrough
+                case .UnsignedLong: return 8
+                case .Void:
+                    print("Invalid operation: getting size of void type")
+                    exit(ExitCode.internalError.rawValue)
+                case .Double: return 8
+                case .Pointer(_): return 8
+                case .FunType(_, _):
+                    print("Invalid operation getting the size of a function type")
+                    exit(ExitCode.internalError.rawValue)
+                case .ArrayType(let nestedType, let sz):
+                    return size(nestedType, table) * Int(sz)
+                case .Structure(let tag):
+                    if let definedStruct = table[tag] {
+                        return definedStruct.size
+                    } else {
+                        print("Tried to use undefined structure type \(tag)")
+                        exit(ExitCode.semanticError.rawValue)
+                    }
+            }
+        }
+
         var stringCounter : UInt = 0
 
         func stringConstantName() -> String {
@@ -675,7 +735,7 @@ class SemanticAnalyzer {
             return .Cast(Self.deConvert(toType), exp, Self.deConvert(ofType))
         }
 
-        func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Expression, CheckerType) {
+        func typeCheck(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)], _ typeTable: TypeTable) -> (Parser.AST.Expression, CheckerType) {
             switch expression {
                 case .Constant(let c, _):
                     switch c {
@@ -688,7 +748,7 @@ class SemanticAnalyzer {
                         case .ConstUChar(let val): return (.Constant(.ConstChar(val), .UChar), .UChar)
                     }
                 case .Unary(let unOp, let e, _):
-                    let (checkedE, eType) = typeCheckAndConvert(e, nameMap)
+                    let (checkedE, eType) = typeCheckAndConvert(e, nameMap, typeTable)
                     if eType == .Void {
                         print("Tried to perform unary operation \(unOp) on void expression \(e)")
                         exit(ExitCode.semanticError.rawValue)
@@ -722,7 +782,7 @@ class SemanticAnalyzer {
                     return (.Unary(unOp, checkedE, outType), convertCTypeToCheckerType(outType))
                 case .Binary(let binOp, let left, let right, _):
                     // not all binary operations on all pairs of types make sense
-                    let (checkedLeft, leftType) = typeCheckAndConvert(left, nameMap)
+                    let (checkedLeft, leftType) = typeCheckAndConvert(left, nameMap, typeTable)
                     switch leftType {
                         case .Void: fallthrough
                         case .Function(_, _):
@@ -730,7 +790,7 @@ class SemanticAnalyzer {
                             exit(ExitCode.semanticError.rawValue)
                         default: ()
                     }
-                    let (checkedRight, rightType) = typeCheckAndConvert(right, nameMap)
+                    let (checkedRight, rightType) = typeCheckAndConvert(right, nameMap, typeTable)
                     switch rightType {
                         case .Void: fallthrough
                         case .Function(_, _):
@@ -941,14 +1001,14 @@ class SemanticAnalyzer {
                         exit(ExitCode.internalError.rawValue)
                     }
                 case .Assignment(let lValue, let exp, _):
-                    let (lV, lT) = typeCheckAndConvert(lValue, nameMap)
+                    let (lV, lT) = typeCheckAndConvert(lValue, nameMap, typeTable)
 
                     if !isValidLValue(lV) {
                         print("Attempted to assign to non-lvalue expression \(lValue)")
                         exit(ExitCode.semanticError.rawValue)
                     }
 
-                    let (checkedExp, expType) = typeCheckAndConvert(exp, nameMap)
+                    let (checkedExp, expType) = typeCheckAndConvert(exp, nameMap, typeTable)
                     if expType == lT {
                         return (.Assignment(lV, checkedExp, Self.deConvert(lT)), lT)
                     }
@@ -973,9 +1033,9 @@ class SemanticAnalyzer {
                     print("Unreachable compound assignment found during type checking")
                     exit(ExitCode.internalError.rawValue)
                 case .Conditional(let cond, let left, let right, _):
-                    let (checkedCond, condType) = typeCheckAndConvert(cond, nameMap)
-                    let (checkedLeft, leftType) = typeCheckAndConvert(left, nameMap)
-                    let (checkedRight, rightType) = typeCheckAndConvert(right, nameMap)
+                    let (checkedCond, condType) = typeCheckAndConvert(cond, nameMap, typeTable)
+                    let (checkedLeft, leftType) = typeCheckAndConvert(left, nameMap, typeTable)
+                    let (checkedRight, rightType) = typeCheckAndConvert(right, nameMap, typeTable)
 
                     if !isTypeScalar(condType) {
                         print("Conditional in conditional expression must be a scalar type, not \(condType)")
@@ -1008,7 +1068,7 @@ class SemanticAnalyzer {
                     }
                     var checkedParams : [(Parser.AST.Expression, TypeChecker.CheckerType)] = []
                     for p in params {
-                        let q = typeCheckAndConvert(p, nameMap)
+                        let q = typeCheckAndConvert(p, nameMap, typeTable)
                         checkedParams.append(q)
                     }
                     let (fType, _) = nameMap[name]!
@@ -1058,11 +1118,11 @@ class SemanticAnalyzer {
                             exit(ExitCode.semanticError.rawValue)
                         default: ()
                     }
-                    let tmp = typeCheckAndConvert(child, nameMap)
+                    let tmp = typeCheckAndConvert(child, nameMap, typeTable)
                     return (.Cast(targetType, tmp.0, Self.deConvert(tmp.1)), tmp.1)
                 case .Dereference(let ptr, _):
                     // type check the pointer expression
-                    let (child, childType) = typeCheckAndConvert(ptr, nameMap)
+                    let (child, childType) = typeCheckAndConvert(ptr, nameMap, typeTable)
                     // verify that the expression is a pointer
                     switch childType {
                         case .Pointer(let pointeeType):
@@ -1074,7 +1134,7 @@ class SemanticAnalyzer {
                     }
                 case .AddrOf(let exp, _):
                     // type check the child expression
-                    let (child, childType) = typeCheckAndConvert(exp, nameMap)
+                    let (child, childType) = typeCheckAndConvert(exp, nameMap, typeTable)
                     // verify that it is an lvalue
                     if !isValidLValue(child) {
                         print("Attempted to get the address of non-lvalue expression \(child)")
@@ -1085,8 +1145,8 @@ class SemanticAnalyzer {
                     return (.AddrOf(child, Self.deConvert(ourType)), ourType)
                 case .Subscript(let ptr, let offset, _):
                     // well, actually, either ptr or offset could be the pointer; the other one has to be an integer though
-                    let (checkedPtr, ptrType) = typeCheckAndConvert(ptr, nameMap)
-                    let (checkedOffset, offsetType) = typeCheckAndConvert(offset, nameMap)
+                    let (checkedPtr, ptrType) = typeCheckAndConvert(ptr, nameMap, typeTable)
+                    let (checkedOffset, offsetType) = typeCheckAndConvert(offset, nameMap, typeTable)
                     if isSubscribtableType(ptrType) && isIntegralType(offsetType) {
                         let innerType = getPointeeType(ptrType, permitArrays: true)
                         if !isTypeComplete(innerType) {
@@ -1124,7 +1184,7 @@ class SemanticAnalyzer {
                     let arrType : Parser.AST.CType = .ArrayType(.Char, UInt(val.count) + 1)
                     return (.String(val, arrType), convertCTypeToCheckerType(arrType))
                 case .SizeOf(let exp, _):
-                    let (checkedExp, checkedType) = typeCheckAndConvert(exp, nameMap)
+                    let (checkedExp, checkedType) = typeCheckAndConvert(exp, nameMap, typeTable)
                     if !isTypeComplete(checkedType) {
                         print("Can not get size of expression \(exp) of incomplete type")
                         exit(ExitCode.semanticError.rawValue)
@@ -1142,7 +1202,7 @@ class SemanticAnalyzer {
             }
         }
 
-        func typeCheck(_ targetType: Parser.AST.CType, _ initializer: Parser.AST.Initializer, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Initializer, CheckerType) {
+        func typeCheck(_ targetType: Parser.AST.CType, _ initializer: Parser.AST.Initializer, _ nameMap: [String: (CheckerType, IdentifierAttributes)], _ typeTable: TypeTable) -> (Parser.AST.Initializer, CheckerType) {
             func zeroInitializer(_ initType: Parser.AST.CType) -> Parser.AST.Initializer {
                 switch initType {
                     case .Int: return .SingleInit(.Constant(.ConstInt(0), .Int))
@@ -1193,7 +1253,7 @@ class SemanticAnalyzer {
                         default: ()
                     }
 
-                    let (typecheckedExp, expType) = typeCheck(exp, nameMap)
+                    let (typecheckedExp, expType) = typeCheck(exp, nameMap, typeTable)
                     let tType = convertCTypeToCheckerType(targetType)
                     return (.SingleInit(typeConvert(typecheckedExp, ofType: expType, toType: tType)), tType)
                 case .CompoundInit(let subInits):
@@ -1215,7 +1275,7 @@ class SemanticAnalyzer {
 
                     var typecheckedChildren : [Parser.AST.Initializer] = []
                     for s in subInits {
-                        let (tcS, _) = typeCheck(extractedInnerType, s, nameMap)
+                        let (tcS, _) = typeCheck(extractedInnerType, s, nameMap, typeTable)
                         typecheckedChildren.append(tcS)
                     }
 
@@ -1227,7 +1287,7 @@ class SemanticAnalyzer {
             }
         }
 
-        func typeCheck(_ statement: Parser.AST.Statement, _ nameMap: inout [String: (CheckerType, IdentifierAttributes)], _ enclosingFuncReturnType : Parser.AST.CType) -> Parser.AST.Statement {
+        func typeCheck(_ statement: Parser.AST.Statement, _ nameMap: inout [String: (CheckerType, IdentifierAttributes)], _ enclosingFuncReturnType : Parser.AST.CType, _ typeTable: inout TypeTable) -> Parser.AST.Statement {
             switch statement {
                 case .Return(let exp):
                     if let e = exp {
@@ -1235,7 +1295,7 @@ class SemanticAnalyzer {
                             print("Attempted to return non-void value \(e) from void function")
                             exit(ExitCode.semanticError.rawValue)
                         }
-                        let (outExp, outTp) = typeCheckAndConvert(e, nameMap)
+                        let (outExp, outTp) = typeCheckAndConvert(e, nameMap, typeTable)
                         let castExp = typeConvert(outExp, ofType: outTp, toType: convertCTypeToCheckerType(enclosingFuncReturnType))
                         return .Return(castExp)
                     } else {
@@ -1246,29 +1306,29 @@ class SemanticAnalyzer {
                         return .Return(nil)
                     }
                 case .Expression(let exp):
-                    return .Expression(typeCheckAndConvert(exp, nameMap).0)
+                    return .Expression(typeCheckAndConvert(exp, nameMap, typeTable).0)
                 case .If(let condition, let thenClause, let elseClause):
-                    let checkedCond = typeCheckAndConvert(condition, nameMap).0   // TODO: do we need to cast this guy?
-                    let checkedThen = typeCheck(thenClause, &nameMap, enclosingFuncReturnType)
+                    let checkedCond = typeCheckAndConvert(condition, nameMap, typeTable).0   // TODO: do we need to cast this guy?
+                    let checkedThen = typeCheck(thenClause, &nameMap, enclosingFuncReturnType, &typeTable)
                     let checkedElse: Parser.AST.Statement?
                     if let els = elseClause {
-                        checkedElse = typeCheck(els, &nameMap, enclosingFuncReturnType)
+                        checkedElse = typeCheck(els, &nameMap, enclosingFuncReturnType, &typeTable)
                     } else {
                         checkedElse = nil
                     }
                     return .If(checkedCond, checkedThen, checkedElse)
                 case .Compound(let block):
-                    return .Compound(typeCheck(block, &nameMap, enclosingFuncReturnType))
+                    return .Compound(typeCheck(block, &nameMap, enclosingFuncReturnType, &typeTable))
                 case .Null: return .Null
                 case .Break(_): return statement
                 case .Continue(_): return statement
                 case .While(let condition, let body, let lbl):
-                    let checkedCond = typeCheckAndConvert(condition, nameMap)
-                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
+                    let checkedCond = typeCheckAndConvert(condition, nameMap, typeTable)
+                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType, &typeTable)
                     return .While(checkedCond.0, checkedBody, lbl)
                 case .DoWhile(let body, let condition, let lbl):
-                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
-                    let checkedCond = typeCheckAndConvert(condition, nameMap)
+                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType, &typeTable)
+                    let checkedCond = typeCheckAndConvert(condition, nameMap, typeTable)
                     return .DoWhile(checkedBody, checkedCond.0, lbl)
                 case .For(let forInit, let condition, let post, let body, let lbl):
                     let checkedInit : Parser.AST.ForInit
@@ -1279,54 +1339,54 @@ class SemanticAnalyzer {
                                     print("Unreachable totally guano-on-toast insanse situation where a function \(name) was declared in the initializer of a for loop")
                                     exit(ExitCode.internalError.rawValue)
                                 case .VariableDeclaration(_, _ , _, _):
-                                    checkedInit = .InitDecl(typeCheck(decl, false, &nameMap))
+                                    checkedInit = .InitDecl(typeCheck(decl, false, &nameMap, &typeTable))
                                 case .StructDeclaration(let tag, _):
                                     print("Unsupported struct declaration (\(tag)) found while parsing for loop header")
                                     exit(ExitCode.semanticError.rawValue)
                             }
                         case .InitExp(let exp):
                             if let e = exp {
-                                checkedInit = .InitExp(typeCheckAndConvert(e, nameMap).0)
+                                checkedInit = .InitExp(typeCheckAndConvert(e, nameMap, typeTable).0)
                             } else {
                                 checkedInit = .InitExp(nil)
                             }
                     }
                     let checkedCondition : Parser.AST.Expression?
                     if let c = condition {
-                        checkedCondition = typeCheckAndConvert(c, nameMap).0
+                        checkedCondition = typeCheckAndConvert(c, nameMap, typeTable).0
                     } else {
                         checkedCondition = nil
                     }
                     let checkedPost : Parser.AST.Expression?
                     if let p = post {
-                        checkedPost = typeCheckAndConvert(p, nameMap).0
+                        checkedPost = typeCheckAndConvert(p, nameMap, typeTable).0
                     } else {
                         checkedPost = nil
                     }
-                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
+                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType, &typeTable)
                     return .For(checkedInit, checkedCondition, checkedPost, checkedBody, lbl)
                 case .Switch(let toggle, let body, let lbl):
                     // TODO: cast this to bool-like
-                    let checkedToggle = typeCheckAndConvert(toggle, nameMap)
-                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType)
+                    let checkedToggle = typeCheckAndConvert(toggle, nameMap, typeTable)
+                    let checkedBody = typeCheck(body, &nameMap, enclosingFuncReturnType, &typeTable)
                     return .Switch(checkedToggle.0, checkedBody, lbl)
                 case .Labeled(let ls):
                     let checkedLine : Parser.AST.LabeledStatement
                     switch ls {
                         // TODO: some type checking that should be happening isn't happening inside of switch statements
                         case .CaseStatement(let lbl, let line):    // don't bother type checking a constant
-                            checkedLine = .CaseStatement(lbl, typeCheck(line, &nameMap, enclosingFuncReturnType))
+                            checkedLine = .CaseStatement(lbl, typeCheck(line, &nameMap, enclosingFuncReturnType, &typeTable))
                         case .DefaultStatement(let line):
-                            checkedLine = .DefaultStatement(typeCheck(line, &nameMap, enclosingFuncReturnType))
+                            checkedLine = .DefaultStatement(typeCheck(line, &nameMap, enclosingFuncReturnType, &typeTable))
                         case .IdentifiedLine(let lbl, let line):
-                            checkedLine = .IdentifiedLine(lbl, typeCheck(line, &nameMap, enclosingFuncReturnType))
+                            checkedLine = .IdentifiedLine(lbl, typeCheck(line, &nameMap, enclosingFuncReturnType, &typeTable))
                     }
                     return .Labeled(checkedLine)
             }
         }
 
         // NOTE: this does not match return statements with function return types
-        func typeCheck(_ block: Parser.AST.Block, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)], _ enclosingFuncReturnType : Parser.AST.CType) -> Parser.AST.Block {
+        func typeCheck(_ block: Parser.AST.Block, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)], _ enclosingFuncReturnType : Parser.AST.CType, _ typeTable: inout TypeTable) -> Parser.AST.Block {
             switch block {
                 case .Block(let blockItems):
                     var typeCheckedItems : [Parser.AST.BlockItem] = []
@@ -1340,20 +1400,20 @@ class SemanticAnalyzer {
                                             exit(ExitCode.semanticError.rawValue)
                                         }
                                     case .VariableDeclaration(_, _, _, _):
-                                        typeCheckedItems.append(.D(typeCheck(decl, false, &nameMap)))
+                                        typeCheckedItems.append(.D(typeCheck(decl, false, &nameMap, &typeTable)))
                                     case .StructDeclaration(_, _):
                                         print("As-yet-unhandled struct declaration found while type checking")
                                         exit(ExitCode.internalError.rawValue)
                                 }
                             case .S(let stmt):
-                                typeCheckedItems.append(.S(typeCheck(stmt, &nameMap, enclosingFuncReturnType)))
+                                typeCheckedItems.append(.S(typeCheck(stmt, &nameMap, enclosingFuncReturnType, &typeTable)))
                         }
                     }
                     return .Block(typeCheckedItems)
             }
         }
 
-        func typeCheck(_ declaration: Parser.AST.Declaration, _ fileLevel: Bool, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)]) -> Parser.AST.Declaration {
+        func typeCheck(_ declaration: Parser.AST.Declaration, _ fileLevel: Bool, _ nameMap : inout [String : (CheckerType, IdentifierAttributes)], _ typeTable: inout TypeTable) -> Parser.AST.Declaration {
 
             func convert(_ initializer : Parser.AST.Initializer, _ targetType: Parser.AST.CType) -> InitialValue {
                 switch initializer {
@@ -1499,7 +1559,7 @@ class SemanticAnalyzer {
                                 print("FUNCTION WITH NO FUNCTION TYPE WHAT IS GOING ON?!?!?")
                                 exit(ExitCode.internalError.rawValue)
                         }
-                        typeCheckedBody = typeCheck(b, &nameMap, retType)
+                        typeCheckedBody = typeCheck(b, &nameMap, retType, &typeTable)
                     } else {
                         typeCheckedBody = nil
                     }
@@ -1508,7 +1568,7 @@ class SemanticAnalyzer {
                     var typeCheckedInit : Parser.AST.Initializer?
                     let conTp = convertCTypeToCheckerType(tp)
                     if let e = initExp {
-                        (typeCheckedInit, _) = typeCheck(tp, e, nameMap)
+                        (typeCheckedInit, _) = typeCheck(tp, e, nameMap, typeTable)
                     } else {
                         typeCheckedInit = nil
                     }
@@ -1600,25 +1660,52 @@ class SemanticAnalyzer {
                         }
                     }
                     return .VariableDeclaration(tp, name, typeCheckedInit, storageClass)
-                case .StructDeclaration(_, _):
-                    print("As-yet-unhandled struct declaration found while type checking")
-                    exit(ExitCode.internalError.rawValue)
+                case .StructDeclaration(let tag, let members):
+                    func roundUp(_ x: Int, _ n: Int) -> Int {
+                        return Int(ceil(Double(x) / Double(n))) * n
+                    }
+                    if members.isEmpty {
+                        // we only have ot do work for complete struct definitions
+                        return declaration
+                    }
+
+                    // ok, type check, then update the type table
+                    // TODO: validate the declaration according to the rules laid out in the standard
+
+                    // define a member entry for each member
+                    var structSize: Int = 0
+                    var structAlignment: Int = 0
+                    var memberEntries: [TypeTableEntry.MemberEntry] = []
+                    for (memberName, memberType) in members {
+                        let memberAlignment = alignment(memberType, typeTable)
+                        let memberOffset = roundUp(structSize, memberAlignment)
+                        memberEntries.append(TypeTableEntry.MemberEntry(identifier: memberName, typeSpec: memberType, offset: memberOffset))
+                        structAlignment = max(structAlignment, memberAlignment)
+                        structSize = memberOffset + size(memberType, typeTable)
+                    }
+                    // figure out size/alignment
+                    structSize = roundUp(structSize, structAlignment)
+                    let structDef = TypeTableEntry.StructEntry(alignment: structAlignment, size: structSize, memebers: memberEntries)
+                    // update the type table
+                    typeTable[tag] = structDef
+                    // bounce (to the ounce)
+                    return .StructDeclaration(tag, members)
             }
         }
 
-        func typeCheck(_ program: Parser.AST.Program, _ symbolTable: inout [String : (CheckerType, IdentifierAttributes)]) -> Parser.AST.Program {
+        func typeCheck(_ program: Parser.AST.Program, _ symbolTable: inout [String : (CheckerType, IdentifierAttributes)], _ typeTable: inout TypeTable) -> Parser.AST.Program {
             switch program {
                 case .Statement(let decls):
                     var typeCheckedDecls : [Parser.AST.Declaration] = []
                     for d in decls {
-                        typeCheckedDecls.append(typeCheck(d, true, &symbolTable))
+                        typeCheckedDecls.append(typeCheck(d, true, &symbolTable, &typeTable))
                     }
                     return .Statement(typeCheckedDecls)
             }
         }
 
-        func typeCheckAndConvert(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)]) -> (Parser.AST.Expression, CheckerType) {
-            let (typedExpression, expressionType) = typeCheck(expression, nameMap)
+        func typeCheckAndConvert(_ expression: Parser.AST.Expression, _ nameMap: [String: (CheckerType, IdentifierAttributes)], _ typeTable: TypeTable) -> (Parser.AST.Expression, CheckerType) {
+            let (typedExpression, expressionType) = typeCheck(expression, nameMap, typeTable)
 
             switch expressionType {
                 case .ArrayType(let elementType, _):
@@ -1644,7 +1731,9 @@ class SemanticAnalyzer {
             TypeChecker.IdentifierAttributes    // storage and other attributes
         )] = [:]
 
-        let typeCheckedProgram = TypeChecker().typeCheck(casedProgram, &overallNameMap)
+        var typeTable : TypeChecker.TypeTable = [:]
+
+        let typeCheckedProgram = TypeChecker().typeCheck(casedProgram, &overallNameMap, &typeTable)
         return (typeCheckedProgram, overallNameMap)
     }
 }
