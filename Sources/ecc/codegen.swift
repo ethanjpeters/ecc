@@ -164,6 +164,8 @@ func convert(_ op: Assembly.Tree.BinaryOperator, _ tp: Assembly.Tree.AssemblyTyp
             return "sar\(typeToSuffix(tp))"
         case .Shl:
             return "shl\(typeToSuffix(tp))"
+        case .Shr:
+            return "shr\(typeToSuffix(tp))"
         case .DivDouble:
             return "div\(typeToSuffix(tp))"
     }

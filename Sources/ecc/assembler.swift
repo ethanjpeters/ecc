@@ -77,6 +77,7 @@ class Assembly {
             case Xor
             case Sar
             case Shl
+            case Shr
             case DivDouble
         }
 
@@ -1198,6 +1199,7 @@ class Assembly {
                                         out.append(instr)
                                 }
                             case .Sar: fallthrough
+                            case .Shr: fallthrough
                             case .Shl:
                                 switch src {
                                     case .Data(_): fallthrough
