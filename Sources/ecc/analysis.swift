@@ -34,7 +34,7 @@ class SemanticAnalyzer {
         func copyStructMap(_ structMap: StructTable) -> StructTable {
             var out : StructTable = [:]
             for (name, entry) in structMap {
-                out[name] = .init(newName: entry.newName, currentScope: entry.currentScope)
+                out[name] = .init(newName: entry.newName, currentScope: false)
             }
             return out
         }
@@ -200,10 +200,11 @@ class SemanticAnalyzer {
                         copiedNameMap[pName] = .init(newName: uniqueName, currentScope: true, hasLinkage: false)
                         mangledPNames.append(uniqueName)
                     }
+                    var copiedStructMap = copyStructMap(structMap)
                     if let b = body {
                         switch b {
                             case .Block(let items):
-                                return .FunctionDeclaration(returnType, name, mangledPNames, .Block(items.map { resolveBlockItem($0, &copiedNameMap, &structMap) }), storageClass)
+                                return .FunctionDeclaration(returnType, name, mangledPNames, .Block(items.map { resolveBlockItem($0, &copiedNameMap, &copiedStructMap) }), storageClass)
                         }
                     } else {
                         return .FunctionDeclaration(returnType, name, mangledPNames, nil, storageClass)
