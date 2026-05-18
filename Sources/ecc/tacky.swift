@@ -558,8 +558,39 @@ class Tacky {
                     exit(ExitCode.internalError.rawValue)
                 }
             case .Arrow(let exp, let memberName, _):
-                print("As-yet-unhandled arrow expression found while generating TACKY")
-                exit(ExitCode.internalError.rawValue)
+                let structType: Parser.AST.CType = getType(exp)
+                let innerStructType: Parser.AST.CType
+                let tg: String
+                switch structType {
+                    case .Pointer(let innerType):
+                        switch innerType {
+                            case .Structure(let tag):
+                                tg = tag
+                                innerStructType = innerType
+                            default:
+                                print("Unreachable no-type's land where arrow operator was used on pointer to non-struct")
+                                exit(ExitCode.internalError.rawValue)
+                        }
+                    default:
+                        print("Unreachable no-type's land where arrow operator was used on non-pointer")
+                        exit(ExitCode.internalError.rawValue)
+                }
+                if let structDef = typeTable[tg] {
+                    for m in structDef.memebers {
+                        if m.identifier == memberName {
+                            let memberOffset = m.offset
+                            let innerObject = generateTACKYExpressionAndConvert(exp, out: &out, symbolTable: &symbolTable, typeTable: typeTable)
+                            let tmp = makeTempVariable(.Pointer(innerStructType), &symbolTable)
+                            out.append(.AddPtr(innerObject, .Constant(.ConstLong(Int64(memberOffset))), 1, tmp))
+                            return .DereferencedPointer(tmp)
+                        }
+                    }
+                    print("Unreachable point where struct member name is not valid")
+                    exit(ExitCode.internalError.rawValue)
+                } else {
+                    print("Unreachable point where struct is not defined but we're generating TACKY out of its dot operation")
+                    exit(ExitCode.internalError.rawValue)
+                }
         }
     }
 
