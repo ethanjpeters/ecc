@@ -741,8 +741,36 @@ class Assembly {
                 case .GetAddress(let src, let dst):
                     out.append(.Lea(convert(src, symbolTable, typedSymbolTable), convert(dst, symbolTable, typedSymbolTable)))
                 case .Load(let ptr, let dst):
-                    out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
-                    out.append(.Mov(deduceType(dst, typedSymbolTable, typeTable), .Memory(.AX, 0), convert(dst, symbolTable, typedSymbolTable)))
+                    let dstType = deduceType(dst, typedSymbolTable, typeTable)
+                    let p = convert(ptr, symbolTable, typedSymbolTable)
+                    let d = convert(dst, symbolTable, typedSymbolTable)
+                    out.append(.Mov(.Quadword, p, .Register(.AX)))
+                    switch dstType {
+                        case .Byte: fallthrough
+                        case .Longword: fallthrough
+                        case .Quadword: fallthrough
+                        case .Double:
+                            out.append(.Mov(dstType, .Memory(.AX, 0), d))
+                        case .ByteArray(let size, _):
+                            for i in 0..<size {
+                                let dd : Tree.Operand
+                                switch d {
+                                    case .PseudoMem(let sName, let sOff):
+                                        dd = .PseudoMem(sName, sOff + i)
+                                    case .Memory(let reg, let off):
+                                        dd = .Memory(reg, off + Int(i))
+                                    case .Immediate(_): fallthrough
+                                    case .Register(_): fallthrough
+                                    case .Pseudo(_): fallthrough
+                                    case .Stack(_): fallthrough
+                                    case .Data(_, _): fallthrough
+                                    case .Indexed(_, _, _):
+                                        print("Unexpected operand type \(d) found while processing ByteArray")
+                                        exit(ExitCode.internalError.rawValue)
+                                }
+                                out.append(.Mov(.Byte, .Memory(.AX, Int(i)), dd)) // TODO: this more efficiently
+                            }
+                    }
                 case .Store(let src, let ptr):
                     out.append(.Mov(.Quadword, convert(ptr, symbolTable, typedSymbolTable), .Register(.AX)))
                     out.append(.Mov(deduceType(src, typedSymbolTable, typeTable), convert(src, symbolTable, typedSymbolTable), .Memory(.AX, 0)))
