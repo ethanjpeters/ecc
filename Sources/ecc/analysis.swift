@@ -1201,11 +1201,59 @@ class SemanticAnalyzer {
                     validateTypeSpecifier(convertCTypeToCheckerType(namedType))
                     return (.SizeOfT(namedType, .UnsignedLong), .UnsignedLong)
                 case .Dot(let exp, let memberName, _):
-                    print("As-yet-unhandled dot expression found while type checking")
-                    exit(ExitCode.internalError.rawValue)
+                    let (checkedExp, checkedType) = typeCheckAndConvert(exp, nameMap, typeTable)
+                    let sType: TypeTableEntry.StructEntry
+                    let tg: String
+                    switch checkedType {
+                        case .Structure(let tag):
+                            if let te = typeTable[tag] {
+                                sType = te
+                                tg = tag
+                            } else {
+                                print("Somehow type checked the lhs of a dot expression and got an undefined structure")
+                                exit(ExitCode.semanticError.rawValue)
+                            }
+                        default:
+                            print("Tried to apply dot operation to non-record type \(checkedType)")
+                            exit(ExitCode.semanticError.rawValue)
+                    }
+                    for m in sType.memebers {
+                        if m.identifier == memberName {
+                            return (.Dot(checkedExp, memberName, m.typeSpec), convertCTypeToCheckerType(m.typeSpec))
+                        }
+                    }
+                    print("No member \(memberName) in structure \(tg)")
+                    exit(ExitCode.semanticError.rawValue)
                 case .Arrow(let exp, let memberName, _):
-                    print("As-yet-unhandled arrow expression found while type checking")
-                    exit(ExitCode.internalError.rawValue)
+                    let (checkedExp, checkedType) = typeCheckAndConvert(exp, nameMap, typeTable)
+                    let sType: TypeTableEntry.StructEntry
+                    let tg: String
+                    switch checkedType {
+                        case .Pointer(let pointeeType):
+                            switch pointeeType {
+                                case .Structure(let tag):
+                                    if let te = typeTable[tag] {
+                                        sType = te
+                                        tg = tag
+                                    } else { 
+                                        print("Somehow type checked the lhs of an arrow expression and got an undefined structure")
+                                        exit(ExitCode.semanticError.rawValue)
+                                    }
+                                default:
+                                    print("Tried to use arrow operator on pointer to non-struct type \(pointeeType)")
+                                    exit(ExitCode.semanticError.rawValue)
+                            }
+                        default:
+                            print("Tried to use arrow operator on non-pointer type \(checkedType)")
+                            exit(ExitCode.semanticError.rawValue)
+                    }
+                    for m in sType.memebers {
+                        if m.identifier == memberName {
+                            return (.Arrow(checkedExp, memberName, m.typeSpec), convertCTypeToCheckerType(m.typeSpec))
+                        }
+                    }
+                    print("No member \(memberName) in structure \(tg)")
+                    exit(ExitCode.semanticError.rawValue)
             }
         }
 
