@@ -616,6 +616,20 @@ class SemanticAnalyzer {
             case LocalAttr
         }
 
+        public struct TypeTableEntry {
+            public struct MemberEntry {
+                public let identifier: String
+                public let typeSpec: Parser.AST.CType
+                public let offset: Int
+            }
+
+            public struct StructEntry {
+                public let alignment: Int
+                public let size: Int
+                public let memebers: [MemberEntry]
+            }
+        }
+
         var stringCounter : UInt = 0
 
         func stringConstantName() -> String {
