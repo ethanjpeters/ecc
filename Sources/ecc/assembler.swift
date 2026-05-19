@@ -936,6 +936,14 @@ class Assembly {
                         // TODO:
                     }
 
+                    func copyBytesFromRegister(_ r: Tree.Register, _ op: Tree.Operand, _ size: UInt) {
+                        if size > 8 {
+                            print("Something has gone terribly wrong and we're trying to copy more than 8 bytes from a register")
+                            exit(ExitCode.internalError.rawValue)
+                        }
+                        // TODO:
+                    }
+
                     var returnInMemory = false
                     var intDests: [TypedOperand] = []
                     var doubleDests: [TypedOperand] = []
@@ -1008,11 +1016,29 @@ class Assembly {
 
                     // move the result
                     if let rslt = result {
-                        out.append(.Mov(
-                            deduceType(rslt, typedSymbolTable, typeTable),
-                            .Register(.AX),
-                            convert(rslt, symbolTable, typedSymbolTable)
-                        ))
+                        let intRetRegs: [Tree.Register] = [ .AX, .DX ]
+                        let fpRetRegs: [Tree.Register] = [ .XMM0, .XMM1 ]
+
+                        // retrieve values returned in general purpose registers
+                        var regIndex = 0
+                        for tpOp in intDests {
+                            let r = intRetRegs[regIndex]
+                            switch tpOp.tp {
+                                case .ByteArray(let sz, _):
+                                    copyBytesFromRegister(r, tpOp.op, sz)
+                                default:
+                                    out.append(.Mov(tpOp.tp, .Register(r), tpOp.op))
+                            }
+                            regIndex = regIndex + 1
+                        }
+
+                        // retrieve values returned in XMM registers
+                        regIndex = 0
+                        for tpOp in doubleDests {
+                            let r = fpRetRegs[regIndex]
+                            out.append(.Mov(.Double, .Register(r), tpOp.op))
+                            regIndex = regIndex + 1
+                        }
                     }
                 case .SignExtend(let src, let dst):
                     let cSrc = convert(src, symbolTable, typedSymbolTable)
