@@ -928,12 +928,38 @@ class Assembly {
                     // save context (currently not an issue because we only use scratch registers)
                     // move parameters into place
 
+                    func addOffset(_ b: Tree.Operand, _ off: UInt) -> Tree.Operand {
+                        switch b {
+                            case .Data(let name, let fff):
+                                return .Data(name, fff + Int(off))
+                            case .Indexed(_, _, _): fallthrough
+                            case .Pseudo(_): fallthrough
+                            case .Register(_): fallthrough
+                            case .Stack(_): fallthrough
+                            case .Immediate(_):
+                                print("Invalid attempt to add offset to \(b)")
+                                exit(ExitCode.internalError.rawValue)
+                            case .Memory(let r, let fff):
+                                return .Memory(r, fff + Int(off))
+                            case .PseudoMem(let name, let fff):
+                                return .PseudoMem(name, fff + off)
+                        }
+                    }
+
                     func copyBytesToRegister(_ b: Tree.Operand, _ r: Tree.Register, _ size: UInt) {
                         if size > 8 {
                             print("Something has gone terribly wrong and we're trying to pass a \(size) byte value in a register :grimace:")
                             exit(ExitCode.internalError.rawValue)
                         }
-                        // TODO:
+                        var offset = size - 1
+                        while offset > 0 {
+                            let srcByte = addOffset(b, offset)
+                            out.append(.Mov(.Byte, srcByte, .Register(r)))
+                            if offset > 0 {
+                                out.append(.Binary(.Shl, .Quadword, .Immediate(.UnsignedImmediate(8)), .Register(r)))
+                            }
+                            offset = offset - 1
+                        }
                     }
 
                     func copyBytesFromRegister(_ r: Tree.Register, _ op: Tree.Operand, _ size: UInt) {
