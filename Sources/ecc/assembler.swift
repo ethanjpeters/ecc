@@ -395,6 +395,94 @@ class Assembly {
         return ClassifiedReturn(integerReturnValues: intRetVals, doubleReturnValues: doubleRetVals, returnInMemory: false)
     }
 
+    func setUpParameters(_ values: [Tacky.IR.Value], _ returnInMemory: Bool, _ symbolTable: [String: Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: TypeTable, _ out: inout [Tree.Instruction]) {
+        // classify incoming parameters
+        let classedParams = classifyParams(values, returnInMemory, symbolTable, typedSymbolTable, typeTable)
+
+        // copy parameters from general purpose registers
+        let intRegs: [Tree.Register] = [.DI, .SI, .DX, .CX, .R8, .R9]
+        var regIndex = 0
+
+        if returnInMemory {
+            out.append(.Mov(.Quadword, .Register(.DI), .Memory(.BP, -8)))
+            regIndex = regIndex + 1
+        }
+
+        for intParm in classedParams.integerRegisterArguments {
+            let r = intRegs[regIndex]
+            switch intParm.tp {
+                case .ByteArray(let sz, _):
+                    copyBytesFromRegister(r, intParm.op, sz, &out)
+                default:
+                    out.append(.Mov(intParm.tp, .Register(r), intParm.op))
+            }
+            regIndex = regIndex + 1
+        }
+
+        // copy parameters from the stack
+        var offset = 16
+        for sParm in classedParams.stackArguments {
+            switch sParm.tp {
+                case .ByteArray(let size, _):
+                    copyBytes(size, .Memory(.BP, offset), sParm.op, &out)
+                default:
+                    out.append(.Mov(sParm.tp, .Memory(.BP, offset), sParm.op))
+            }
+            offset = offset + 8
+        }
+    }
+
+
+    func addOffset(_ b: Tree.Operand, _ off: UInt) -> Tree.Operand {
+        switch b {
+            case .Data(let name, let fff):
+                return .Data(name, fff + Int(off))
+            case .Indexed(_, _, _): fallthrough
+            case .Pseudo(_): fallthrough
+            case .Register(_): fallthrough
+            case .Stack(_): fallthrough
+            case .Immediate(_):
+                print("Invalid attempt to add offset to \(b)")
+                exit(ExitCode.internalError.rawValue)
+            case .Memory(let r, let fff):
+                return .Memory(r, fff + Int(off))
+            case .PseudoMem(let name, let fff):
+                return .PseudoMem(name, fff + off)
+        }
+    }
+
+    func copyBytesToRegister(_ b: Tree.Operand, _ r: Tree.Register, _ size: UInt, _ out: inout [Tree.Instruction]) {
+        if size > 8 {
+            print("Something has gone terribly wrong and we're trying to pass a \(size) byte value in a register :grimace:")
+            exit(ExitCode.internalError.rawValue)
+        }
+        var offset = size - 1
+        while offset > 0 {
+            let srcByte = addOffset(b, offset)
+            out.append(.Mov(.Byte, srcByte, .Register(r)))
+            if offset > 0 {
+                out.append(.Binary(.Shl, .Quadword, .Immediate(.UnsignedImmediate(8)), .Register(r)))
+            }
+            offset = offset - 1
+        }
+    }
+
+    func copyBytesFromRegister(_ r: Tree.Register, _ op: Tree.Operand, _ size: UInt, _ out: inout [Tree.Instruction]) {
+        if size > 8 {
+            print("Something has gone terribly wrong and we're trying to copy more than 8 bytes from a register")
+            exit(ExitCode.internalError.rawValue)
+        }
+        var offset: UInt = 0
+        while offset < size {
+            let dstByte = addOffset(op, offset)
+            out.append(.Mov(.Byte, .Register(r), dstByte))
+            if offset < size - 1 {
+                out.append(.Binary(.Shr, .Quadword, .Immediate(.UnsignedImmediate(8)), .Register(r)))
+            }
+            offset = offset + 1
+        }
+    }
+
     func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable) -> Assembly.Tree.Operand {
         switch val {
             case .Constant(let c):
@@ -928,56 +1016,6 @@ class Assembly {
                     // save context (currently not an issue because we only use scratch registers)
                     // move parameters into place
 
-                    func addOffset(_ b: Tree.Operand, _ off: UInt) -> Tree.Operand {
-                        switch b {
-                            case .Data(let name, let fff):
-                                return .Data(name, fff + Int(off))
-                            case .Indexed(_, _, _): fallthrough
-                            case .Pseudo(_): fallthrough
-                            case .Register(_): fallthrough
-                            case .Stack(_): fallthrough
-                            case .Immediate(_):
-                                print("Invalid attempt to add offset to \(b)")
-                                exit(ExitCode.internalError.rawValue)
-                            case .Memory(let r, let fff):
-                                return .Memory(r, fff + Int(off))
-                            case .PseudoMem(let name, let fff):
-                                return .PseudoMem(name, fff + off)
-                        }
-                    }
-
-                    func copyBytesToRegister(_ b: Tree.Operand, _ r: Tree.Register, _ size: UInt) {
-                        if size > 8 {
-                            print("Something has gone terribly wrong and we're trying to pass a \(size) byte value in a register :grimace:")
-                            exit(ExitCode.internalError.rawValue)
-                        }
-                        var offset = size - 1
-                        while offset > 0 {
-                            let srcByte = addOffset(b, offset)
-                            out.append(.Mov(.Byte, srcByte, .Register(r)))
-                            if offset > 0 {
-                                out.append(.Binary(.Shl, .Quadword, .Immediate(.UnsignedImmediate(8)), .Register(r)))
-                            }
-                            offset = offset - 1
-                        }
-                    }
-
-                    func copyBytesFromRegister(_ r: Tree.Register, _ op: Tree.Operand, _ size: UInt) {
-                        if size > 8 {
-                            print("Something has gone terribly wrong and we're trying to copy more than 8 bytes from a register")
-                            exit(ExitCode.internalError.rawValue)
-                        }
-                        var offset: UInt = 0
-                        while offset < size {
-                            let dstByte = addOffset(op, offset)
-                            out.append(.Mov(.Byte, .Register(r), dstByte))
-                            if offset < size - 1 {
-                                out.append(.Binary(.Shr, .Quadword, .Immediate(.UnsignedImmediate(8)), .Register(r)))
-                            }
-                            offset = offset + 1
-                        }
-                    }
-
                     var returnInMemory = false
                     var intDests: [TypedOperand] = []
                     var doubleDests: [TypedOperand] = []
@@ -1004,7 +1042,7 @@ class Assembly {
                     for (intReg, intParm) in zip(intRegisterTargets, paramClasses.integerRegisterArguments) {
                         switch intParm.tp {
                             case .ByteArray(let sz, _):
-                                copyBytesToRegister(intParm.op, intReg, sz)
+                                copyBytesToRegister(intParm.op, intReg, sz, &out)
                             default:
                                 out.append(.Mov(intParm.tp, intParm.op, .Register(intReg)))
                         }
@@ -1059,7 +1097,7 @@ class Assembly {
                             let r = intRetRegs[regIndex]
                             switch tpOp.tp {
                                 case .ByteArray(let sz, _):
-                                    copyBytesFromRegister(r, tpOp.op, sz)
+                                    copyBytesFromRegister(r, tpOp.op, sz, &out)
                                 default:
                                     out.append(.Mov(tpOp.tp, .Register(r), tpOp.op))
                             }
