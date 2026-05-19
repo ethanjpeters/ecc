@@ -323,7 +323,7 @@ class Assembly {
         public let returnInMemory: Bool
     }
 
-    func classifyReturNValue(_ v : Tacky.IR.Value, _ symbolTable: [String: Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: TypeTable) -> ClassifiedReturn {
+    func classifyReturnValue(_ v : Tacky.IR.Value, _ symbolTable: [String: Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: TypeTable) -> ClassifiedReturn {
         let t = deduceType(v, typedSymbolTable, typeTable)
 
         if t == .Double {
@@ -927,7 +927,20 @@ class Assembly {
                     // save context (currently not an issue because we only use scratch registers)
                     // move parameters into place
 
-                    var returnInMemory = false // TODO:
+                    var returnInMemory = false
+                    var intDests: [TypedOperand] = []
+                    var doubleDests: [TypedOperand] = []
+
+                    if let r = result {
+                        let cReturn = classifyReturnValue(r, symbolTable, typedSymbolTable, typeTable)
+                        returnInMemory = cReturn.returnInMemory
+                        intDests = cReturn.integerReturnValues
+                        doubleDests = cReturn.doubleReturnValues
+                    }
+
+                    if returnInMemory {
+                        out.append(.Lea(convert(result!, symbolTable, typedSymbolTable), .Register(.DI)))
+                    }
 
                     // 1. use the helper function to classify incoming parameters
                     let paramClasses = classifyParams(params, returnInMemory, symbolTable, typedSymbolTable, typeTable)
