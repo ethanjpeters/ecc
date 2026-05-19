@@ -63,6 +63,13 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
                         case .fourByte: return "%ebp"
                         case .eightByte: return "%rbp"
                     }
+                case .SP:
+                    switch width {
+                        case .eightByte: return "%rsp"
+                        default:
+                            print("Invalid op: trying to adjust stack pointer but not with quadword value")
+                            exit(ExitCode.internalError.rawValue)
+                    }
                 case .R8:
                     switch width {
                         case .oneByte: return "%r8b"
