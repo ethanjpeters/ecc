@@ -324,7 +324,7 @@ class Assembly {
         public let returnInMemory: Bool
     }
 
-    func classifyReturnValue(_ v : Tacky.IR.Value, _ symbolTable: [String: Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: TypeTable) -> ClassifiedReturn {
+    func classifyReturnValue(_ v : Tacky.IR.Value, _ symbolTable: [String: Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: TypeTable, _ sEntry: StructEntry? = nil) -> ClassifiedReturn {
         let t = deduceType(v, typedSymbolTable, typeTable)
 
         if t == .Double {
@@ -344,35 +344,43 @@ class Assembly {
         // v is a structure
         let klazzes : [StructClass]
         let structSize : Int
-        let varName : String
-        switch v {
-            case .Constant(_):
-                print("There is no such thing as a constant struct")
-                exit(ExitCode.internalError.rawValue)
-            case .Var(let name):
-                varName = name
-                if let (sType, _) = typedSymbolTable[name] {
-                    switch sType {
-                        case .Structure(let tag):
-                            if let se = typeTable[tag] {
-                                klazzes = classifyStruct(se, typeTable)
-                                structSize = se.size
-                            } else {
-                                print("Tried to return undefined struct \(tag) from function")
-                                exit(ExitCode.internalError.rawValue)
-                            }
-                        default:
-                            print("Unreachable case where we're trying to return a non-struct from a function as a struct")
-                            exit(ExitCode.internalError.rawValue)
-                    }
-                } else {
-                    print("Unreachable case where a structure was not defined before we tried to return it from a function")
+        var varName : String? = nil
+        if let se = sEntry {
+            klazzes = classifyStruct(se, typeTable)
+            structSize = se.size
+        } else {
+            switch v {
+                case .Constant(_):
+                    print("There is no such thing as a constant struct")
                     exit(ExitCode.internalError.rawValue)
-                }
+                case .Var(let name):
+                    varName = name
+                    if let (sType, _) = typedSymbolTable[name] {
+                        switch sType {
+                            case .Structure(let tag):
+                                if let se = typeTable[tag] {
+                                    klazzes = classifyStruct(se, typeTable)
+                                    structSize = se.size
+                                } else {
+                                    print("Tried to return undefined struct \(tag) from function")
+                                    exit(ExitCode.internalError.rawValue)
+                                }
+                            default:
+                                print("Unreachable case where we're trying to return a non-struct from a function as a struct")
+                                exit(ExitCode.internalError.rawValue)
+                        }
+                    } else {
+                        print("Unreachable case where a structure was not defined before we tried to return it from a function")
+                        exit(ExitCode.internalError.rawValue)
+                    }
+            }
         }
         if klazzes[0] == .Memory {
             // the whole structure is returned in memory
             return ClassifiedReturn(integerReturnValues: [], doubleReturnValues: [], returnInMemory: true)
+        }
+        if varName == nil {
+            return ClassifiedReturn(integerReturnValues: [], doubleReturnValues: [], returnInMemory: false)
         }
         // the structure is returned in registers
         // partition it into eightbytes by class
@@ -380,7 +388,7 @@ class Assembly {
         var doubleRetVals: [TypedOperand] = []
         var offset: UInt = 0
         for k in klazzes {
-            let op : Tree.Operand = .PseudoMem(varName, offset)
+            let op : Tree.Operand = .PseudoMem(varName!, offset)
             switch k {
                 case .SSE:
                     doubleRetVals.append(TypedOperand(op: op, tp: .Double))
@@ -1345,32 +1353,32 @@ class Assembly {
             case .Function(let name, let isGlobal, let params, let instrs):
                 var out : [Tree.Instruction] = []
 
-                var fpRegisterTargets : [Tree.Register] = [.XMM0, .XMM1, .XMM2, .XMM3, .XMM4, .XMM5, .XMM6, .XMM7]
-                var intRegisterTargets : [Tree.Register] = [.DI, .SI, .DX, .CX, .R8, .R9]
-                var stackParams : [String] = []
-                for p in params {
-                    let tp = deduceType(.Var(p), typedSymbolTable, typeTable)
-                    // if we're looking at a floating point value AND we have floating point registers left unallocated
-                    if tp == .Double && !fpRegisterTargets.isEmpty {
-                        let source = fpRegisterTargets.removeFirst()
-                        out.append(.Mov(tp, .Register(source), .Pseudo(p)))
-                    // if we're NOT looking at a floating point value AND we have non-floating point registers left unallocated
-                    } else if tp != .Double && !intRegisterTargets.isEmpty {
-                        let source = intRegisterTargets.removeFirst()
-                        out.append(.Mov(tp, .Register(source), .Pseudo(p)))
-                    // we ran out of registers for this type of parameter
-                    } else {
-                        // stack time!
-                        stackParams.append(p)
-                    }
+                // 1. get this function's type signature
+                guard let (fType, _) = typedSymbolTable[name] else {
+                    print("Somehow tried to emit a function that did not appear in the symbol table")
+                    exit(ExitCode.internalError.rawValue)
                 }
-                stackParams.reverse()
-                var counter = 0
-                for p in stackParams {
-                    out.append(.Mov(deduceType(.Var(p), typedSymbolTable, typeTable), .Stack(16 + counter), .Pseudo(p)))
-                    counter = counter + 8
+                // 2. determine if it requires returning something in memory
+                let returnInMemory: Bool
+                switch fType {
+                    case .Function(let rType, let pTypes):
+                        switch rType {
+                            case .Structure(let tag):
+                                let c = classifyReturnValue(.Var("DUMMY"), symbolTable, typedSymbolTable, typeTable)
+                                returnInMemory = c.returnInMemory
+                            default:
+                                returnInMemory = false
+                        }
+                    default:
+                        print("Function \(name) had non-function type \(fType) in the symbol table")
+                        exit(ExitCode.internalError.rawValue)
                 }
+                // 3. set up params
+                let pms : [Tacky.IR.Value] = params.map { .Var($0) }
+                setUpParameters(pms, returnInMemory, symbolTable, typedSymbolTable, typeTable, &out)
+                // 4. emit body
                 generate(instrs, symbolTable, &out, typedSymbolTable, typeTable)
+                // 5. construct return
                 return .Function(name, isGlobal, out)
             case .StaticVariable(_, _, _, _):
                 print("As yet unhandled global variable caught while generating assembly")
