@@ -852,48 +852,39 @@ class Assembly {
                     // save context (currently not an issue because we only use scratch registers)
                     // move parameters into place
 
-                    // 1. separate params into floating point and integer
-                    var fpRegisterTargets : [Tree.Register] = [.XMM0, .XMM1, .XMM2, .XMM3, .XMM4, .XMM5, .XMM6, .XMM7]
-                    var intRegisterTargets : [Tree.Register] = [.DI, .SI, .DX, .CX, .R8, .R9]
-                    var stackParams : [Tacky.IR.Value] = []
-                    for p in params {
-                        let tp = deduceType(p, typedSymbolTable, typeTable)
-                        // if we're looking at a floating point value AND we have floating point registers left unallocated
-                        if tp == .Double && !fpRegisterTargets.isEmpty {
-                            let target = fpRegisterTargets.removeFirst()
-                            out.append(.Mov(tp, convert(p, symbolTable, typedSymbolTable), .Register(target)))
-                        // if we're NOT looking at a floating point value AND we have non-floating point registers left unallocated
-                        } else if tp != .Double && !intRegisterTargets.isEmpty {
-                            let target = intRegisterTargets.removeFirst()
-                            out.append(.Mov(tp, convert(p, symbolTable, typedSymbolTable), .Register(target)))
-                        // we ran out of registers for this type of parameter
-                        } else {
-                            // stack time!
-                            stackParams.append(p)
-                        }
+                    // 1. use the helper function to classify incoming parameters
+                    let paramClasses = classifyParams(params, /* TODO */ false, symbolTable, typedSymbolTable, typeTable)
+                    // 2. assign to registers/stack
+                    let fpRegisterTargets : [Tree.Register] = [.XMM0, .XMM1, .XMM2, .XMM3, .XMM4, .XMM5, .XMM6, .XMM7]
+                    let intRegisterTargets : [Tree.Register] = [.DI, .SI, .DX, .CX, .R8, .R9] // TODO: DI
+                    for (fpReg, fpParm) in zip(fpRegisterTargets, paramClasses.floatingRegisterArguments) {
+                        out.append(.Mov(fpParm.tp, fpParm.op, .Register(fpReg)))
+                    }
+                    for (intReg, intParm) in zip(intRegisterTargets, paramClasses.integerRegisterArguments) {
+                        out.append(.Mov(intParm.tp, intParm.op, .Register(intReg)))
                     }
 
                     // the System V ABI requires the stack to be 16-byte aligned
-                    let stackPadding = stackParams.count % 2 == 0 ? 0 : 8
+                    let stackPadding = paramClasses.stackArguments.count % 2 == 0 ? 0 : 8
 
                     if stackPadding != 0 {
                         out.append(.AllocateStack(stackPadding))
                     }
 
+                    var stackParams = paramClasses.stackArguments
                     stackParams.reverse()
                     for p in stackParams {
-                        let src = convert(p, symbolTable, typedSymbolTable)
-                        var shouldPushStraight : Bool = deduceType(p, typedSymbolTable, typeTable) == .Quadword
-                        switch src {
+                        var shouldPushStraight : Bool = p.tp == .Quadword
+                        switch p.op {
                             case .Register(_): fallthrough
                             case .Immediate(_):
                                 shouldPushStraight = true
                             default: ()
                         }
                         if shouldPushStraight {
-                            out.append(.Push(src))
+                            out.append(.Push(p.op))
                         } else {
-                            out.append(.Mov(.Longword, src, .Register(.AX)))
+                            out.append(.Mov(.Longword, p.op, .Register(.AX)))
                             out.append(.Push(.Register(.AX)))
                         }
                     }
