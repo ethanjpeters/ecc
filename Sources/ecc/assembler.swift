@@ -419,6 +419,15 @@ class Assembly {
             regIndex = regIndex + 1
         }
 
+        // copy parameters from floating point registers
+        let fpRegs: [Tree.Register] = [.XMM0, .XMM1, .XMM2, .XMM3, .XMM4, .XMM5, .XMM6, .XMM7]
+        regIndex = 0
+        for fpParm in classedParams.floatingRegisterArguments {
+            let r = fpRegs[regIndex]
+            out.append(.Mov(.Double, fpParm.op, .Register(r)))
+            regIndex = regIndex + 1
+        }
+
         // copy parameters from the stack
         var offset = 16
         for sParm in classedParams.stackArguments {
