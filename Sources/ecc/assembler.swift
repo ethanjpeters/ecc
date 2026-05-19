@@ -1364,7 +1364,9 @@ class Assembly {
                     case .Function(let rType, let pTypes):
                         switch rType {
                             case .Structure(let tag):
-                                let c = classifyReturnValue(.Var("DUMMY"), symbolTable, typedSymbolTable, typeTable)
+                                let se = typeTable[tag]!
+                                let dummyV : Tacky.IR.Value = .Constant(.ConstInt(0))
+                                let c = classifyReturnValue(dummyV, symbolTable, typedSymbolTable, typeTable, se)
                                 returnInMemory = c.returnInMemory
                             default:
                                 returnInMemory = false
