@@ -327,14 +327,14 @@ class Assembly {
     func classifyReturnValue(_ v : Tacky.IR.Value, _ symbolTable: [String: Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: TypeTable, _ sEntry: StructEntry? = nil) -> ClassifiedReturn {
         let t = deduceType(v, typedSymbolTable, typeTable)
 
-        if t == .Double {
+        if t == .Double && sEntry == nil {
             return ClassifiedReturn(
                 integerReturnValues: [],
                 doubleReturnValues: [TypedOperand(op: convert(v, symbolTable, typedSymbolTable), tp: t)],
                 returnInMemory: false
             )
         }
-        if isScalar(t) {
+        if isScalar(t) && sEntry == nil {
             return ClassifiedReturn(
                 integerReturnValues: [TypedOperand(op: convert(v, symbolTable, typedSymbolTable), tp: t)],
                 doubleReturnValues: [],
