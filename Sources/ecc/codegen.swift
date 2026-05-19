@@ -129,8 +129,12 @@ func convert(_ operand: Assembly.Tree.Operand, _ width: RegisterWidth = .fourByt
             }
         case .Stack(let slot):
             return "\(slot)(%rbp)"
-        case .Data(let name):
-            return "\(name)(%rip)"
+        case .Data(let name, let offset):
+            if offset == 0 {
+                return "\(name)(%rip)"
+            } else {
+                return "\(name)+\(offset)(%rip)"
+            }
         case .Memory(let reg, let off):
             let prefix = off == 0 ? "" : "\(off)"
             return "\(prefix)(\(convert(.Register(reg), .eightByte)))"
