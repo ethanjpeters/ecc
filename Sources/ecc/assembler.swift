@@ -967,7 +967,15 @@ class Assembly {
                             print("Something has gone terribly wrong and we're trying to copy more than 8 bytes from a register")
                             exit(ExitCode.internalError.rawValue)
                         }
-                        // TODO:
+                        var offset: UInt = 0
+                        while offset < size {
+                            let dstByte = addOffset(op, offset)
+                            out.append(.Mov(.Byte, .Register(r), dstByte))
+                            if offset < size - 1 {
+                                out.append(.Binary(.Shr, .Quadword, .Immediate(.UnsignedImmediate(8)), .Register(r)))
+                            }
+                            offset = offset + 1
+                        }
                     }
 
                     var returnInMemory = false
