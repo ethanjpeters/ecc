@@ -203,23 +203,21 @@ class Assembly {
         public let stackArguments: [TypedOperand]
     }
 
-    func classifyParams(_ values: [Tacky.IR.Value], _ returnInMemory: Bool, _ symbolTable: [String: Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: TypeTable) -> ClassifiedParams {
-
-        // TODO:
-        func getEightbyteType(_ offset: Int, _ size: Int) -> Tree.AssemblyType {
-            let bytesFromEnd = size - offset
-            if bytesFromEnd >= 8 {
-                return .Quadword
-            }
-            if bytesFromEnd >= 4 {
-                return .Longword
-            }
-            if bytesFromEnd == 1 {
-                return .Byte
-            }
-            return .ByteArray(UInt(bytesFromEnd), 8)
+    func getEightbyteType(_ offset: Int, _ size: Int) -> Tree.AssemblyType {
+        let bytesFromEnd = size - offset
+        if bytesFromEnd >= 8 {
+            return .Quadword
         }
+        if bytesFromEnd >= 4 {
+            return .Longword
+        }
+        if bytesFromEnd == 1 {
+            return .Byte
+        }
+        return .ByteArray(UInt(bytesFromEnd), 8)
+    }
 
+    func classifyParams(_ values: [Tacky.IR.Value], _ returnInMemory: Bool, _ symbolTable: [String: Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: TypeTable) -> ClassifiedParams {
         var intRegArgs: [TypedOperand] = []
         var doubleRegArgs: [TypedOperand] = []
         var stackArgs: [TypedOperand] = []
@@ -317,6 +315,83 @@ class Assembly {
         }
 
         return ClassifiedParams(integerRegisterArguments: intRegArgs, floatingRegisterArguments: doubleRegArgs, stackArguments: stackArgs)
+    }
+
+    struct ClassifiedReturn {
+        public let integerReturnValues: [TypedOperand]
+        public let doubleReturnValues: [TypedOperand]
+        public let returnInMemory: Bool
+    }
+
+    func classifyReturNValue(_ v : Tacky.IR.Value, _ symbolTable: [String: Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: TypeTable) -> ClassifiedReturn {
+        let t = deduceType(v, typedSymbolTable, typeTable)
+
+        if t == .Double {
+            return ClassifiedReturn(
+                integerReturnValues: [],
+                doubleReturnValues: [TypedOperand(op: convert(v, symbolTable, typedSymbolTable), tp: t)],
+                returnInMemory: false
+            )
+        }
+        if isScalar(t) {
+            return ClassifiedReturn(
+                integerReturnValues: [TypedOperand(op: convert(v, symbolTable, typedSymbolTable), tp: t)],
+                doubleReturnValues: [],
+                returnInMemory: false
+            )
+        }
+        // v is a structure
+        let klazzes : [StructClass]
+        let structSize : Int
+        let varName : String
+        switch v {
+            case .Constant(_):
+                print("There is no such thing as a constant struct")
+                exit(ExitCode.internalError.rawValue)
+            case .Var(let name):
+                varName = name
+                if let (sType, _) = typedSymbolTable[name] {
+                    switch sType {
+                        case .Structure(let tag):
+                            if let se = typeTable[tag] {
+                                klazzes = classifyStruct(se, typeTable)
+                                structSize = se.size
+                            } else {
+                                print("Tried to return undefined struct \(tag) from function")
+                                exit(ExitCode.internalError.rawValue)
+                            }
+                        default:
+                            print("Unreachable case where we're trying to return a non-struct from a function as a struct")
+                            exit(ExitCode.internalError.rawValue)
+                    }
+                } else {
+                    print("Unreachable case where a structure was not defined before we tried to return it from a function")
+                    exit(ExitCode.internalError.rawValue)
+                }
+        }
+        if klazzes[0] == .Memory {
+            // the whole structure is returned in memory
+            return ClassifiedReturn(integerReturnValues: [], doubleReturnValues: [], returnInMemory: true)
+        }
+        // the structure is returned in registers
+        // partition it into eightbytes by class
+        var intRetVals: [TypedOperand] = []
+        var doubleRetVals: [TypedOperand] = []
+        var offset: UInt = 0
+        for k in klazzes {
+            let op : Tree.Operand = .PseudoMem(varName, offset)
+            switch k {
+                case .SSE:
+                    doubleRetVals.append(TypedOperand(op: op, tp: .Double))
+                case .Integer:
+                    intRetVals.append(TypedOperand(op: op, tp: getEightbyteType(Int(offset), structSize)))
+                case .Memory:
+                    print("Um, we decided this class was **not** memory, remember?")
+                    exit(ExitCode.internalError.rawValue)
+            }
+            offset = offset + 8
+        }
+        return ClassifiedReturn(integerReturnValues: intRetVals, doubleReturnValues: doubleRetVals, returnInMemory: false)
     }
 
     func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable) -> Assembly.Tree.Operand {
@@ -852,11 +927,13 @@ class Assembly {
                     // save context (currently not an issue because we only use scratch registers)
                     // move parameters into place
 
+                    var returnInMemory = false // TODO:
+
                     // 1. use the helper function to classify incoming parameters
-                    let paramClasses = classifyParams(params, /* TODO */ false, symbolTable, typedSymbolTable, typeTable)
+                    let paramClasses = classifyParams(params, returnInMemory, symbolTable, typedSymbolTable, typeTable)
                     // 2. assign to registers/stack
                     let fpRegisterTargets : [Tree.Register] = [.XMM0, .XMM1, .XMM2, .XMM3, .XMM4, .XMM5, .XMM6, .XMM7]
-                    let intRegisterTargets : [Tree.Register] = [.DI, .SI, .DX, .CX, .R8, .R9] // TODO: DI
+                    let intRegisterTargets : [Tree.Register] = (returnInMemory ? [.DI] : []) + [.SI, .DX, .CX, .R8, .R9]
                     for (fpReg, fpParm) in zip(fpRegisterTargets, paramClasses.floatingRegisterArguments) {
                         out.append(.Mov(fpParm.tp, fpParm.op, .Register(fpReg)))
                     }
