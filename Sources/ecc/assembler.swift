@@ -129,6 +129,69 @@ class Assembly {
         }
     }
 
+    enum StructClass {
+        case Memory
+        case SSE
+        case Integer
+    }
+
+    typealias StructEntry = SemanticAnalyzer.TypeChecker.TypeTableEntry.StructEntry
+    typealias MemberEntry = SemanticAnalyzer.TypeChecker.TypeTableEntry.MemberEntry
+    typealias TypeTable = SemanticAnalyzer.TypeChecker.TypeTable
+
+    func classifyStruct(_ s: StructEntry, _ typeTable: TypeTable) -> [StructClass] {
+        // if a struct is bigger than 16 bytes, then it is treated
+        // as a collection of eightbyte values all stored in memory
+        if s.size > 16 {    // magic number much?
+            var sz = s.size
+            var out: [StructClass] = []
+            while sz > 0 {
+                out.append(.Memory)
+                sz = sz - 8
+            }
+            return out
+        }
+
+        // flatten list of members, including nested structs
+        var members: [MemberEntry] = []
+        func dumpMembers(_ se: StructEntry) {
+            for m in se.members {
+                switch m.typeSpec {
+                    case .Structure(let tag):
+                        if let x = typeTable[tag] {
+                            dumpMembers(x)
+                        } else {
+                            print("Unreachable case where nested struct is not defined anywhere")
+                            exit(ExitCode.internalError.rawValue)
+                        }
+                    default: members.append(m)
+                }
+            }
+        }
+
+        // if a struct is bigger than 8 bytes (i.e. has at least two elements)
+        if s.size > 8 {
+            // this seems odd to me, but I'm rolling with it
+            if members.first!.typeSpec == .Double && members.last!.typeSpec == .Double {
+                return [.SSE, .SSE]
+            }
+            if members.first!.typeSpec == .Double {
+                return [.SSE, .Integer]
+            }
+            if members.last!.typeSpec == .Double {
+                return [.Integer, .SSE]
+            }
+            return [.Integer, .Integer]
+        } else {
+            // otherwise, treat it as a single eightbyte value, which is either an integer or a double
+            if members.first!.typeSpec == .Double {
+                return [.SSE]
+            } else {
+                return [.Integer]
+            }
+        }
+    }
+
     let negativeZero : Assembly.Tree.Declaration = .StaticConstant(negativeZeroLabel, 16, .DoubleInit(-0.0))
     let biggestQuadword : Assembly.Tree.Declaration = .StaticConstant(biggestQuadwordLabel, 8, .DoubleInit(biggestQuadwordValue))
 
