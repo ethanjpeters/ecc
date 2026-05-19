@@ -542,6 +542,16 @@ class Assembly {
         }
     }
 
+    func getAssemblyTypeSize(_ tp: Tree.AssemblyType) -> UInt {
+        switch tp {
+            case .Quadword: fallthrough
+            case .Double: return 8
+            case .Longword: return 4
+            case .Byte: return 1
+            case .ByteArray(let sz, _): return sz
+        }
+    }
+
     let negativeZero : Assembly.Tree.Declaration = .StaticConstant(negativeZeroLabel, 16, .DoubleInit(-0.0))
     let biggestQuadword : Assembly.Tree.Declaration = .StaticConstant(biggestQuadwordLabel, 8, .DoubleInit(biggestQuadwordValue))
 
@@ -865,10 +875,42 @@ class Assembly {
             switch instr {
                 case .Return(let val):
                     if let v = val {
-                        let tp = deduceType(v, typedSymbolTable, typeTable)
-                        out.append(.Mov(tp, convert(v, symbolTable, typedSymbolTable), tp == .Double ? .Register(.XMM0) : .Register(.AX)))
+                        let returnClasses = classifyReturnValue(v, symbolTable, typedSymbolTable, typeTable)
+
+                        if returnClasses.returnInMemory {
+                            out.append(.Mov(.Quadword, .Memory(.BP, -8), .Register(.AX)))
+                            let retStorage: Tree.Operand = .Memory(.AX, 0)
+                            let retOp = convert(v, symbolTable, typedSymbolTable)
+                            let t = deduceType(v, typedSymbolTable, typeTable)
+                            copyBytes(getAssemblyTypeSize(t), retOp, retStorage, &out)
+                        } else {
+                            let intRetRegs : [Tree.Register] = [ .AX, .DX ]
+                            let doubleRetRegs : [Tree.Register] = [ .XMM0, .XMM1 ]
+
+                            var regIndex = 0
+                            for intRet in returnClasses.integerReturnValues {
+                                let r = intRetRegs[regIndex]
+                                switch intRet.tp {
+                                    case .ByteArray(let sz, _):
+                                        copyBytesToRegister(intRet.op, r, sz, &out)
+                                    default:
+                                        out.append(.Mov(intRet.tp, intRet.op, .Register(r)))
+                                }
+                                regIndex = regIndex + 1
+                            }
+
+                            regIndex = 0
+                            for fpRet in returnClasses.doubleReturnValues {
+                                let r = doubleRetRegs[regIndex]
+                                out.append(.Mov(.Double, fpRet.op, .Register(r)))
+                                regIndex = regIndex + 1
+                            }
+                        }
+
+                        out.append(.Ret)
+                    } else {
+                        out.append(.Ret)
                     }
-                    out.append(.Ret)
                 case .Unary(let op, let src, let dst):
                     let srcType = deduceType(src, typedSymbolTable, typeTable)
                     let isFlop = (srcType == .Double)
