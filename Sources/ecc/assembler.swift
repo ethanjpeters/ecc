@@ -192,6 +192,183 @@ class Assembly {
         }
     }
 
+    struct TypedOperand {
+        public let op: Tree.Operand
+        public let tp: Tree.AssemblyType
+    }
+
+    struct ClassifiedParams {
+        public let integerRegisterArguments: [TypedOperand]
+        public let floatingRegisterArguments: [TypedOperand]
+        public let stackArguments: [TypedOperand]
+    }
+
+    func classifyParams(_ values: [Tacky.IR.Value], _ returnInMemory: Bool, _ symbolTable: [String: Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable, _ typeTable: TypeTable) -> ClassifiedParams {
+
+        // TODO:
+        func getEightbyteType(_ offset: Int, _ size: Int) -> Tree.AssemblyType {
+            let bytesFromEnd = size - offset
+            if bytesFromEnd >= 8 {
+                return .Quadword
+            }
+            if bytesFromEnd >= 4 {
+                return .Longword
+            }
+            if bytesFromEnd == 1 {
+                return .Byte
+            }
+            return .ByteArray(UInt(bytesFromEnd), 8)
+        }
+
+        var intRegArgs: [TypedOperand] = []
+        var doubleRegArgs: [TypedOperand] = []
+        var stackArgs: [TypedOperand] = []
+
+        let intRegsAvailable = returnInMemory ? 5 : 6
+        let fpRegsAvailable = 8
+
+        for v in values {
+            let typedOp = TypedOperand(op: convert(v, symbolTable, typedSymbolTable), tp: deduceType(v, typedSymbolTable, typeTable))
+            if typedOp.tp == .Double {
+                if doubleRegArgs.count < fpRegsAvailable {
+                    doubleRegArgs.append(typedOp)
+                } else {
+                    stackArgs.append(typedOp)
+                }
+            } else if isScalar(typedOp.tp) {
+                if intRegArgs.count < intRegsAvailable {
+                    intRegArgs.append(typedOp)
+                } else {
+                    doubleRegArgs.append(typedOp)
+                }
+            } else {
+                // value is a structure, complicated stuff to be found here
+                // ok, first all of, split the struct into eightbyteses by class
+                // well, first-first we need to get the StructEntry for this object; this is giving me a headache. Ok, this should be a variable
+                let klazzes : [StructClass]
+                let structSize : Int
+                let varName : String
+                var useStack = true
+                switch v {
+                    case .Constant(_):
+                        print("There is no such thing as a constant struct")
+                        exit(ExitCode.internalError.rawValue)
+                    case .Var(let name):
+                        varName = name
+                        if let (sType, _) = typedSymbolTable[name] {
+                            switch sType {
+                                case .Structure(let tag):
+                                    if let se = typeTable[tag] {
+                                        klazzes = classifyStruct(se, typeTable)
+                                        structSize = se.size
+                                    } else {
+                                        print("Tried to pass undefined struct \(tag) to function")
+                                        exit(ExitCode.internalError.rawValue)
+                                    }
+                                default:
+                                    print("Unreachable case where we're trying to pass a non-struct to a function as a struct")
+                                    exit(ExitCode.internalError.rawValue)
+                            }
+                        } else {
+                            print("Unreachable case where a structure was not defined before we tried to pass it to a function")
+                            exit(ExitCode.internalError.rawValue)
+                        }
+                }
+                // then, potentially, put things in registers
+                if klazzes.first! != .Memory {
+                    // make tentative assignments to registers
+                    var tentativeInts: [TypedOperand] = []
+                    var tentativeDoubles: [TypedOperand] = []
+                    var offset: UInt = 0
+
+                    for k in klazzes {
+                        let op : Tree.Operand = .PseudoMem(varName, offset)
+                        if k == .SSE {
+                            tentativeDoubles.append(TypedOperand(op: op, tp: .Double))
+                        } else {
+                            let ebType = getEightbyteType(Int(offset), structSize)
+                            tentativeInts.append(TypedOperand(op: op, tp: ebType))
+                        }
+                        offset = offset + 8
+                    }
+
+                    // finalize **if** there are enough registers
+                    if tentativeDoubles.count + doubleRegArgs.count <= fpRegsAvailable && tentativeInts.count + intRegArgs.count <= intRegsAvailable {
+                        for q in tentativeDoubles {
+                            doubleRegArgs.append(q)
+                        }
+                        for q in tentativeInts {
+                            intRegArgs.append(q)
+                        }
+                        useStack = false
+                    }
+                }
+                // finally, put stuff on the stack
+                if useStack {
+                    var offset: UInt = 0
+                    for _ in klazzes {
+                        let op: Tree.Operand = .PseudoMem(varName, offset)
+                        let ebType = getEightbyteType(Int(offset), structSize)
+                        stackArgs.append(TypedOperand(op: op, tp: ebType))
+                        offset = offset + 8
+                    }
+                }
+            }
+        }
+
+        return ClassifiedParams(integerRegisterArguments: intRegArgs, floatingRegisterArguments: doubleRegArgs, stackArguments: stackArgs)
+    }
+
+    func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable) -> Assembly.Tree.Operand {
+        switch val {
+            case .Constant(let c):
+                switch c {
+                    case .ConstInt(let i): return .Immediate(.SignedImmediate(Int(i)))
+                    case .ConstLong(let i): return .Immediate(.SignedImmediate(Int(i)))
+                    case .ConstUnsignedInt(let i): return .Immediate(.UnsignedImmediate(UInt(i)))
+                    case .ConstUnsignedLong(let i): return .Immediate(.UnsignedImmediate(UInt(i)))
+                    case .ConstDouble(let f):
+                        guard let staticVar = self.extractedDoubles[f] else {
+                            print("Somehow got a constant double that has not been extracted")
+                            exit(ExitCode.internalError.rawValue)
+                        }
+                        switch staticVar {
+                            case .StaticConstant(let name, _, _):
+                                return .Data(name, 0)
+                            default:
+                                print("static declaration of a floating point constant is somehow not a constant?")
+                                exit(ExitCode.internalError.rawValue)
+                        }
+                    case .ConstChar(let i32): return .Immediate(.SignedImmediate(Int(i32)))
+                    case .ConstUnsignedChar(let i32): return .Immediate(.SignedImmediate(Int(i32)))
+                }
+            case .Var(let name):
+                if let _ = symbolTable[name] {
+                    return .Data(name, 0)
+                }
+                if let x = typedSymbolTable[name] {
+                    switch x.0 {
+                        case .ArrayType(_, _):
+                            return .PseudoMem(name, 0)
+                        case .Structure(_):
+                            return .PseudoMem(name, 0)
+                        default: ()
+                    }
+                }
+                return .Pseudo(name)
+        }
+    }
+
+    func isScalar(_ t: Tree.AssemblyType) -> Bool {
+        switch t {
+            case .Byte: fallthrough
+            case .Longword: fallthrough
+            case .Quadword: fallthrough
+            case .Double: return true
+            case .ByteArray(_, _): return false
+        }
+    }
+
     let negativeZero : Assembly.Tree.Declaration = .StaticConstant(negativeZeroLabel, 16, .DoubleInit(-0.0))
     let biggestQuadword : Assembly.Tree.Declaration = .StaticConstant(biggestQuadwordLabel, 8, .DoubleInit(biggestQuadwordValue))
 
@@ -293,46 +470,6 @@ class Assembly {
         let out = "L._assembly.label.\(labelCounter)"
         labelCounter = labelCounter + 1
         return out
-    }
-
-    func convert(_ val: Tacky.IR.Value, _ symbolTable: [String : Assembly.Tree.Declaration], _ typedSymbolTable: SymbolTable) -> Tree.Operand {
-        switch val {
-            case .Constant(let c):
-                switch c {
-                    case .ConstInt(let i): return .Immediate(.SignedImmediate(Int(i)))
-                    case .ConstLong(let i): return .Immediate(.SignedImmediate(Int(i)))
-                    case .ConstUnsignedInt(let i): return .Immediate(.UnsignedImmediate(UInt(i)))
-                    case .ConstUnsignedLong(let i): return .Immediate(.UnsignedImmediate(UInt(i)))
-                    case .ConstDouble(let f):
-                        guard let staticVar = self.extractedDoubles[f] else {
-                            print("Somehow got a constant double that has not been extracted")
-                            exit(ExitCode.internalError.rawValue)
-                        }
-                        switch staticVar {
-                            case .StaticConstant(let name, _, _):
-                                return .Data(name, 0)
-                            default:
-                                print("static declaration of a floating point constant is somehow not a constant?")
-                                exit(ExitCode.internalError.rawValue)
-                        }
-                    case .ConstChar(let i32): return .Immediate(.SignedImmediate(Int(i32)))
-                    case .ConstUnsignedChar(let i32): return .Immediate(.SignedImmediate(Int(i32)))
-                }
-            case .Var(let name):
-                if let _ = symbolTable[name] {
-                    return .Data(name, 0)
-                }
-                if let x = typedSymbolTable[name] {
-                    switch x.0 {
-                        case .ArrayType(_, _):
-                            return .PseudoMem(name, 0)
-                        case .Structure(_):
-                            return .PseudoMem(name, 0)
-                        default: ()
-                    }
-                }
-                return .Pseudo(name)
-        }
     }
 
     func deduceType(_ val: Tacky.IR.Value, _ symbolTable: SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> Tree.AssemblyType {
