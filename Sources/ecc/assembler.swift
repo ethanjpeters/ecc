@@ -238,7 +238,7 @@ class Assembly {
                 if intRegArgs.count < intRegsAvailable {
                     intRegArgs.append(typedOp)
                 } else {
-                    doubleRegArgs.append(typedOp)
+                    stackArgs.append(typedOp)
                 }
             } else {
                 // value is a structure, complicated stuff to be found here
