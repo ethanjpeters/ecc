@@ -284,7 +284,7 @@ func emitInstructions(_ instructions: [Assembly.Tree.Instruction], out: inout [S
 
 func emitProgramLevelStatement(_ pls: Assembly.Tree.Declaration, out: inout [String]) {
     switch pls {
-        case .Function(let name, let isGlobal, let instrs):
+        case .Function(let name, let isGlobal, let instrs, _):
             let fName = makeFunctionName(name)
             if isGlobal {
                 out.append("\t.global \(fName)")

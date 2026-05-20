@@ -115,7 +115,7 @@ class Assembly {
         }
 
         enum Declaration {
-            case Function(String, Bool /* is global */, [Instruction])
+            case Function(String, Bool /* is global */, [Instruction], Bool /* return in memory */)
             case StaticVariable(String /* name */, Bool /* is global */, Int /* alignment */, [SemanticAnalyzer.TypeChecker.StaticInit] /* initial values */)
             case StaticConstant(String /* name */, Int /* alignment */, SemanticAnalyzer.TypeChecker.StaticInit /* init */)
         }
@@ -1381,7 +1381,7 @@ class Assembly {
                 // 4. emit body
                 generate(instrs, symbolTable, &out, typedSymbolTable, typeTable)
                 // 5. construct return
-                return .Function(name, isGlobal, out)
+                return .Function(name, isGlobal, out, returnInMemory)
             case .StaticVariable(_, _, _, _):
                 print("As yet unhandled global variable caught while generating assembly")
                 exit(ExitCode.internalError.rawValue)
@@ -1621,13 +1621,14 @@ class Assembly {
 
                 switch tp {
                     case .ArrayType(_, _): ()
+                    case .Structure(_): ()
                     default:
-                        print("Impossible situation reached where pseudo mem operand is not an array (\(tp), \(name))")
+                        print("Impossible situation reached where pseudo mem operand is neither an array nor a struct (\(tp), \(name))")
                         exit(ExitCode.internalError.rawValue)
                 }
 
                 switch attr {
-                    case .StaticAttr(_, _): return .Data(name, 0)
+                    case .StaticAttr(_, _): return .Data(name, Int(offset))
                     default: ()
                 }
 
@@ -1650,10 +1651,10 @@ class Assembly {
         }
     }
 
-    func replacePseudoRegisters(_ instructions: [Tree.Instruction], _ symbolTable : SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> [Tree.Instruction] {
+    func replacePseudoRegisters(_ instructions: [Tree.Instruction], _ symbolTable : SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable, _ returnInMemory: Bool) -> [Tree.Instruction] {
         var out : [Tree.Instruction] = []
 
-        var stackSlotCounter : Int = 0
+        var stackSlotCounter : Int = returnInMemory ? 8 : 0
         var nameStackMapping : [String: Int] = [:]
 
         for instr: Assembly.Tree.Instruction in instructions {
@@ -1725,8 +1726,8 @@ class Assembly {
 
     func replacePseudoRegisters(_ pls: Tree.Declaration, _ symbolTable : SymbolTable, _ typeTable: SemanticAnalyzer.TypeChecker.TypeTable) -> Tree.Declaration {
         switch pls {
-            case .Function(let name, let isGlobal, let instrs):
-                return .Function(name, isGlobal, replacePseudoRegisters(instrs, symbolTable, typeTable))
+            case .Function(let name, let isGlobal, let instrs, let returnInMemory):
+                return .Function(name, isGlobal, replacePseudoRegisters(instrs, symbolTable, typeTable, returnInMemory), returnInMemory)
             case .StaticVariable(let name, let isGlobal, let alignment, let initVal):
                 return .StaticVariable(name, isGlobal, alignment, initVal)
             case .StaticConstant(let name, let alignment, let initVal):
@@ -2067,8 +2068,8 @@ class Assembly {
 
     func fixUpMoves(_ pls: Tree.Declaration) -> Tree.Declaration {
         switch pls {
-            case .Function(let name, let isGlobal, let instrs):
-                return .Function(name, isGlobal, fixUpMoves(instrs))
+            case .Function(let name, let isGlobal, let instrs, let rim):
+                return .Function(name, isGlobal, fixUpMoves(instrs), rim)
             case .StaticVariable(_, _, _, _):
                 return pls
             case .StaticConstant(_, _, _):
@@ -2089,7 +2090,7 @@ class Assembly {
                 var fixedDecls : [Tree.Declaration] = []
                 for dec in decls {
                     switch dec {
-                        case .Function(let name, let isGlobal, let body):
+                        case .Function(let name, let isGlobal, let body, let rim):
                             var fixedBody : [Tree.Instruction] = []
                             for instr in body {
                                 switch instr {
@@ -2269,7 +2270,7 @@ class Assembly {
                                     case .Cvtsi2sd(_, _, _): fixedBody.append(instr)
                                 }
                             }
-                            fixedDecls.append(.Function(name, isGlobal, fixedBody))
+                            fixedDecls.append(.Function(name, isGlobal, fixedBody, rim))
                         case .StaticVariable(_, _, _, _):
                             fixedDecls.append(dec)
                         case .StaticConstant(_, _, _):
