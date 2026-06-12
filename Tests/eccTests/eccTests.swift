@@ -24,7 +24,7 @@ struct ProgramSourceCodes {
 }
 
 @Suite("Lexer Tests")
-struct LexerTest {
+struct LexerTests {
     private func toks(_ from: String) -> [Lexer.Token] {
         let lexer = Lexer(withString: from)
         let tokenStream = lexer.lex()
@@ -133,7 +133,7 @@ struct LexerTest {
 }
 
 @Suite("Parser Tests")
-struct ParserTest {
+struct ParserTests {
     private func ast(_ from: String) -> Parser.AST.Program {
         let lexer = Lexer(withString: from)
         var tokenStream = lexer.lex()
@@ -153,5 +153,43 @@ struct ParserTest {
                 nil
             )
         ]))
+    }
+}
+
+@Suite("Analyzer Tests")
+struct AnalysisTests {
+    private func ast(_ from: String) -> (Parser.AST.Program, [String : (SemanticAnalyzer.TypeChecker.CheckerType, SemanticAnalyzer.TypeChecker.IdentifierAttributes)], SemanticAnalyzer.TypeChecker.TypeTable) {
+        let lexer = Lexer(withString: from)
+        var tokenStream = lexer.lex()
+        let ast = Parser().parse(tokenStream: &tokenStream)
+        return SemanticAnalyzer().analyze(ast)
+    }
+
+    func testMostBasicProgram() async throws {
+        let (vAst, sTable, tTable) = ast(ProgramSourceCodes.ret2)
+        let expAst : Parser.AST.Program = .Statement([
+            .FunctionDeclaration(.Int,
+                "main",
+                [],
+                .Block([
+                    .S(.Return(.Constant(
+                        .ConstInt(Int32(2)), .Int)
+                    ))
+                ]),
+                nil
+            )
+        ])
+        #expect(vAst == expAst)
+        let expSTable : [String : (SemanticAnalyzer.TypeChecker.CheckerType, SemanticAnalyzer.TypeChecker.IdentifierAttributes)] = [
+            "main" : (.Function(.Int, []), .FunAttr(true, true))
+        ]
+        #expect(sTable.count == expSTable.count)
+        #expect(sTable.keys == expSTable.keys)
+        for k in sTable.keys {
+            let (lTp, lIdentAttr) = sTable[k]!
+            let (rTp, rIdentAttr) = expSTable[k]!
+            #expect(lTp == rTp)
+            #expect(lIdentAttr == rIdentAttr)
+        }
     }
 }

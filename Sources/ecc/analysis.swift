@@ -565,8 +565,8 @@ class SemanticAnalyzer {
         }
     }
 
-    class TypeChecker {
-        indirect enum CheckerType : Equatable {
+    public class TypeChecker {
+        public indirect enum CheckerType : Equatable {
             case Char
             case SChar
             case UChar
@@ -595,34 +595,34 @@ class SemanticAnalyzer {
             case PointerInit(String /* name */)
         }
 
-        enum InitialValue {
+        public enum InitialValue : Equatable {
             case Tentative
             case Initial([StaticInit])   // NOTE: other types will affect this
             case NoInitializer
         }
 
-        enum IdentifierAttributes {
+        public enum IdentifierAttributes : Equatable {
             case FunAttr(Bool /* is defined */, Bool /* is global */)
             case StaticAttr(InitialValue /* init */, Bool /* is global */)
             case ConstantAttr(StaticInit /* init */)
             case LocalAttr
         }
 
-        public struct TypeTableEntry {
-            public struct MemberEntry {
+        public struct TypeTableEntry : Equatable {
+            public struct MemberEntry : Equatable {
                 public let identifier: String
                 public let typeSpec: Parser.AST.CType
                 public let offset: Int
             }
 
-            public struct StructEntry {
+            public struct StructEntry : Equatable {
                 public let alignment: Int
                 public let size: Int
                 public let members: [MemberEntry]
             }
         }
 
-        typealias TypeTable = [String: TypeTableEntry.StructEntry]
+        public typealias TypeTable = [String: TypeTableEntry.StructEntry]
 
         func alignment(_ tp: Parser.AST.CType, _ table: TypeTable) -> Int {
             switch tp {                
