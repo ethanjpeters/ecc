@@ -582,7 +582,7 @@ class SemanticAnalyzer {
             case Structure(String /* tag */)
         }
 
-        enum StaticInit {
+        public enum StaticInit : Equatable {
             case IntInit(Int32)
             case UIntInit(UInt32)
             case LongInit(Int64)

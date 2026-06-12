@@ -3,8 +3,8 @@ import Foundation
 typealias SymbolTable = [String : (SemanticAnalyzer.TypeChecker.CheckerType, SemanticAnalyzer.TypeChecker.IdentifierAttributes)]
 
 class Tacky {
-    struct IR {
-        enum UnaryOperator {
+    public struct IR {
+        public enum UnaryOperator: Equatable {
             case Complement
             case Negate
             case Not
@@ -14,7 +14,7 @@ class Tacky {
             case PostDecrement
         }
 
-        enum BinaryOperator {
+        public enum BinaryOperator: Equatable {
             case Add
             case Subtract
             case Multiply
@@ -35,7 +35,7 @@ class Tacky {
             case BitwiseShiftLeft
         }
 
-        enum ConstVal {
+        public enum ConstVal: Equatable {
             case ConstChar(Int32)
             case ConstUnsignedChar(Int32)
             case ConstInt(Int32)
@@ -45,12 +45,12 @@ class Tacky {
             case ConstDouble(Double)
         }
 
-        enum Value {
+        public enum Value: Equatable {
             case Constant(ConstVal)
             case Var(String)
         }
 
-        enum Instruction {
+        public enum Instruction: Equatable {
             case Return(Value?)
             case Unary(UnaryOperator, Value/* src */, Value /* dst */)
             case Binary(BinaryOperator, Value /* src1 */, Value /* src2 */, Value /* dst */)
@@ -75,13 +75,13 @@ class Tacky {
             case CopyFromOffset(String /* src */, Int /* offset */, Value /* dst */)
         }
 
-        enum Declaration {
+        public enum Declaration: Equatable {
             case Function(String /* name */, Bool /* is global */, [String] /* params */, [Instruction] /* body */)
             case StaticVariable(String /* name */, Bool /* is global */, Parser.AST.CType, [SemanticAnalyzer.TypeChecker.StaticInit] /* initial value */)
             case StaticConstant(String /* name */, Parser.AST.CType /* type */, SemanticAnalyzer.TypeChecker.StaticInit /* init */)
         }
 
-        enum Program {
+        public enum Program: Equatable {
             case Statement([Declaration])
         }
     }
