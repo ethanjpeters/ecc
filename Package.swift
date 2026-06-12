@@ -1,10 +1,13 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.3
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
 
 let package = Package(
     name: "ecc",
+    platforms: [
+        .macOS(.v10_15)
+    ],
     products: [
         .executable(name: "ecc", targets: ["ecc"])
     ],
