@@ -11,16 +11,30 @@ struct ProgramSourceCodes {
         return 2;
     }
     """
+
+    static let arrays : String = """
+    static int z[4];
+
+    int main(void) {
+        int x[3] = { 1, 2, 3 };
+        int y[2][3] = { { 3, 4, 5 }, { 6, 7, 8 } };
+        return x[2];
+    }
+    """
 }
 
 @Suite("Lexer Tests")
 struct LexerTest {
+    private func toks(_ from: String) -> [Lexer.Token] {
+        let lexer = Lexer(withString: from)
+        let tokenStream = lexer.lex()
+        let justTokens = tokenStream.map { $0.0 }
+        return justTokens
+    }
+
     @Test("Most basic program")
     func testMostBasicProgram() async throws {
-        let lexer = Lexer(withString: ProgramSourceCodes.ret2)
-        let tokenStream = lexer.lex()
-        let justTokens = tokenStream.map{ $0.0 }
-        #expect(justTokens == [
+        #expect(toks(ProgramSourceCodes.ret2) == [
             .keywordInt,
             .identifier("main"),
             .openParen,
@@ -32,5 +46,88 @@ struct LexerTest {
             .semicolon,
             .closeBrace
         ])
+    }
+
+    @Test("Basic arrays program")
+    func testBasicArraysProgram() async throws {
+        let staticDef : [Lexer.Token] = [
+            .keywordStatic,
+            .keywordInt,
+            .identifier("z"),
+            .openBracket,
+            .constant("4"),
+            .closeBracket,
+            .semicolon,
+        ]
+        let mainHeader : [Lexer.Token] = [
+            .keywordInt,
+            .identifier("main"),
+            .openParen,
+            .keywordVoid,
+            .closeParen,
+            .openBrace,
+        ]
+        let xDef : [Lexer.Token] = [
+            .keywordInt,
+            .identifier("x"),
+            .openBracket,
+            .constant("3"),
+            .closeBracket,
+            .equal,
+            .openBrace,
+            .constant("1"),
+            .comma,
+            .constant("2"),
+            .comma,
+            .constant("3"),
+            .closeBrace,
+            .semicolon
+        ]
+        let yDef : [Lexer.Token] = [
+            .keywordInt,
+            .identifier("y"),
+            .openBracket,
+            .constant("2"),
+            .closeBracket,
+            .openBracket,
+            .constant("3"),
+            .closeBracket,
+            .equal,
+            .openBrace,
+            .openBrace,
+            .constant("3"),
+            .comma,
+            .constant("4"),
+            .comma,
+            .constant("5"),
+            .closeBrace,
+            .comma,
+            .openBrace,
+            .constant("6"),
+            .comma,
+            .constant("7"),
+            .comma,
+            .constant("8"),
+            .closeBrace,
+            .closeBrace,
+            .semicolon,
+        ]
+        let retStmt : [Lexer.Token] = [
+            .keywordReturn,
+            .identifier("x"),
+            .openBracket,
+            .constant("2"),
+            .closeBracket,
+            .semicolon,
+            .closeBrace
+        ]
+        let t = toks(ProgramSourceCodes.arrays)
+        #expect(t == (
+            staticDef +
+            mainHeader +
+            xDef +
+            yDef +
+            retStmt
+        ))
     }
 }
