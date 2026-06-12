@@ -142,17 +142,16 @@ struct ParserTest {
 
     func testMostBasicProgram() async throws {
         #expect(ast(ProgramSourceCodes.ret2) == .Statement([
-                .FunctionDeclaration(.Int,
-                    "main",
-                    [],
-                    .Block([
-                        .S(.Return(.Constant(
-                            .ConstInt(Int32(2)), nil)
-                        ))
-                    ]),
-                    nil
-                )
-            ])
-        )
+            .FunctionDeclaration(.Int,
+                "main",
+                [],
+                .Block([
+                    .S(.Return(.Constant(
+                        .ConstInt(Int32(2)), nil)
+                    ))
+                ]),
+                nil
+            )
+        ]))
     }
 }
