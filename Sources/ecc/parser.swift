@@ -1,8 +1,8 @@
 import Foundation
 
 class Parser {
-    struct AST {
-        enum UnaryOperator {
+    public struct AST {
+        public enum UnaryOperator : Equatable {
             case Complement
             case Negate
             case Not
@@ -12,7 +12,7 @@ class Parser {
             case PostDecrement
         }
         
-        enum BinaryOperator {
+        public enum BinaryOperator : Equatable {
             case Add
             case Subtract
             case Multiply
@@ -35,7 +35,7 @@ class Parser {
             case BitwiseShiftLeft
         }
         
-        enum Constant {
+        public enum Constant : Equatable {
             case ConstInt(Int32)
             case ConstUnsignedInt(UInt32)
             case ConstLong(Int64)
@@ -45,7 +45,7 @@ class Parser {
             case ConstUChar(Int32)
         }
 
-        indirect enum Expression {
+        public indirect enum Expression : Equatable {
             case Constant(Constant, CType?)
             case String(String, CType?)
             case Unary(UnaryOperator, Expression, CType?)
@@ -65,32 +65,32 @@ class Parser {
             case Arrow(Expression /* pointer */, String /* member */, CType?)
         }
 
-        indirect enum Initializer {
+        public indirect enum Initializer : Equatable {
             case SingleInit(Expression)
             case CompoundInit([Initializer])
         }
         
-        enum BlockItem {
+        public enum BlockItem : Equatable {
             case S(Statement)
             case D(Declaration)
         }
         
-        enum Block {
+        public enum Block : Equatable {
             case Block([BlockItem])
         }
         
-        enum ForInit {
+        public enum ForInit : Equatable {
             case InitDecl(Declaration)
             case InitExp(Expression?)
         }
         
-        enum LabeledStatement {
+        public enum LabeledStatement : Equatable {
             case IdentifiedLine(String /* label */, Statement)
             case CaseStatement(Expression /* label, must be a constant */, Statement)
             case DefaultStatement(Statement)
         }
         
-        indirect enum Statement {
+        public indirect enum Statement : Equatable {
             case Return(Expression?)
             case Expression(Expression)
             case If(Expression /* condition */, Statement /* then */, Statement? /* else */)
@@ -105,7 +105,7 @@ class Parser {
             case Labeled(LabeledStatement)
         }
         
-        indirect enum CType : Equatable {
+        public indirect enum CType : Equatable {
             case Char
             case SChar
             case UChar
@@ -121,23 +121,51 @@ class Parser {
             case Structure(String /* tag */)
         }
 
-        enum Parameter {
+        public enum Parameter : Equatable {
             case NamedParameter(CType /* type */, String /* identifier name */)
             // it is sometimes technically valid for a parameter to be unnamed, but not in my America
         }
 
-        enum StorageClass {
+        public enum StorageClass : Equatable {
             case Static
             case Extern
         }
 
-        enum Declaration {
+        public enum Declaration : Equatable {
             case VariableDeclaration(CType /* type */, String /* identifier name */, Initializer?, StorageClass?)
             case FunctionDeclaration(CType /* type signature */, String /* name */, [String] /* param names */, Block? /* body */, StorageClass?)
             case StructDeclaration(String /* tag */, [(String /* member name */, CType /* member type */)] /* members */)
+
+            public static func == (lhs: Parser.AST.Declaration, rhs: Parser.AST.Declaration) -> Bool {
+                switch lhs {
+                    case .VariableDeclaration(let tp, let name, let initializer, let sc):
+                        switch rhs {
+                            case .VariableDeclaration(let rTp, let rName, let rInit, let rSc):
+                                return rTp == tp && name == rName && rInit == initializer && rSc == sc
+                            default: return false
+                        }
+                    case .FunctionDeclaration(let tp, let name, let params, let body, let sc):
+                        switch rhs {
+                            case .FunctionDeclaration(let rTp, let rName, let rParams, let rBody, let rSc):
+                                return tp == rTp && name == rName && params == rParams && body == rBody && sc == rSc
+                            default: return false
+                        }
+                    case .StructDeclaration(let tag, let members):
+                        switch rhs {
+                            case .StructDeclaration(let rTag, let rMembers):
+                                if tag != rTag { return false }
+                                if members.count != rMembers.count { return false }
+                                for (m, rM) in zip(members, rMembers) {
+                                    if m.0 != rM.0 || m.1 != rM.1 { return false }
+                                }
+                                return true
+                            default: return false
+                        }
+                }
+            }
         }
 
-        enum Program {
+        public enum Program : Equatable {
             case Statement([Declaration])
         }
     }

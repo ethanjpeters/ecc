@@ -131,3 +131,28 @@ struct LexerTest {
         ))
     }
 }
+
+@Suite("Parser Tests")
+struct ParserTest {
+    private func ast(_ from: String) -> Parser.AST.Program {
+        let lexer = Lexer(withString: from)
+        var tokenStream = lexer.lex()
+        return Parser().parse(tokenStream: &tokenStream)
+    }
+
+    func testMostBasicProgram() async throws {
+        #expect(ast(ProgramSourceCodes.ret2) == .Statement([
+                .FunctionDeclaration(.Int,
+                    "main",
+                    [],
+                    .Block([
+                        .S(.Return(.Constant(
+                            .ConstInt(Int32(2)), nil)
+                        ))
+                    ]),
+                    nil
+                )
+            ])
+        )
+    }
+}
