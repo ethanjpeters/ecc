@@ -102,6 +102,10 @@ class Lexer {
         sourceFileCharacters = Array(sourceFileContent)
     }
 
+    public init(withString: String) {
+        sourceFileCharacters = Array(withString)
+    }
+
     func enforceAscii(index: Int) {
         if !sourceFileCharacters[index].isASCII {
             print("Encountered illegal non-ASCII character \(sourceFileCharacters[index])")
