@@ -154,6 +154,55 @@ struct ParserTests {
             )
         ]))
     }
+
+    func testBasicArraysProgram() async throws {
+        let xDecl : Parser.AST.Declaration = .VariableDeclaration(
+            .ArrayType(.Int, 3),
+            "x",
+            .CompoundInit([
+                .SingleInit(.Constant(.ConstInt(3), nil)),
+                .SingleInit(.Constant(.ConstInt(4), nil)),
+                .SingleInit(.Constant(.ConstInt(5), nil))
+            ]),
+            nil
+        )
+        let yDecl : Parser.AST.Declaration = .VariableDeclaration(
+            .ArrayType(.ArrayType(.Int, 3), 2),
+            "y",
+            .CompoundInit([
+                .CompoundInit([
+                    .SingleInit(.Constant(.ConstInt(3), nil)),
+                    .SingleInit(.Constant(.ConstInt(4), nil)),
+                    .SingleInit(.Constant(.ConstInt(5), nil)),
+                ]),
+                .CompoundInit([
+                    .SingleInit(.Constant(.ConstInt(6), nil)),
+                    .SingleInit(.Constant(.ConstInt(7), nil)),
+                    .SingleInit(.Constant(.ConstInt(8), nil)),
+                ])
+            ]),
+            nil
+        )
+        #expect(ast(ProgramSourceCodes.arrays) == .Statement([
+            .VariableDeclaration(.ArrayType(.Int, 4), "z", nil, .Static),
+            .FunctionDeclaration(.Int,
+                "main",
+                [],
+                .Block([
+                    .D(xDecl),
+                    .D(yDecl),
+                    .S(.Return(
+                        .Subscript(
+                            .Var("x", nil),
+                            .Constant(.ConstInt(2), nil),
+                            nil
+                        )
+                    ))
+                ]),
+                nil
+            )
+        ]))
+    }
 }
 
 @Suite("Analyzer Tests")
