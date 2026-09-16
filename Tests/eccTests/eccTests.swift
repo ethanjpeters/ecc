@@ -191,5 +191,6 @@ struct AnalysisTests {
             #expect(lTp == rTp)
             #expect(lIdentAttr == rIdentAttr)
         }
+        #expect(tTable.count == 0)
     }
 }
