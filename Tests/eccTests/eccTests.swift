@@ -140,14 +140,15 @@ struct ParserTests {
         return Parser().parse(tokenStream: &tokenStream)
     }
 
+    @Test("Most basic program")
     func testMostBasicProgram() async throws {
         #expect(ast(ProgramSourceCodes.ret2) == .Statement([
-            .FunctionDeclaration(.Int,
+            .FunctionDeclaration(.FunType([], .Int),
                 "main",
                 [],
                 .Block([
                     .S(.Return(.Constant(
-                        .ConstInt(Int32(2)), nil)
+                        .ConstInt(2), nil)
                     ))
                 ]),
                 nil
@@ -155,14 +156,15 @@ struct ParserTests {
         ]))
     }
 
+    @Test("Basic arrays program")
     func testBasicArraysProgram() async throws {
         let xDecl : Parser.AST.Declaration = .VariableDeclaration(
             .ArrayType(.Int, 3),
             "x",
             .CompoundInit([
-                .SingleInit(.Constant(.ConstInt(3), nil)),
-                .SingleInit(.Constant(.ConstInt(4), nil)),
-                .SingleInit(.Constant(.ConstInt(5), nil))
+                .SingleInit(.Constant(.ConstInt(1), nil)),
+                .SingleInit(.Constant(.ConstInt(2), nil)),
+                .SingleInit(.Constant(.ConstInt(3), nil))
             ]),
             nil
         )
@@ -185,7 +187,7 @@ struct ParserTests {
         )
         #expect(ast(ProgramSourceCodes.arrays) == .Statement([
             .VariableDeclaration(.ArrayType(.Int, 4), "z", nil, .Static),
-            .FunctionDeclaration(.Int,
+            .FunctionDeclaration(.FunType([], .Int),
                 "main",
                 [],
                 .Block([
@@ -214,15 +216,16 @@ struct AnalysisTests {
         return SemanticAnalyzer().analyze(ast)
     }
 
+    @Test("Most basic program")
     func testMostBasicProgram() async throws {
         let (vAst, sTable, tTable) = ast(ProgramSourceCodes.ret2)
         let expAst : Parser.AST.Program = .Statement([
-            .FunctionDeclaration(.Int,
+            .FunctionDeclaration(.FunType([], .Int),
                 "main",
                 [],
                 .Block([
                     .S(.Return(.Constant(
-                        .ConstInt(Int32(2)), .Int)
+                        .ConstInt(2), .Int)
                     ))
                 ]),
                 nil
@@ -241,5 +244,57 @@ struct AnalysisTests {
             #expect(lIdentAttr == rIdentAttr)
         }
         #expect(tTable.count == 0)
+    }
+
+    @Test("Basic arrays program")
+    func testBasicArraysProgram() async throws {
+        let (vAst, sTable, tTable) = ast(ProgramSourceCodes.arrays)
+        let xDecl : Parser.AST.Declaration = .VariableDeclaration(
+            .ArrayType(.Int, 3),
+            "x.uniqued.0",
+            .CompoundInit([
+                .SingleInit(.Constant(.ConstInt(1), .Int)),
+                .SingleInit(.Constant(.ConstInt(2), .Int)),
+                .SingleInit(.Constant(.ConstInt(3), .Int))
+            ]),
+            nil
+        )
+        let yDecl : Parser.AST.Declaration = .VariableDeclaration(
+            .ArrayType(.ArrayType(.Int, 3), 2),
+            "y.uniqued.1",
+            .CompoundInit([
+                .CompoundInit([
+                    .SingleInit(.Constant(.ConstInt(3), .Int)),
+                    .SingleInit(.Constant(.ConstInt(4), .Int)),
+                    .SingleInit(.Constant(.ConstInt(5), .Int)),
+                ]),
+                .CompoundInit([
+                    .SingleInit(.Constant(.ConstInt(6), .Int)),
+                    .SingleInit(.Constant(.ConstInt(7), .Int)),
+                    .SingleInit(.Constant(.ConstInt(8), .Int)),
+                ])
+            ]),
+            nil
+        )
+        let expAst : Parser.AST.Program = .Statement([
+            .VariableDeclaration(.ArrayType(.Int, 4), "z", nil, .Static),
+            .FunctionDeclaration(.FunType([], .Int),
+                "main",
+                [],
+                .Block([
+                    .D(xDecl),
+                    .D(yDecl),
+                    .S(.Return(
+                        .Subscript(
+                            .AddrOf(.Var("x.uniqued.0", .ArrayType(.Int, 3)), .Pointer(.Int)),
+                            .Cast(.Long, .Constant(.ConstInt(2), .Int), .Int),
+                            .Int
+                        )
+                    ))
+                ]),
+                nil
+            )
+        ])
+        #expect(vAst == expAst)
     }
 }
