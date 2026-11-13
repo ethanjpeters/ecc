@@ -21,6 +21,31 @@ struct ProgramSourceCodes {
         return x[2];
     }
     """
+
+    static let basicStruct : String = """
+    struct LLNode {
+        void *item;
+        struct LLNode *next;
+    };
+
+    struct LLNode *reverseInternal(struct LLNode * head, struct LLNode * prev) {
+        if (head) {
+            struct LLNode *n = head->next;
+            head->next = prev;
+            if (n) {
+                return reverseInternal(n, head);
+            }
+        }
+        return head;
+    }
+
+    struct LLNode *reverse(struct LLNode * head) {
+        return reverseInternal(head, (struct LLNode*)0);
+    }
+
+    int main(void) {
+    }
+    """
 }
 
 @Suite("Lexer Tests")
@@ -128,6 +153,55 @@ struct LexerTests {
             xDef +
             yDef +
             retStmt
+        ))
+    }
+
+    @Test("Basic struct program")
+    func testBasicStructProgram() async throws {
+        let structDef : [Lexer.Token] = [
+            .keywordStruct, .identifier("LLNode"), .openBrace,
+            .keywordVoid, .asterisk, .identifier("item"), .semicolon,
+            .keywordStruct, .identifier("LLNode"), .asterisk, .identifier("next"), .semicolon,
+            .closeBrace, .semicolon
+        ]
+        let internalFuncDef : [Lexer.Token] = [
+            .keywordStruct, .identifier("LLNode"), .asterisk,
+            .identifier("reverseInternal"), .openParen, .keywordStruct,
+            .identifier("LLNode"), .asterisk, .identifier("head"), .comma,
+            .keywordStruct, .identifier("LLNode"), .asterisk, .identifier("prev"),
+            .closeParen, .openBrace,
+            .keywordIf, .openParen, .identifier("head"), .closeParen, .openBrace,
+            .keywordStruct, .identifier("LLNode"), .asterisk, .identifier("n"),
+            .equal, .identifier("head"), .arrow, .identifier("next"), .semicolon,
+            .identifier("head"), .arrow, .identifier("next"), .equal, .identifier("prev"),
+            .semicolon,
+            .keywordIf, .openParen, .identifier("n"), .closeParen, .openBrace,
+            .keywordReturn, .identifier("reverseInternal"), .openParen, .identifier("n"),
+            .comma, .identifier("head"), .closeParen, .semicolon,
+            .closeBrace,
+            .closeBrace,
+            .keywordReturn, .identifier("head"), .semicolon,
+            .closeBrace
+        ]
+        let reverseFuncDef : [Lexer.Token] = [
+            .keywordStruct, .identifier("LLNode"), .asterisk, .identifier("reverse"),
+            .openParen, .keywordStruct, .identifier("LLNode"), .asterisk, .identifier("head"),
+            .closeParen, .openBrace,
+            .keywordReturn, .identifier("reverseInternal"), .openParen, .identifier("head"),
+            .comma, .openParen, .keywordStruct, .identifier("LLNode"), .asterisk, .closeParen,
+            .constant("0"), .closeParen, .semicolon,
+            .closeBrace
+        ]
+        let mainFuncDef : [Lexer.Token] = [
+            .keywordInt, .identifier("main"), .openParen, .keywordVoid, .closeParen, .openBrace,
+            .closeBrace
+        ]
+        let t = toks(ProgramSourceCodes.basicStruct)
+        #expect(t == (
+            structDef +
+            internalFuncDef +
+            reverseFuncDef +
+            mainFuncDef
         ))
     }
 }
