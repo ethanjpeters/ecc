@@ -952,6 +952,7 @@ class Parser {
             switch peek(tokenStream) {
                 case .identifier(let tagName):
                     structTag = tagName
+                    let _ = expectIdentifier(&tokenStream)
                 default:
                     print("Unexpected token \(peek(tokenStream)) found while expecting structure tag")
                     exit(ExitCode.internalError.rawValue)
@@ -970,6 +971,8 @@ class Parser {
                     memberList.append((memberName, namedType))
                 }
                 let _ = expect(.closeBrace, &tokenStream)
+            } else {
+                let _ = expect(.semicolon, &tokenStream)
             }
             return .StructDeclaration(structTag, memberList)
         }
