@@ -973,9 +973,8 @@ class Parser {
                     let _ = expect(.semicolon, &tokenStream)
                 }
                 let _ = expect(.closeBrace, &tokenStream)
-            } else {
-                let _ = expect(.semicolon, &tokenStream)
             }
+            let _ = expect(.semicolon, &tokenStream)
             return .StructDeclaration(structTag, memberList)
         }
         // parse the specifier list
