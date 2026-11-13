@@ -970,6 +970,7 @@ class Parser {
                     let memberDeclarator = parseDeclarator(tokenStream: &tokenStream)
                     let (memberName, memberType, _) = processDeclarator(declarator: memberDeclarator, baseType: namedType)
                     memberList.append((memberName, memberType))
+                    let _ = expect(.semicolon, &tokenStream)
                 }
                 let _ = expect(.closeBrace, &tokenStream)
             } else {
