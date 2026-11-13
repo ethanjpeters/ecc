@@ -1,10 +1,6 @@
 import Testing
 @testable import ecc
 
-@Test func example() async throws {
-    // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-}
-
 struct ProgramSourceCodes {
     static let ret2 : String = """
     int main(void) {
@@ -44,6 +40,7 @@ struct ProgramSourceCodes {
     }
 
     int main(void) {
+        return 0;
     }
     """
 }
@@ -194,6 +191,7 @@ struct LexerTests {
         ]
         let mainFuncDef : [Lexer.Token] = [
             .keywordInt, .identifier("main"), .openParen, .keywordVoid, .closeParen, .openBrace,
+            .keywordReturn, .constant("0"), .semicolon,
             .closeBrace
         ]
         let t = toks(ProgramSourceCodes.basicStruct)
@@ -278,6 +276,126 @@ struct ParserTests {
                 nil
             )
         ]))
+    }
+
+    @Test("Basic struct program")
+    func testBasicStructsProgram() async throws {
+        let structDecl : Parser.AST.Declaration = .StructDeclaration(
+            "LLNode",
+            [
+                ("item", .Pointer(.Void)),
+                ("next", .Pointer(.Structure("LLNode")))
+            ]
+        )
+        let internalFuncDef : Parser.AST.Declaration = .FunctionDeclaration(
+            .Pointer(.Structure("LLNode")),
+            "reverseInternal",
+            ["head", "prev"],
+            .Block([
+                .S(.If(
+                    // condition
+                    .Var("head", nil),
+                    // then path
+                    .Compound(.Block([
+                        // struct LLNode *n = head->next;
+                        .D(.VariableDeclaration(
+                            // type
+                            .Pointer(.Structure("LLNode")),
+                            // name
+                            "n",
+                            // initializer
+                            .SingleInit(.Arrow(
+                                .Var("head", nil),
+                                "next",
+                                nil
+                            )),
+                            // storage class
+                            nil
+                        )),
+                        // head->next = prev;
+                        .S(.Expression(.Assignment(
+                            .Arrow(
+                                .Var("head", nil),
+                                "head",
+                                nil
+                            ),
+                            .Var("prev", nil),
+                            nil
+                        ))),
+                        // if (n) { ... }
+                        .S(.If(
+                            // condition
+                            .Var("n", nil),
+                            // then path
+                            .Compound(.Block([
+                                .S(.Return(
+                                    .FunctionCall(
+                                        // name
+                                        .Var("reverseInternal", nil),
+                                        // parameters
+                                        [
+                                            .Var("n", nil),
+                                            .Var("head", nil)
+                                        ],
+                                        // type
+                                        nil
+                                    )
+                                ))
+                            ])),
+                            // else path
+                            nil
+                        ))
+                    ])),
+                    // else path
+                    nil
+                )),
+                .S(.Return(.Var("head", nil)))
+            ]),
+            nil
+        )
+        let reverseFuncDef : Parser.AST.Declaration = .FunctionDeclaration(
+            .Pointer(.Structure("LLNode")),
+            "reverse",
+            ["head"],
+            .Block([
+                .S(.Return(
+                    .FunctionCall(
+                        // name
+                        .Var("reverseInternal", nil),
+                        // parameters
+                        [
+                            .Var("head", nil),
+                            .Cast(
+                                .Pointer(.Structure("LLNode")),
+                                .Constant(
+                                    .ConstInt(Int32(0)),
+                                    nil
+                                ),
+                                nil
+                            )
+                        ],
+                        // type
+                        nil
+                    )
+                ))
+            ]),
+            nil
+        )
+        let mainFuncDef : Parser.AST.Declaration = .FunctionDeclaration(
+            .Int,
+            "main",
+            [],
+            .Block([.S(.Return(.Constant(.ConstInt(0), nil)))]),
+            nil
+        )
+        let expectedProgramDef : Parser.AST.Program = .Statement([
+            structDecl,
+            internalFuncDef,
+            reverseFuncDef,
+            mainFuncDef
+        ])
+        let actualProgramDef = ast(ProgramSourceCodes.basicStruct)
+        #expect(actualProgramDef == expectedProgramDef)
     }
 }
 
