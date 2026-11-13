@@ -967,8 +967,9 @@ class Parser {
                         exit(ExitCode.lexerError.rawValue)
                     }
                     let (namedType, _) = parseType(&tokenStream)    // known to not include a storage class
-                    let memberName = expectIdentifier(&tokenStream)
-                    memberList.append((memberName, namedType))
+                    let memberDeclarator = parseDeclarator(tokenStream: &tokenStream)
+                    let (memberName, memberType, _) = processDeclarator(declarator: memberDeclarator, baseType: namedType)
+                    memberList.append((memberName, memberType))
                 }
                 let _ = expect(.closeBrace, &tokenStream)
             } else {
